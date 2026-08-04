@@ -1,0 +1,173 @@
+import { useEffect, useRef, useState } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useApp } from '../state/AppContext'
+import { receiptFileName } from '../lib/format'
+import { Button, PageHeader } from '../components/ui'
+import { ReceiptCard } from '../components/ReceiptCard'
+import { IconPrint, IconShare, IconDownload, IconWhatsApp } from '../components/Icons'
+import { defaultCenter } from '../lib/sync'
+
+export function ReceiptView() {
+  const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+  const [params, setParams] = useSearchParams()
+  const isNew = params.get('new') === '1'
+  const { payments, students, center } = useApp()
+
+  const payment = payments.find((p) => p.id === id)
+  const student = payment ? students.find((s) => s.id === payment.studentId) : undefined
+
+  const cardRef = useRef<HTMLDivElement>(null)
+  const [scale, setScale] = useState(1)
+  const [holderH, setHolderH] = useState(600)
+
+  useEffect(() => {
+    const el = cardRef.current
+    if (!el) return
+    const calc = () => {
+      const avail = Math.min(window.innerWidth - 28, 560)
+      const s = Math.min(1, avail / el.offsetWidth)
+      setScale(s)
+      setHolderH(el.offsetHeight * s + 2)
+    }
+    calc()
+    const ro = new ResizeObserver(calc)
+    ro.observe(el)
+    window.addEventListener('resize', calc)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', calc)
+    }
+  }, [id])
+
+  useEffect(() => {
+    if (!isNew) return
+    const t = window.setTimeout(() => {
+      setParams({}, { replace: true })
+    }, 4000)
+    return () => window.clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isNew])
+
+  if (!payment || !student) {
+    return (
+      <div>
+        <PageHeader title="Receipt" back onBack={() => navigate(-1)} />
+        <div className="text-center text-[#8a8578] text-[14px] py-16">Receipt not found</div>
+      </div>
+    )
+  }
+
+  const fileName = receiptFileName(payment.receiptNo, payment.date)
+
+  const pngBlob = async (): Promise<Blob> => {
+    if (payment.pngBlob) return payment.pngBlob
+    const el = cardRef.current
+    if (!el) throw new Error('not ready')
+    const { toPng } = await import('html-to-image')
+    const dataUrl = await toPng(el, { pixelRatio: 2, cacheBust: true })
+    return fetch(dataUrl).then((r) => r.blob())
+  }
+
+  const onShare = async () => {
+    try {
+      const blob = await pngBlob()
+      const file = new File([blob], fileName, { type: 'image/png' })
+      const nav = navigator as Navigator & {
+        canShare?: (d: { files: File[] }) => boolean
+      }
+      if (nav.canShare && nav.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: `Receipt #${payment.receiptNo}` })
+      } else if (navigator.share) {
+        await navigator.share({
+          title: `Receipt #${payment.receiptNo}`,
+          text: `${student.name} · ${payment.mode} · ${fileName}`,
+        })
+      } else {
+        await onDownload()
+      }
+    } catch (e) {
+      if ((e as Error).name !== 'AbortError') {
+        // fall through to download silently
+        await onDownload()
+      }
+    }
+  }
+
+  const onDownload = async () => {
+    const blob = await pngBlob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const whatsappText = `Here is the receipt for ${student.name} · ${payment.mode} · ${fileName}`
+
+  return (
+    <div>
+      {isNew && (
+        <div className="bg-emerald-600 text-white text-center text-[13.5px] font-semibold py-2.5">
+          ✓ Receipt created and saved to Drive
+        </div>
+      )}
+
+      <PageHeader
+        title={`Receipt #${String(payment.receiptNo).padStart(4, '0')}`}
+        subtitle={`${student.name} · ${payment.mode}`}
+        back
+        onBack={() => (isNew ? navigate(`/student/${student.id}`) : navigate(-1))}
+      />
+
+      {/* Receipt (scaled to fit) */}
+      <div className="flex justify-center px-2.5 no-print">
+        <div style={{ height: holderH }} className="flex justify-center w-full max-w-[560px]">
+          <div style={{ transform: `scale(${scale})`, transformOrigin: 'top center' }}>
+            <div ref={cardRef}>
+              <ReceiptCard
+                center={center.name ? center : defaultCenter()}
+                student={student}
+                payment={payment}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Print-only copy */}
+      <div className="print-area" style={{ display: 'none' }}>
+        <ReceiptCard center={center.name ? center : defaultCenter()} student={student} payment={payment} />
+      </div>
+
+      {/* Actions */}
+      <div className="px-4 pb-6 pt-4 grid grid-cols-2 gap-2 no-print">
+        <Button variant="secondary" onClick={() => window.print()}>
+          <IconPrint className="w-4.5 h-4.5" /> Print
+        </Button>
+        <Button onClick={() => void onDownload()}>
+          <IconDownload className="w-4.5 h-4.5" /> Save PNG
+        </Button>
+        <Button
+          variant="secondary"
+          className="text-[#0f766e] dark:text-[#34c1b8]"
+          onClick={() => void onShare()}
+        >
+          <IconShare className="w-4.5 h-4.5" /> Share
+        </Button>
+        <Button
+          variant="secondary"
+          className="text-[#0f766e] dark:text-[#34c1b8]"
+          onClick={() =>
+            window.open(`https://wa.me/?text=${encodeURIComponent(whatsappText)}`, '_blank')
+          }
+        >
+          <IconWhatsApp className="w-4.5 h-4.5" /> WhatsApp
+        </Button>
+      </div>
+
+      <div className="pb-8" />
+    </div>
+  )
+}

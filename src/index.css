@@ -1,0 +1,130 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-ink: #12314f;
+  --color-ink-deep: #0b2136;
+  --color-teal: #0f766e;
+  --color-cream: #f5f3ee;
+  --color-paper: #fffdf8;
+  --color-amber: #b45309;
+  --color-mint: #ecfdf5;
+  --font-sans: "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-serif: Georgia, "Times New Roman", serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--color-cream);
+  color: #1c2936;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.dark body {
+  background: #0f1720;
+  color: #dbe4ec;
+}
+
+.app-shell {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100dvh;
+  background: var(--color-cream);
+  box-shadow: 0 0 40px rgba(18, 49, 79, 0.08);
+}
+
+.dark .app-shell {
+  background: #101a26;
+  box-shadow: none;
+}
+
+.safe-b {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* ---------- Receipt (print + rasterize target) ---------- */
+
+.receipt-card {
+  width: 560px;
+  background: #fffdf8;
+  color: #1c2936;
+  border: 1px solid #d8d3c8;
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.receipt-print {
+  background: #fff;
+}
+
+@page {
+  size: 210mm 297mm;
+  margin: 12mm;
+}
+
+@media print {
+  body {
+    background: #fff !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-area {
+    display: block !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    max-width: none !important;
+    border-radius: 0 !important;
+  }
+}
+
+.sheet-holder {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+  padding: 16px;
+}
+
+@media (max-width: 620px) {
+  .receipt-card {
+    transform-origin: top left;
+  }
+}
+
+/* subtle entrance */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.rise {
+  animation: rise 0.25s ease-out both;
+}
