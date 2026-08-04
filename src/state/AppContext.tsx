@@ -10,7 +10,7 @@ import {
 } from 'react'
 import type { Student, Payment, Center, Session, SessionUser, PaymentMode } from '../types'
 import { db, getKV, setKV, queueOp, K } from '../lib/db'
-import { signIn, silentSignIn, fetchUserInfo, revoke } from '../lib/auth'
+import { signIn, silentSignIn, revoke } from '../lib/auth'
 import {
   ensureDriveStructure,
   flushOutbox,
@@ -199,15 +199,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (cid: string) => {
-      const token = await signIn(cid)
-      const info = await fetchUserInfo(token)
+      const { token, user } = await signIn(cid)
       setToken(token)
       setDriveToken(token)
-      setUser(info)
+      setUser(user)
       const session = (await getKV<Session>(K.SESSION)) || { theme: 'light', lastPulledAt: 0 }
-      await setKV(K.SESSION, { ...session, clientId: cid, user: info })
+      await setKV(K.SESSION, { ...session, clientId: cid, user })
       setClientId(cid)
-      showToast(`Signed in as ${info.email}`, 'ok')
+      showToast(`Signed in as ${user.email}`, 'ok')
       setInitialized(true)
       await ensureDriveStructure().catch((e) => showToast(e.message, 'err'))
       void syncNow()
