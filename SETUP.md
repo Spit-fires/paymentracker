@@ -9,7 +9,7 @@ shared view-only with the student), records payments, and the app generates a cl
 
 | Person | Work |
 |---|---|
-| **You** (once, ~10 min) | Google Cloud setup + paste Client ID into `src/config.ts` + deploy |
+| **You** (once, ~10 min) | Google Cloud setup (done) + embed Client ID in `src/config.ts` (done) + deploy (done) |
 | **Teacher** (ever) | Tap **Sign in with Google** once, then use the app. Nothing else. |
 
 ## Stack
@@ -35,10 +35,10 @@ Do this on the dedicated account so the teacher's data lives under their own Dri
      Publishing avoids the 7-day refresh-token expiry that Testing mode enforces.
 5. **APIs & Services → Credentials → Create Credentials → OAuth Client ID** → **Web application**:
    - Authorized JavaScript origins: `http://localhost:5173` **and** your GitHub Pages URL
-     (e.g. `https://<username>.github.io/paymentracker/`).
+     (for this repo: `https://spit-fires.github.io/paymentracker/`).
    - Create, then copy the **Client ID** (ends in `.apps.googleusercontent.com`).
-6. **Paste the Client ID into `src/config.ts`** (the `CLIENT_ID` constant).
-7. Build + deploy (section 3).
+6. **Paste the Client ID into `src/config.ts`** (the `CLIENT_ID` constant) — already done with your Client ID.
+7. Build + deploy (section 3) — already done via the Actions workflow on `main`.
 
 That's the whole one-time setup. The teacher never touches any of this.
 
@@ -52,20 +52,19 @@ pnpm dev          # opens http://localhost:5173
 Click **Sign in with Google** and use the dedicated account. Google shows an "unverified app"
 warning the first time — accept it once (Advanced → Go to PaymentTracker (unsafe)).
 
-## 3 · Deploy to GitHub Pages
+## 3 · Deploy to GitHub Pages — done
+
+The repo is live at **https://github.com/Spit-fires/paymentracker** and the app is deployed to
+**https://spit-fires.github.io/paymentracker/**. Pushing to `main` auto-deploys via
+`.github/workflows/deploy.yml` (builds with pnpm, then `actions/deploy-pages`).
+
+**Important:** the deployed URL must be added to the OAuth client's *Authorized JavaScript origins*
+in Google Cloud (Settings → the OAuth Client ID → add `https://spit-fires.github.io/paymentracker/`).
+
+Local build for manual verification:
 
 ```bash
 pnpm build        # outputs to dist/
-```
-
-Then either push `dist/` to a `gh-pages` branch, or use the simplest route — drag-and-drop the
-`dist` folder into [netlify.com/drop](https://app.netlify.com/drop) (free, HTTPS) and add that
-URL to the OAuth "Authorized JavaScript origins" above. For GitHub Pages:
-
-```bash
-pnpm add -D gh-pages
-# package.json: "deploy": "gh-pages -d dist"
-pnpm deploy
 ```
 
 The app uses `base: './'` + hash routing, so it works from any subpath.
