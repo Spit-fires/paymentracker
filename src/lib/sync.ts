@@ -119,8 +119,12 @@ export async function flushOutbox(): Promise<void> {
     const entries = await db.outbox.toArray()
     if (!entries.length) break
     for (const e of entries) {
-      await applyOp(e.op)
-      await db.outbox.delete(e.id!)
+      try {
+        await applyOp(e.op)
+        await db.outbox.delete(e.id!)
+      } catch {
+        break
+      }
     }
   }
 }
@@ -151,7 +155,14 @@ export async function pull(): Promise<boolean> {
             const local = new Map((await db.students.toArray()).map((s) => [s.id, s]))
             const merged = j.students.map((s: Student) => {
               const cur = local.get(s.id)
-              return cur?.photoBlob ? { ...s, photoBlob: cur.photoBlob } : s
+              if (!cur) return s
+              return {
+                ...s,
+                photoBlob: cur.photoBlob,
+                photoFileId: cur.photoFileId,
+                folderId: cur.folderId,
+                folderShared: cur.folderShared,
+              }
             })
             await db.students.bulkPut(merged)
           })
@@ -161,7 +172,7 @@ export async function pull(): Promise<boolean> {
             const local = new Map((await db.payments.toArray()).map((p) => [p.id, p]))
             const merged = j.payments.map((p: Payment) => {
               const cur = local.get(p.id)
-              return cur?.pngBlob ? { ...p, pngBlob: cur.pngBlob } : p
+              return cur?.pngBlob ? { ...p, pngBlob: cur.pngBlob } : cur?.pngFileId ? { ...p, pngFileId: cur.pngFileId } : p
             })
             await db.payments.bulkPut(merged)
           })
@@ -177,7 +188,9 @@ export async function pull(): Promise<boolean> {
       // file missing or parse error — skip
     }
   }
-  await setKV(K.SESSION, { ...session, lastPulledAt: latest })
+  if (changed) {
+    await setKV(K.SESSION, { ...session, lastPulledAt: latest })
+  }
   return changed
 }
 

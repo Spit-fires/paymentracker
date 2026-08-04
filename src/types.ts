@@ -1,4 +1,4 @@
-export type PaymentMode = 'Cash' | 'UPI' | 'Bank' | 'Other'
+export type PaymentMode = 'Cash' | 'Bkash' | 'Nagad' | 'Other'
 
 export interface Student {
   id: string

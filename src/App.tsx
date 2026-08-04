@@ -1,6 +1,7 @@
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AppProvider, useApp } from './state/AppContext'
 import { Layout } from './components/Layout'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { Login } from './pages/Login'
 import { Lock } from './pages/Lock'
 import { Dashboard } from './pages/Dashboard'
@@ -29,9 +30,10 @@ function Gate() {
   if (!initialized) return <Splash />
   if (user && locked) return <Lock />
   if (!user) return <Login />
-  return (
+    return (
     <Layout>
-      <Routes>
+      <ErrorBoundary>
+        <Routes>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/students" element={<Students />} />
@@ -42,6 +44,7 @@ function Gate() {
         <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
+      </ErrorBoundary>
     </Layout>
   )
 }

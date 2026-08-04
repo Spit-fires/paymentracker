@@ -13,7 +13,7 @@ import { Card, Button, PageHeader, Spinner } from '../components/ui'
 import { ReceiptCard } from '../components/ReceiptCard'
 import { IconCheck, IconReceipt } from '../components/Icons'
 
-const MODES: PaymentMode[] = ['Cash', 'UPI', 'Bank', 'Other']
+const MODES: PaymentMode[] = ['Cash', 'Bkash', 'Nagad', 'Other']
 
 function shiftPeriod(p: string, delta: number): string {
   const [y, m] = p.split('-').map(Number)
@@ -25,10 +25,14 @@ export function Payment() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [params] = useSearchParams()
-  const { students, payments, center, receiptSeq, addPayment, showToast } = useApp()
+  const { students, payments, center, receiptSeq, addPayment, updatePayment, showToast } = useApp()
 
   const student = students.find((s) => s.id === id)
   const prefill = params.get('prefill')
+  const existing = useMemo(
+    () => (prefill ? payments.find((x) => x.id === prefill) : undefined),
+    [prefill, payments],
+  )
 
   const period = periodNow()
   const [amount, setAmount] = useState('')
@@ -36,11 +40,9 @@ export function Payment() {
   const [selPeriod, setSelPeriod] = useState(period)
   const [busy, setBusy] = useState(false)
   const previewRef = useRef<HTMLDivElement>(null)
-  const initialised = useRef(false)
 
   useEffect(() => {
-    if (!student || initialised.current) return
-    initialised.current = true
+    if (!student) return
     // autofill from last month, or from a linked payment for re-record
     if (prefill) {
       const p = payments.find((x) => x.id === prefill)
@@ -69,15 +71,15 @@ export function Payment() {
     if (!student) return null
     return {
       id: 'preview',
-      receiptNo: receiptSeq + 1,
+      receiptNo: existing ? existing.receiptNo : receiptSeq + 1,
       studentId: student.id,
       amount: amountNum,
       mode,
       period: selPeriod,
-      date: Date.now(),
+      date: existing ? existing.date : Date.now(),
       updatedAt: Date.now(),
     }
-  }, [student, amountNum, mode, selPeriod, receiptSeq])
+  }, [student, existing, amountNum, mode, selPeriod, receiptSeq])
 
   if (!student) {
     return (
@@ -92,23 +94,33 @@ export function Payment() {
 
   const submit = async () => {
     if (amountNum <= 0) return showToast('Enter a valid amount', 'err')
-    if (!student.folderId && !previewRef.current) return showToast('Please wait, still loading', 'err')
+    if (!previewRef.current) return showToast('Please wait, still loading', 'err')
     setBusy(true)
     try {
-      if (!previewRef.current) throw new Error('Receipt not ready')
       const blob = await toPng(previewRef.current, { pixelRatio: 2, cacheBust: true }).then((dataUrl) =>
         fetch(dataUrl).then((r) => r.blob()),
       )
-      const payment = await addPayment({
-        studentId: student.id,
-        amount: amountNum,
-        mode,
-        period: selPeriod,
-        date: Date.now(),
-        pngBlob: blob,
-      })
-      showToast(`Receipt #${String(payment.receiptNo).padStart(4, '0')} created`, 'ok')
-      navigate(`/receipt/${payment.id}?new=1`)
+      if (existing) {
+        await updatePayment(existing.id, {
+          amount: amountNum,
+          mode,
+          period: selPeriod,
+          pngBlob: blob,
+        })
+        showToast(`Receipt #${String(existing.receiptNo).padStart(4, '0')} updated`, 'ok')
+        navigate(`/receipt/${existing.id}`)
+      } else {
+        const payment = await addPayment({
+          studentId: student.id,
+          amount: amountNum,
+          mode,
+          period: selPeriod,
+          date: Date.now(),
+          pngBlob: blob,
+        })
+        showToast(`Receipt #${String(payment.receiptNo).padStart(4, '0')} created`, 'ok')
+        navigate(`/receipt/${payment.id}?new=1`)
+      }
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Could not create receipt', 'err')
     } finally {
@@ -118,7 +130,7 @@ export function Payment() {
 
   return (
     <div>
-      <PageHeader title="Record payment" back onBack={() => navigate(-1)} />
+      <PageHeader title={existing ? 'Edit receipt' : 'Record payment'} back onBack={() => navigate(-1)} />
 
       <div className="px-4 space-y-4">
         {/* Student summary */}
@@ -217,12 +229,18 @@ export function Payment() {
         {/* Live preview note */}
         <div className="flex items-start gap-2 text-[12px] text-[#8a8578] dark:text-[#93a7bb]">
           <IconReceipt className="w-4 h-4 shrink-0 mt-0.5" />
-          <span>Receipt #{String((receiptSeq + 1)).padStart(4, '0')} · {receiptFileName(receiptSeq + 1, Date.now())} will be saved to this student's Drive folder.</span>
+          {existing ? (
+            <span>
+              Receipt #{String(existing.receiptNo).padStart(4, '0')} will be <b className="text-[#0f766e]">updated</b>, keeping its original number and date.
+            </span>
+          ) : (
+            <span>Receipt #{String((receiptSeq + 1)).padStart(4, '0')} · {receiptFileName(receiptSeq + 1, Date.now())} will be saved to this student's Drive folder.</span>
+          )}
         </div>
 
         <Button full onClick={submit} disabled={busy} className="!py-3.5 text-[16px]">
           {busy ? <Spinner className="text-white" /> : <IconCheck className="w-5 h-5" />}
-          {busy ? 'Creating receipt…' : 'Submit payment'}
+          {busy ? 'Saving…' : existing ? 'Save changes' : 'Submit payment'}
         </Button>
       </div>
 

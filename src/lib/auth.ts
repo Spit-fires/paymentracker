@@ -39,10 +39,14 @@ export function waitForGis(): Promise<NonNullable<Window['google']>> {
       check()
       return
     }
-    const t = setTimeout(check, 15000)
+    const t = setTimeout(check, 30000)
     window.addEventListener('google-loaded', check, { once: true })
-    setTimeout(() => clearTimeout(t), 16000)
-    // GIS script dispatches 'google-loaded' when ready
+    setTimeout(() => clearTimeout(t), 31000)
+    try {
+      window.dispatchEvent(new Event('google-loaded'))
+    } catch {
+      /* ignore */
+    }
   })
   return gisPromise
 }

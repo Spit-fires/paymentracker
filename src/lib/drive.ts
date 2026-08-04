@@ -127,9 +127,4 @@ export class DriveClient {
   async deleteFile(fileId: string): Promise<void> {
     await this.req(`${API}/files/${fileId}`, { method: 'DELETE' })
   }
-
-  async about(): Promise<{ storageQuota: { usage: string; limit: string } }> {
-    const res = await this.req(`${API}/about?fields=storageQuota`)
-    return res.json()
-  }
 }

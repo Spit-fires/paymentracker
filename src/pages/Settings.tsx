@@ -71,12 +71,14 @@ export function Settings() {
   }
 
   const backup = async () => {
+    const driveRefs = await getKV(K.DRIVE)
     const data = {
       app: 'paymenttracker',
       version: 1,
       exportedAt: new Date().toISOString(),
       center,
       receiptSeq: (await db.kv.get(K.RECEIPT_SEQ))?.value || 0,
+      driveRefs,
       students: students.map(({ photoBlob: _pb, ...rest }) => rest),
       payments: payments.map(({ pngBlob: _pb, ...rest }) => rest),
     }
@@ -102,6 +104,7 @@ export function Settings() {
         await db.payments.bulkPut(j.payments)
         if (j.center) await setKV(K.CENTER, j.center)
         await setKV(K.RECEIPT_SEQ, j.receiptSeq || 0)
+        if (j.driveRefs) await setKV(K.DRIVE, j.driveRefs)
       })
       await queueOp({ kind: 'pushJSON', file: 'students' })
       await queueOp({ kind: 'pushJSON', file: 'payments' })

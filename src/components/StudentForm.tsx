@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Student } from '../types'
 import { Field, Input, Textarea, Button } from './ui'
 
@@ -38,18 +38,27 @@ export function StudentForm({
   const [f, setF] = useState<FormValue>(initialForm(initial))
   const [err, setErr] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  const previewUrl = useRef<string | null>(null)
   const [preview, setPreview] = useState<string | null>(
-    initial?.photoBlob ? URL.createObjectURL(initial.photoBlob) : null,
+    initial?.photoBlob ? (previewUrl.current = URL.createObjectURL(initial.photoBlob), previewUrl.current) : null,
   )
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl.current) URL.revokeObjectURL(previewUrl.current)
+    }
+  }, [])
 
   const set = <K extends keyof FormValue>(k: K, v: FormValue[K]) => setF((p) => ({ ...p, [k]: v }))
 
   const pickPhoto = (file?: File | null) => {
     if (!file) return
     if (!file.type.startsWith('image/')) return
+    if (previewUrl.current) URL.revokeObjectURL(previewUrl.current)
     const blob = file
     set('photo', blob)
-    setPreview(URL.createObjectURL(blob))
+    previewUrl.current = URL.createObjectURL(blob)
+    setPreview(previewUrl.current)
   }
 
   const submit = () => {

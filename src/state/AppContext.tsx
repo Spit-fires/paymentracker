@@ -373,9 +373,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           type: 'receipt',
           studentId: cur.studentId,
           paymentId: cur.id,
-          fileName: `${String(cur.receiptNo).padStart(4, '0')}-receipt.png`,
+          fileName: receiptFileName(cur.receiptNo, cur.date),
           blob: patch.pngBlob,
         })
+        await db.payments.update(cur.id, { pngFileId: undefined })
       }
       await queueOp({ kind: 'pushJSON', file: 'payments' })
       await refreshData()

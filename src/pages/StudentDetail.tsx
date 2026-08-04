@@ -301,7 +301,7 @@ export function StudentDetail() {
               <button
                 onClick={() => navigate(`/payment/${student.id}?prefill=${p.id}`)}
                 className="text-[12px] font-semibold text-[#0f766e] dark:text-[#34c1b8] whitespace-nowrap"
-                title="Record again with same amount"
+                title="Edit this receipt (keeps its number and date)"
               >
                 Re-record
               </button>

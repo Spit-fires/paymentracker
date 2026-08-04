@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { toPng } from 'html-to-image'
 import { useApp } from '../state/AppContext'
 import { receiptFileName } from '../lib/format'
 import { Button, PageHeader } from '../components/ui'
@@ -64,7 +65,6 @@ export function ReceiptView() {
     if (payment.pngBlob) return payment.pngBlob
     const el = cardRef.current
     if (!el) throw new Error('not ready')
-    const { toPng } = await import('html-to-image')
     const dataUrl = await toPng(el, { pixelRatio: 2, cacheBust: true })
     return fetch(dataUrl).then((r) => r.blob())
   }
@@ -105,6 +105,9 @@ export function ReceiptView() {
   }
 
   const whatsappText = `Here is the receipt for ${student.name} · ${payment.mode} · ${fileName}`
+  const whatsappUrl = student.phone
+    ? `https://wa.me/${student.phone.replace(/\D/g, '').replace(/^88/, '').replace(/^0/, '880')}?text=${encodeURIComponent(whatsappText)}`
+    : `https://wa.me/?text=${encodeURIComponent(whatsappText)}`
 
   return (
     <div>
@@ -159,9 +162,7 @@ export function ReceiptView() {
         <Button
           variant="secondary"
           className="text-[#0f766e] dark:text-[#34c1b8]"
-          onClick={() =>
-            window.open(`https://wa.me/?text=${encodeURIComponent(whatsappText)}`, '_blank')
-          }
+          onClick={() => window.open(whatsappUrl, '_blank')}
         >
           <IconWhatsApp className="w-4.5 h-4.5" /> WhatsApp
         </Button>
