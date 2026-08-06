@@ -22,7 +22,7 @@ export function ReauthBanner() {
           </div>
           {reauthError && (
             <div className="text-[11px] text-muted dark:text-muted-dark truncate mt-0.5">
-              Google says: {reauthError}
+              Google says: {reauthError} · origin: {location.origin}
             </div>
           )}
         </div>
