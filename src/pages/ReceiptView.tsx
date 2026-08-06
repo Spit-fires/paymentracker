@@ -106,7 +106,31 @@ export function ReceiptView() {
   }
 
   const whatsappText = `Here is the receipt for ${student.name} · ${payment.mode} · ${fileName}`
-  const whatsappUrl = waLink(student.phone, whatsappText)
+
+  /** wa.me links can only carry text — the image is sent via the Web Share
+   *  API (share sheet → WhatsApp), with the text link as a desktop fallback. */
+  const onWhatsApp = async () => {
+    try {
+      const blob = await pngBlob()
+      const file = new File([blob], fileName, { type: 'image/png' })
+      const nav = navigator as Navigator & {
+        canShare?: (d: { files: File[] }) => boolean
+      }
+      if (nav.canShare && nav.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          text: whatsappText,
+          title: `Receipt #${payment.receiptNo}`,
+        })
+      } else {
+        window.open(waLink(student.phone, whatsappText), '_blank')
+      }
+    } catch (e) {
+      if ((e as Error).name !== 'AbortError') {
+        window.open(waLink(student.phone, whatsappText), '_blank')
+      }
+    }
+  }
 
   return (
     <div>
@@ -163,7 +187,7 @@ export function ReceiptView() {
           variant="secondary"
           size="lg"
           className="!text-teal dark:!text-teal-bright"
-          onClick={() => window.open(whatsappUrl, '_blank')}
+          onClick={() => void onWhatsApp()}
         >
           <IconWhatsApp className="w-5 h-5" /> WhatsApp
         </Button>
