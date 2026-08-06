@@ -19,7 +19,7 @@ import {
   defaultCenter,
 } from '../lib/sync'
 import { newId, receiptFileName } from '../lib/format'
-import { setToken, getToken, clearToken } from '../lib/token'
+import { setToken, getToken, clearToken, tokenNeedsRefresh } from '../lib/token'
 
 export interface Toast {
   id: number
@@ -90,6 +90,9 @@ const AppCtx = createContext<Ctx>(null as unknown as Ctx)
 export const useApp = () => useContext(AppCtx)
 
 let toastId = 0
+// guards the init effect against React StrictMode's double-mount in dev,
+// which otherwise races two GIS popup flows and can log the user out
+let bootStarted = false
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [initialized, setInitialized] = useState(false)
@@ -121,7 +124,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const syncNow = useCallback(async () => {
-    if (!getToken() || !online) return
+    if (!online) return
+    // Google access tokens live ~1h; silently renew before hitting the API
+    if (tokenNeedsRefresh() && clientId) {
+      const fresh = await silentSignIn(clientId)
+      if (fresh?.token) {
+        setToken(fresh.token, fresh.expiresIn)
+        setDriveToken(fresh.token)
+      }
+    }
+    if (!getToken()) return
     setSyncing(true)
     try {
       await ensureDriveStructure()
@@ -137,7 +149,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } finally {
       setSyncing(false)
     }
-  }, [online, showToast, refreshData])
+  }, [online, showToast, refreshData, clientId])
 
   const scheduleSync = useCallback(() => {
     window.clearTimeout(syncTimer.current)
@@ -148,6 +160,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // init
   useEffect(() => {
+    if (bootStarted) return
+    bootStarted = true
     let alive = true
     ;(async () => {
       const session = await getKV<Session>(K.SESSION)
@@ -163,18 +177,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (alive) setInitialized(true)
           return
         }
-        const token = await silentSignIn(session.clientId)
-        if (token) {
-          setToken(token)
-          setDriveToken(token)
+        let tok = await silentSignIn(session.clientId)
+        // GIS can hiccup on cold start — retry once before giving up
+        if (!tok && alive) {
+          await new Promise((r) => setTimeout(r, 900))
+          tok = await silentSignIn(session.clientId)
+        }
+        if (tok) {
+          setToken(tok.token, tok.expiresIn)
+          setDriveToken(tok.token)
           if (alive) {
             await ensureDriveStructure().catch(() => undefined)
             void syncNow()
           }
         } else {
-          // token expired / revoked
+          // token expired / revoked — keep the saved session so the PIN
+          // screen survives and re-login is a single tap, not a wipe
           if (alive) setUser(null)
-          await setKV(K.SESSION, { ...session, user: undefined })
         }
       }
       if (alive) setInitialized(true)
@@ -204,8 +223,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (cid: string) => {
-      const { token, user } = await signIn(cid)
-      setToken(token)
+      const { token, expiresIn, user } = await signIn(cid)
+      setToken(token, expiresIn)
       setDriveToken(token)
       setUser(user)
       const session = (await getKV<Session>(K.SESSION)) || { theme: 'light', lastPulledAt: 0 }

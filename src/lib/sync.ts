@@ -221,7 +221,18 @@ export async function ensureDriveStructure(): Promise<DriveRefs> {
   const existing = await getKV<DriveRefs>(K.DRIVE)
   if (existing?.rootFolderId) return existing
   const c = client()
-  const roots = await c.list("appProperties has { key='pt' and value='root' } and trashed=false", 'files(id)')
+  // prefer the app-marked root folder, fall back to a plain name match
+  // (covers folders created by an older app version or manually)
+  let roots = await c.list(
+    "appProperties has { key='pt' and value='root' } and trashed=false",
+    'files(id,name,mimeType)',
+  )
+  if (!roots.length) {
+    roots = await c.list(
+      "name = 'PaymentTracker' and mimeType = 'application/vnd.google-apps.folder' and trashed=false",
+      'files(id,name,mimeType)',
+    )
+  }
   let rootId = roots[0]?.id
   if (!rootId) rootId = await c.createFolder('PaymentTracker', 'root', { pt: 'root' })
 

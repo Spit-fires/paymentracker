@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useApp } from '../state/AppContext'
 import { db, setKV, queueOp, K, getKV } from '../lib/db'
@@ -16,8 +16,9 @@ import {
   IconLogout,
   IconReceipt,
   IconCheck,
+  IconFolder,
 } from '../components/Icons'
-import type { Center, Session } from '../types'
+import type { Center, Session, DriveRefs } from '../types'
 
 function csvCell(v: string | number): string {
   let s = String(v ?? '')
@@ -50,9 +51,19 @@ export function Settings() {
   const [pinConfirm, setPinConfirm] = useState('')
   const [hasPin, setHasPin] = useState(false)
   const [restoreOpen, setRestoreOpen] = useState(false)
+  const [driveRefs, setDriveRefs] = useState<DriveRefs | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
+  useEffect(() => {
+    getKV<DriveRefs>(K.DRIVE)
+      .then((d) => d && setDriveRefs(d))
+      .catch(() => undefined)
+  }, [])
+
   const period = periodNow()
+  const driveRootUrl = driveRefs?.rootFolderId
+    ? `https://drive.google.com/drive/folders/${driveRefs.rootFolderId}`
+    : undefined
 
   const saveCenter = async () => {
     await updateCenter({ ...form, name: form.name.trim() || defaultCenter().name })
@@ -198,6 +209,21 @@ export function Settings() {
             </div>
           </Card>
         </Link>
+        {driveRootUrl && (
+          <a href={driveRootUrl} target="_blank" rel="noreferrer" className="block">
+            <Card className="!rounded-xl p-3.5 flex items-center gap-3 active:scale-[0.99] transition">
+              <div className="w-10 h-10 rounded-xl bg-[#e8f0f7] dark:bg-hover-dark grid place-items-center shrink-0">
+                <IconFolder className="w-5 h-5 text-ink dark:text-accent-dark" />
+              </div>
+              <div className="flex-1">
+                <div className="text-[14px] font-bold text-ink dark:text-white">Open Drive folder</div>
+                <div className="text-[12px] text-muted dark:text-muted-dark">
+                  PaymentTracker folder in your Google Drive
+                </div>
+              </div>
+            </Card>
+          </a>
+        )}
       </div>
 
       {/* Center profile */}

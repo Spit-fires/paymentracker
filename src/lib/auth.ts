@@ -14,6 +14,7 @@ declare global {
             callback: (res: {
               access_token?: string
               id_token?: string
+              expires_in?: number
               scope?: string
               error?: string
               error_description?: string
@@ -46,7 +47,14 @@ export function waitForGis(timeoutMs = 30000): Promise<NonNullable<Window['googl
   return gisPromise
 }
 
-function requestToken(clientId: string, prompt?: string, timeoutMs = 30000): Promise<{ token: string; idToken?: string }> {
+export interface TokenResult {
+  token: string
+  idToken?: string
+  /** Access-token lifetime in seconds (Google returns ~3600). */
+  expiresIn?: number
+}
+
+function requestToken(clientId: string, prompt?: string, timeoutMs = 30000): Promise<TokenResult> {
   return new Promise((resolve, reject) => {
     waitForGis(timeoutMs)
       .then((g) => {
@@ -55,8 +63,11 @@ function requestToken(clientId: string, prompt?: string, timeoutMs = 30000): Pro
           scope: SCOPES,
           include_granted_scopes: true,
           callback: (res) => {
-            if (res.access_token) resolve({ token: res.access_token, idToken: res.id_token })
-            else reject(new Error(res.error_description || res.error || 'Sign-in failed'))
+            if (res.access_token) {
+              resolve({ token: res.access_token, idToken: res.id_token, expiresIn: res.expires_in })
+            } else {
+              reject(new Error(res.error_description || res.error || 'Sign-in failed'))
+            }
           },
         })
         client.requestAccessToken(prompt ? { prompt } : undefined)
@@ -80,18 +91,20 @@ function userFromIdToken(idToken?: string): SessionUser | null {
   return null
 }
 
-/** Fresh, explicit sign-in (may show popup the first time). */
-export async function signIn(clientId: string): Promise<{ token: string; user: SessionUser }> {
-  const { token, idToken } = await requestToken(clientId, 'consent')
+/** Interactive sign-in. First-time users see the consent popup; returning
+ *  users with valid consent get a token with no popup. */
+export async function signIn(
+  clientId: string,
+): Promise<{ token: string; expiresIn?: number; user: SessionUser }> {
+  const { token, idToken, expiresIn } = await requestToken(clientId)
   const user = userFromIdToken(idToken) || (await fetchUserInfo(token))
-  return { token, user }
+  return { token, expiresIn, user }
 }
 
-/** Silent re-auth on app load; returns the token when not previously granted. */
-export async function silentSignIn(clientId: string): Promise<string | null> {
+/** Silent re-auth on app load / before sync; never opens a popup. */
+export async function silentSignIn(clientId: string): Promise<TokenResult | null> {
   try {
-    const { token } = await requestToken(clientId, undefined, 10000)
-    return token
+    return await requestToken(clientId, undefined, 10000)
   } catch {
     return null
   }
