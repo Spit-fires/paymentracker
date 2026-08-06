@@ -115,16 +115,13 @@ async function applyOp(op: OutboxOp): Promise<void> {
 }
 
 export async function flushOutbox(): Promise<void> {
-  while (true) {
+  for (;;) {
     const entries = await db.outbox.toArray()
-    if (!entries.length) break
+    if (!entries.length) return
     for (const e of entries) {
-      try {
-        await applyOp(e.op)
-        await db.outbox.delete(e.id!)
-      } catch {
-        break
-      }
+      // any failure aborts this pass and keeps the op queued for retry
+      await applyOp(e.op)
+      await db.outbox.delete(e.id!)
     }
   }
 }
@@ -156,15 +153,27 @@ export async function pull(): Promise<boolean> {
             const merged = j.students.map((s: Student) => {
               const cur = local.get(s.id)
               if (!cur) return s
+              // keep local when it's fresher than our last pull (likely unsynced)
+              // or newer than the remote record; otherwise take remote
+              const keepLocal =
+                (cur.updatedAt || 0) > session.lastPulledAt || (cur.updatedAt || 0) >= (s.updatedAt || 0)
+              const base = keepLocal ? cur : s
               return {
-                ...s,
+                ...base,
                 photoBlob: cur.photoBlob,
-                photoFileId: cur.photoFileId,
-                folderId: cur.folderId,
-                folderShared: cur.folderShared,
+                photoFileId: s.photoFileId || cur.photoFileId,
+                folderId: s.folderId || cur.folderId,
+                folderShared: s.folderShared || cur.folderShared,
               }
             })
             await db.students.bulkPut(merged)
+            // propagate deletes, but never drop records newer than the last pull
+            const remoteIds = new Set(j.students.map((s: Student) => s.id))
+            for (const loc of local.values()) {
+              if (!remoteIds.has(loc.id) && (loc.updatedAt || 0) <= session.lastPulledAt) {
+                await db.students.delete(loc.id)
+              }
+            }
           })
           changed = true
         } else if (file === 'payments' && Array.isArray(j.payments)) {
@@ -172,9 +181,23 @@ export async function pull(): Promise<boolean> {
             const local = new Map((await db.payments.toArray()).map((p) => [p.id, p]))
             const merged = j.payments.map((p: Payment) => {
               const cur = local.get(p.id)
-              return cur?.pngBlob ? { ...p, pngBlob: cur.pngBlob } : cur?.pngFileId ? { ...p, pngFileId: cur.pngFileId } : p
+              if (!cur) return p
+              const keepLocal =
+                (cur.updatedAt || 0) > session.lastPulledAt || (cur.updatedAt || 0) >= (p.updatedAt || 0)
+              const base = keepLocal ? cur : p
+              return {
+                ...base,
+                pngBlob: cur.pngBlob || p.pngBlob,
+                pngFileId: p.pngFileId || cur.pngFileId,
+              }
             })
             await db.payments.bulkPut(merged)
+            const remoteIds = new Set(j.payments.map((p: Payment) => p.id))
+            for (const loc of local.values()) {
+              if (!remoteIds.has(loc.id) && (loc.updatedAt || 0) <= session.lastPulledAt) {
+                await db.payments.delete(loc.id)
+              }
+            }
           })
           changed = true
         } else if (file === 'meta' && j.center) {

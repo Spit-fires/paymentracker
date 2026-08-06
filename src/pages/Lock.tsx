@@ -11,7 +11,7 @@ function PinDots({ len }: { len: number }) {
         <div
           key={i}
           className={`w-3.5 h-3.5 rounded-full transition ${
-            i < len ? 'bg-[#12314f] dark:bg-[#7fb3e0]' : 'bg-[#e3ddd0] dark:bg-[#2c4054]'
+            i < len ? 'bg-white shadow-[0_0_0_4px_rgba(255,255,255,0.15)]' : 'bg-white/25'
           }`}
         />
       ))}
@@ -48,12 +48,15 @@ export function Lock() {
   const del = () => setPin((p) => p.slice(0, -1))
 
   return (
-    <div className="min-h-screen bg-[#12314f] flex flex-col items-center justify-center px-8">
-      <div className="text-white/90 text-[30px] font-bold mb-1">৳</div>
-      <div className="text-white/70 text-[13px] mb-1">Payment Tracker is locked</div>
+    <div className="min-h-screen bg-ink flex flex-col items-center justify-center px-8">
+      <div className="w-16 h-16 rounded-2xl bg-white/10 grid place-items-center text-white text-[30px] font-bold mb-4">
+        ৳
+      </div>
+      <div className="text-white/90 text-[17px] font-semibold">Payment Tracker is locked</div>
+      <div className="text-white/50 text-[12.5px] mt-1">Enter your PIN to continue</div>
       <PinDots len={pin.length} />
       {err && <div className="text-red-300 text-[12.5px] mb-2">Wrong PIN, try again</div>}
-      <div className="grid grid-cols-3 gap-3 max-w-[260px] w-full mt-2">
+      <div className="grid grid-cols-3 gap-3 max-w-[280px] w-full mt-2">
         {['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫'].map((k, i) =>
           k === '' ? (
             <div key={i} />

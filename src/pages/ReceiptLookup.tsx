@@ -54,19 +54,19 @@ export function ReceiptLookup() {
               onClick={() => navigate(`/receipt/${p.id}`)}
               className="w-full text-left"
             >
-              <Card className="!rounded-xl p-3.5 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-[#e8f0f7] dark:bg-[#1d3144] grid place-items-center text-[#12314f] dark:text-[#cfe2f4] text-[12px] font-bold shrink-0">
+              <Card className="!rounded-xl p-3.5 flex items-center gap-3 active:scale-[0.99] transition">
+                <div className="w-10 h-10 rounded-lg bg-[#e8f0f7] dark:bg-hover-dark grid place-items-center text-ink dark:text-accent-dark text-[12px] font-bold shrink-0">
                   #{String(p.receiptNo).padStart(4, '0')}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[14px] font-bold text-[#12314f] dark:text-white truncate">
-                    {s?.name || '—'} <span className="font-semibold text-[#8a8578]">· {fmtTaka(p.amount)}</span>
+                  <div className="text-[14px] font-bold text-ink dark:text-white truncate">
+                    {s?.name || '—'} <span className="font-semibold text-muted">· {fmtTaka(p.amount)}</span>
                   </div>
-                  <div className="text-[12px] text-[#8a8578] dark:text-[#93a7bb]">
+                  <div className="text-[12px] text-muted dark:text-muted-dark">
                     {periodLabel(p.period)} · {fmtDate(p.date)} · {p.mode}
                   </div>
                 </div>
-                <IconArrow className="w-4 h-4 text-[#c4beb0] dark:text-[#5f7a92]" />
+                <IconArrow className="w-4 h-4 text-faint dark:text-[#5f7a92]" />
               </Card>
             </button>
           )

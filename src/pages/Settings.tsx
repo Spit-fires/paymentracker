@@ -20,7 +20,9 @@ import {
 import type { Center, Session } from '../types'
 
 function csvCell(v: string | number): string {
-  const s = String(v ?? '')
+  let s = String(v ?? '')
+  // guard against CSV formula injection (=, +, -, @)
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 
@@ -97,9 +99,10 @@ export function Settings() {
     try {
       const j = JSON.parse(await file.text())
       if (!j.students || !j.payments) throw new Error('Not a PaymentTracker backup')
-      await db.transaction('rw', db.students, db.payments, db.kv, async () => {
+      await db.transaction('rw', db.students, db.payments, db.kv, db.outbox, async () => {
         await db.students.clear()
         await db.payments.clear()
+        await db.outbox.clear()
         await db.students.bulkPut(j.students)
         await db.payments.bulkPut(j.payments)
         if (j.center) await setKV(K.CENTER, j.center)
@@ -159,8 +162,8 @@ export function Settings() {
         <Card className="!rounded-2xl p-4 flex items-center gap-3">
           <Avatar src={user?.picture} name={user?.name || 'T'} size={46} />
           <div className="flex-1 min-w-0">
-            <div className="text-[15px] font-bold text-[#12314f] dark:text-white truncate">{user?.name}</div>
-            <div className="text-[12.5px] text-[#8a8578] dark:text-[#93a7bb] truncate">{user?.email}</div>
+            <div className="text-[15px] font-bold text-ink dark:text-white truncate">{user?.name}</div>
+            <div className="text-[12.5px] text-muted dark:text-muted-dark truncate">{user?.email}</div>
           </div>
           <div className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/40 rounded-full px-2.5 py-1">
             {online ? 'Online' : 'Offline'}
@@ -171,26 +174,27 @@ export function Settings() {
       {/* Sync + shortcuts */}
       <SectionLabel>Quick links</SectionLabel>
       <div className="px-4 space-y-2">
-        <button
-          onClick={() => void syncNow()}
-          className="w-full text-left"
-        >
-          <Card className="!rounded-xl p-3.5 flex items-center gap-3">
-            <IconSync className={`w-5 h-5 text-[#0f766e] ${syncing ? 'animate-spin' : ''}`} />
+        <button onClick={() => void syncNow()} className="w-full text-left">
+          <Card className="!rounded-xl p-3.5 flex items-center gap-3 active:scale-[0.99] transition">
+            <div className="w-10 h-10 rounded-xl bg-teal/10 dark:bg-teal/20 grid place-items-center shrink-0">
+              <IconSync className={`w-5 h-5 text-teal ${syncing ? 'animate-spin' : ''}`} />
+            </div>
             <div className="flex-1">
-              <div className="text-[14px] font-bold text-[#12314f] dark:text-white">Sync with Drive</div>
-              <div className="text-[12px] text-[#8a8578] dark:text-[#93a7bb]">
+              <div className="text-[14px] font-bold text-ink dark:text-white">Sync with Drive</div>
+              <div className="text-[12px] text-muted dark:text-muted-dark">
                 {syncing ? 'Syncing…' : online ? 'Push & pull latest data' : 'You are offline'}
               </div>
             </div>
           </Card>
         </button>
         <Link to="/receipt/lookup" className="block">
-          <Card className="!rounded-xl p-3.5 flex items-center gap-3">
-            <IconReceipt className="w-5 h-5 text-[#0f766e]" />
+          <Card className="!rounded-xl p-3.5 flex items-center gap-3 active:scale-[0.99] transition">
+            <div className="w-10 h-10 rounded-xl bg-teal/10 dark:bg-teal/20 grid place-items-center shrink-0">
+              <IconReceipt className="w-5 h-5 text-teal" />
+            </div>
             <div className="flex-1">
-              <div className="text-[14px] font-bold text-[#12314f] dark:text-white">Find a receipt</div>
-              <div className="text-[12px] text-[#8a8578] dark:text-[#93a7bb]">Search by receipt number</div>
+              <div className="text-[14px] font-bold text-ink dark:text-white">Find a receipt</div>
+              <div className="text-[12px] text-muted dark:text-muted-dark">Search by receipt number</div>
             </div>
           </Card>
         </Link>
@@ -231,11 +235,13 @@ export function Settings() {
           }}
           className="w-full text-left"
         >
-          <Card className="!rounded-xl p-3.5 flex items-center gap-3">
-            <IconLock className="w-5 h-5 text-[#0f766e]" />
+          <Card className="!rounded-xl p-3.5 flex items-center gap-3 active:scale-[0.99] transition">
+            <div className="w-10 h-10 rounded-xl bg-[#e8f0f7] dark:bg-hover-dark grid place-items-center shrink-0">
+              <IconLock className="w-5 h-5 text-ink dark:text-accent-dark" />
+            </div>
             <div className="flex-1">
-              <div className="text-[14px] font-bold text-[#12314f] dark:text-white">App PIN lock</div>
-              <div className="text-[12px] text-[#8a8578] dark:text-[#93a7bb]">
+              <div className="text-[14px] font-bold text-ink dark:text-white">App PIN lock</div>
+              <div className="text-[12px] text-muted dark:text-muted-dark">
                 Protect the app if the phone is lost
               </div>
             </div>
@@ -243,18 +249,20 @@ export function Settings() {
         </button>
 
         {/* Theme */}
-        <div className="flex items-center gap-3 rounded-2xl bg-white dark:bg-[#141f2c] border border-[#e8e3d9] dark:border-[#253546] p-3.5">
-          <IconSun className="w-5 h-5 text-[#b45309]" />
+        <div className="flex items-center gap-3 rounded-2xl bg-white dark:bg-card-dark border border-line dark:border-line-dark p-3.5">
+          <div className="w-10 h-10 rounded-xl bg-amber/10 grid place-items-center shrink-0">
+            <IconSun className="w-5 h-5 text-amber" />
+          </div>
           <div className="flex-1">
-            <div className="text-[14px] font-bold text-[#12314f] dark:text-white">Dark mode</div>
-            <div className="text-[12px] text-[#8a8578] dark:text-[#93a7bb]">Comfortable at night</div>
+            <div className="text-[14px] font-bold text-ink dark:text-white">Dark mode</div>
+            <div className="text-[12px] text-muted dark:text-muted-dark">Comfortable at night</div>
           </div>
           <button
             onClick={async () => {
               const dark = !document.documentElement.classList.contains('dark')
               await setTheme(dark ? 'dark' : 'light')
             }}
-            className="relative w-12 h-7 rounded-full transition bg-[#d8d3c8] dark:bg-[#2b5a86]"
+            className="relative w-12 h-7 rounded-full transition bg-line dark:bg-ink-soft shrink-0"
             aria-label="Toggle dark mode"
           >
             <span
@@ -262,7 +270,7 @@ export function Settings() {
                 document.documentElement.classList.contains('dark') ? 'left-[22px]' : 'left-0.5'
               }`}
             >
-              <IconMoon className="w-3.5 h-3.5 text-[#12314f] absolute inset-0 m-auto" />
+              <IconMoon className="w-3.5 h-3.5 text-ink absolute inset-0 m-auto" />
             </span>
           </button>
         </div>
@@ -287,10 +295,10 @@ export function Settings() {
 
       <SectionLabel>Session</SectionLabel>
       <div className="px-4">
-        <Button variant="danger" full onClick={() => void logout()}>
-          <IconLogout className="w-4 h-4" /> Sign out
+        <Button variant="danger" full size="lg" onClick={() => void logout()}>
+          <IconLogout className="w-5 h-5" /> Sign out
         </Button>
-        <p className="text-[11.5px] text-[#a29b8d] mt-3 text-center">
+        <p className="text-[11.5px] text-faint mt-3 text-center">
           Utshaho Educare Payment Tracker · data stored in your Google Drive
         </p>
       </div>
@@ -339,7 +347,7 @@ export function Settings() {
 
       {/* Restore modal */}
       <Modal open={restoreOpen} onClose={() => setRestoreOpen(false)} title="Restore backup">
-        <p className="text-[13.5px] text-[#5c6b7a] dark:text-[#b8c6d4] leading-relaxed">
+        <p className="text-[13.5px] text-muted dark:text-muted-dark leading-relaxed">
           Restoring replaces all current students and receipts with the backup. Make sure you're
           synced before continuing.
         </p>

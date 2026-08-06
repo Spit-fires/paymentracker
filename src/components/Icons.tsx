@@ -56,12 +56,6 @@ export const IconPlus = (p: P) => (
   </svg>
 )
 
-export const IconBack = (p: P) => (
-  <svg {...base(p)}>
-    <path d="M19 12H5M12 19l-7-7 7-7" />
-  </svg>
-)
-
 export const IconArrow = (p: P) => (
   <svg {...base(p)}>
     <path d="M9 18l6-6-6-6" />
@@ -168,22 +162,16 @@ export const IconLogout = (p: P) => (
   </svg>
 )
 
-export const IconInfo = (p: P) => (
-  <svg {...base(p)}>
-    <circle cx="12" cy="12" r="10" />
-    <path d="M12 16v-4M12 8h.01" />
-  </svg>
-)
-
 export const IconCheck = (p: P) => (
   <svg {...base(p)}>
     <path d="M20 6 9 17l-5-5" />
   </svg>
 )
 
-export const IconClose = (p: P) => (
+export const IconInfo = (p: P) => (
   <svg {...base(p)}>
-    <path d="M18 6 6 18M6 6l12 12" />
+    <circle cx="12" cy="12" r="10" />
+    <path d="M12 16v-4M12 8h.01" />
   </svg>
 )
 

@@ -28,32 +28,27 @@ declare global {
 
 let gisPromise: Promise<NonNullable<Window['google']>> | null = null
 
-export function waitForGis(): Promise<NonNullable<Window['google']>> {
+/** Resolve once the GSI script has loaded, polling instead of relying on
+ *  an event nobody dispatches. */
+export function waitForGis(timeoutMs = 30000): Promise<NonNullable<Window['google']>> {
   if (gisPromise) return gisPromise
   gisPromise = new Promise((resolve, reject) => {
-    const check = () => {
-      if (window.google) resolve(window.google)
-      else reject(new Error('Google Identity Services failed to load'))
+    const start = Date.now()
+    const poll = () => {
+      if (window.google) return resolve(window.google)
+      if (Date.now() - start > timeoutMs) {
+        return reject(new Error('Google Identity Services failed to load'))
+      }
+      setTimeout(poll, 100)
     }
-    if (window.google) {
-      check()
-      return
-    }
-    const t = setTimeout(check, 30000)
-    window.addEventListener('google-loaded', check, { once: true })
-    setTimeout(() => clearTimeout(t), 31000)
-    try {
-      window.dispatchEvent(new Event('google-loaded'))
-    } catch {
-      /* ignore */
-    }
+    poll()
   })
   return gisPromise
 }
 
-function requestToken(clientId: string, prompt?: string): Promise<{ token: string; idToken?: string }> {
+function requestToken(clientId: string, prompt?: string, timeoutMs = 30000): Promise<{ token: string; idToken?: string }> {
   return new Promise((resolve, reject) => {
-    waitForGis()
+    waitForGis(timeoutMs)
       .then((g) => {
         const client = g.accounts.oauth2.initTokenClient({
           client_id: clientId,
@@ -95,7 +90,7 @@ export async function signIn(clientId: string): Promise<{ token: string; user: S
 /** Silent re-auth on app load; returns the token when not previously granted. */
 export async function silentSignIn(clientId: string): Promise<string | null> {
   try {
-    const { token } = await requestToken(clientId)
+    const { token } = await requestToken(clientId, undefined, 10000)
     return token
   } catch {
     return null

@@ -7,6 +7,7 @@ import { Button, PageHeader } from '../components/ui'
 import { ReceiptCard } from '../components/ReceiptCard'
 import { IconPrint, IconShare, IconDownload, IconWhatsApp } from '../components/Icons'
 import { defaultCenter } from '../lib/sync'
+import { waLink } from '../lib/phone'
 
 export function ReceiptView() {
   const { id } = useParams<{ id: string }>()
@@ -54,7 +55,7 @@ export function ReceiptView() {
     return (
       <div>
         <PageHeader title="Receipt" back onBack={() => navigate(-1)} />
-        <div className="text-center text-[#8a8578] text-[14px] py-16">Receipt not found</div>
+        <div className="text-center text-muted text-[14px] py-16">Receipt not found</div>
       </div>
     )
   }
@@ -105,9 +106,7 @@ export function ReceiptView() {
   }
 
   const whatsappText = `Here is the receipt for ${student.name} · ${payment.mode} · ${fileName}`
-  const whatsappUrl = student.phone
-    ? `https://wa.me/${student.phone.replace(/\D/g, '').replace(/^88/, '').replace(/^0/, '880')}?text=${encodeURIComponent(whatsappText)}`
-    : `https://wa.me/?text=${encodeURIComponent(whatsappText)}`
+  const whatsappUrl = waLink(student.phone, whatsappText)
 
   return (
     <div>
@@ -145,26 +144,28 @@ export function ReceiptView() {
       </div>
 
       {/* Actions */}
-      <div className="px-4 pb-6 pt-4 grid grid-cols-2 gap-2 no-print">
-        <Button variant="secondary" onClick={() => window.print()}>
-          <IconPrint className="w-4.5 h-4.5" /> Print
+      <div className="px-4 pb-6 pt-4 grid grid-cols-2 gap-2.5 no-print">
+        <Button variant="secondary" size="lg" onClick={() => window.print()}>
+          <IconPrint className="w-5 h-5" /> Print
         </Button>
-        <Button onClick={() => void onDownload()}>
-          <IconDownload className="w-4.5 h-4.5" /> Save PNG
+        <Button size="lg" onClick={() => void onDownload()}>
+          <IconDownload className="w-5 h-5" /> Save PNG
         </Button>
         <Button
           variant="secondary"
-          className="text-[#0f766e] dark:text-[#34c1b8]"
+          size="lg"
+          className="!text-teal dark:!text-teal-bright"
           onClick={() => void onShare()}
         >
-          <IconShare className="w-4.5 h-4.5" /> Share
+          <IconShare className="w-5 h-5" /> Share
         </Button>
         <Button
           variant="secondary"
-          className="text-[#0f766e] dark:text-[#34c1b8]"
+          size="lg"
+          className="!text-teal dark:!text-teal-bright"
           onClick={() => window.open(whatsappUrl, '_blank')}
         >
-          <IconWhatsApp className="w-4.5 h-4.5" /> WhatsApp
+          <IconWhatsApp className="w-5 h-5" /> WhatsApp
         </Button>
       </div>
 

@@ -78,7 +78,7 @@ export function StudentForm({
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
-          className="w-20 h-20 rounded-2xl overflow-hidden bg-[#e8f0f7] dark:bg-[#1d3144] grid place-items-center text-[#12314f] dark:text-[#cfe2f4] border-2 border-dashed border-[#c9d6e0] dark:border-[#2c4054]"
+          className="w-20 h-20 rounded-2xl overflow-hidden bg-[#e8f0f7] dark:bg-hover-dark grid place-items-center text-ink dark:text-accent-dark border-2 border-dashed border-[#c9d6e0] dark:border-line-dark"
         >
           {preview ? (
             <img src={preview} alt="Student" className="w-full h-full object-cover" />
@@ -93,7 +93,7 @@ export function StudentForm({
           className="hidden"
           onChange={(e) => pickPhoto(e.target.files?.[0])}
         />
-        <div className="text-[12px] text-[#8a8578] dark:text-[#93a7bb] leading-relaxed">
+        <div className="text-[12px] text-muted dark:text-muted-dark leading-relaxed">
           Optional photo. It's stored privately in the student's Drive folder.
         </div>
       </div>
@@ -142,11 +142,11 @@ export function StudentForm({
       {err && <div className="text-[12.5px] text-red-600 font-medium">{err}</div>}
 
       <div className="flex gap-2 pt-1">
-        <Button full onClick={submit}>
+        <Button full size="lg" onClick={submit}>
           {submitLabel}
         </Button>
         {onCancel && (
-          <Button variant="secondary" onClick={onCancel}>
+          <Button variant="secondary" size="lg" onClick={onCancel}>
             Cancel
           </Button>
         )}

@@ -15,11 +15,13 @@ import { Spinner } from './components/ui'
 
 function Splash() {
   return (
-    <div className="min-h-screen bg-[#12314f] grid place-items-center">
-      <div className="flex flex-col items-center gap-3 text-white">
-        <div className="text-[40px] font-bold">৳</div>
+    <div className="min-h-screen bg-ink grid place-items-center">
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-16 h-16 rounded-2xl bg-white/10 grid place-items-center text-[38px] font-bold text-white">
+          ৳
+        </div>
         <Spinner className="w-6 h-6 text-white/70" />
-        <div className="text-[12px] text-white/50">Payment Tracker</div>
+        <div className="text-[12px] text-white/50 tracking-wide">Payment Tracker</div>
       </div>
     </div>
   )
@@ -30,22 +32,22 @@ function Gate() {
   if (!initialized) return <Splash />
   if (user && locked) return <Lock />
   if (!user) return <Login />
-    return (
-    <Layout>
-      <ErrorBoundary>
+  return (
+    <ErrorBoundary>
+      <Layout>
         <Routes>
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/students" element={<Students />} />
-        <Route path="/student/:id" element={<StudentDetail />} />
-        <Route path="/payment/:id" element={<Payment />} />
-        <Route path="/receipt/lookup" element={<ReceiptLookup />} />
-        <Route path="/receipt/:id" element={<ReceiptView />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
-      </ErrorBoundary>
-    </Layout>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/students" element={<Students />} />
+          <Route path="/student/:id" element={<StudentDetail />} />
+          <Route path="/payment/:id" element={<Payment />} />
+          <Route path="/receipt/lookup" element={<ReceiptLookup />} />
+          <Route path="/receipt/:id" element={<ReceiptView />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </Layout>
+    </ErrorBoundary>
   )
 }
 

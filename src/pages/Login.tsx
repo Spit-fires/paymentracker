@@ -7,7 +7,7 @@ import { IconGoogle } from '../components/Icons'
 function Logo({ size = 56 }: { size?: number }) {
   return (
     <div
-      className="rounded-2xl grid place-items-center text-white font-bold bg-[#12314f] shadow-lg"
+      className="rounded-2xl grid place-items-center text-white font-bold bg-gradient-to-br from-ink to-ink-soft shadow-lg shadow-ink/30"
       style={{ width: size, height: size, fontSize: size * 0.5 }}
     >
       ৳
@@ -44,22 +44,22 @@ export function Login() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#12314f]">
+    <div className="min-h-screen flex flex-col bg-ink">
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-10">
-        <div className="w-full max-w-sm bg-white dark:bg-[#141f2c] rounded-3xl shadow-2xl p-7 rise">
+        <div className="w-full max-w-sm bg-white dark:bg-card-dark rounded-3xl shadow-2xl p-7 rise">
           <div className="flex items-center gap-3 mb-6">
             <Logo />
             <div>
-              <div className="text-[18px] font-bold text-[#12314f] dark:text-white leading-tight">
+              <div className="text-[18px] font-bold text-ink dark:text-white leading-tight">
                 Utshaho Educare
               </div>
-              <div className="text-[12.5px] text-[#8a8578] dark:text-[#93a7bb]">
+              <div className="text-[12.5px] text-muted dark:text-muted-dark">
                 Payment Tracker
               </div>
             </div>
           </div>
 
-          <p className="text-[13.5px] text-[#5c6b7a] dark:text-[#93a7bb] mb-5 leading-relaxed">
+          <p className="text-[13.5px] text-muted dark:text-muted-dark mb-5 leading-relaxed">
             Sign in with the dedicated Utshaho Educare Google account to manage students, record
             payments and issue receipts.
           </p>
@@ -78,12 +78,12 @@ export function Login() {
               </Field>
               <button
                 onClick={() => setShowHelp((v) => !v)}
-                className="text-[12px] text-[#0f766e] font-medium mt-2 underline-offset-2"
+                className="text-[12px] text-teal font-medium mt-2 underline-offset-2"
               >
                 {showHelp ? 'Hide instructions' : 'Where do I find this?'}
               </button>
               {showHelp && (
-                <ol className="text-[12px] text-[#5c6b7a] dark:text-[#93a7bb] mt-2 space-y-1 list-decimal list-inside">
+                <ol className="text-[12px] text-muted dark:text-muted-dark mt-2 space-y-1 list-decimal list-inside">
                   <li>Open Google Cloud Console → create a project for the dedicated account</li>
                   <li>APIs &amp; Services → Credentials → Create Credentials → OAuth Client ID</li>
                   <li>Choose “Web application”</li>
@@ -105,7 +105,7 @@ export function Login() {
           )}
 
           {!editing && (
-            <Button full onClick={submit} disabled={busy} className="!py-3 text-[15px]">
+            <Button full size="lg" onClick={submit} disabled={busy}>
               {busy ? <Spinner className="text-white" /> : <IconGoogle />}
               Sign in with Google
             </Button>
@@ -114,13 +114,17 @@ export function Login() {
           {!editing && (
             <button
               onClick={() => setEditing(true)}
-              className="w-full text-center text-[12.5px] text-[#8a8578] mt-3 underline-offset-2 underline"
+              className="w-full text-center text-[12.5px] text-muted mt-4 underline-offset-2 underline"
             >
               Change Google account / Client ID
             </button>
           )}
 
-          {error && <div className="mt-3 text-[12.5px] text-red-600 font-medium">{error}</div>}
+          {error && (
+            <div className="mt-3 rounded-xl bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-300 text-[12.5px] font-medium px-3.5 py-2.5">
+              {error}
+            </div>
+          )}
         </div>
       </div>
 

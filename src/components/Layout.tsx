@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useApp } from '../state/AppContext'
-import { IconHome, IconUsers, IconGear, IconSync } from './Icons'
+import { IconHome, IconUsers, IconGear, IconSync, IconCheck, IconInfo } from './Icons'
 import { cx } from './ui'
 
 const tabs = [
-  { to: '/dashboard', label: 'Dashboard', Icon: IconHome },
+  { to: '/dashboard', label: 'Home', Icon: IconHome },
   { to: '/students', label: 'Students', Icon: IconUsers },
   { to: '/settings', label: 'Settings', Icon: IconGear },
 ]
@@ -18,13 +18,21 @@ export function Layout({ children }: { children: ReactNode }) {
       {toast && (
         <div
           className={cx(
-            'fixed top-3 left-1/2 -translate-x-1/2 z-[60] max-w-[92%] rounded-xl px-4 py-2.5 text-[13.5px] font-semibold shadow-lg text-white rise',
+            'toast-in fixed top-3 left-1/2 z-[60] max-w-[92%] w-max rounded-full px-4 py-2.5 text-[13.5px] font-semibold shadow-lg text-white flex items-center gap-2',
             toast.kind === 'ok' && 'bg-emerald-600',
             toast.kind === 'err' && 'bg-red-600',
-            toast.kind === 'info' && 'bg-[#12314f]',
+            toast.kind === 'info' && 'bg-ink',
           )}
         >
-          {toast.msg}
+          {toast.kind === 'ok' && <IconCheck className="w-4 h-4 shrink-0" />}
+          {toast.kind === 'err' && (
+            <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 8v4M12 16h.01" />
+            </svg>
+          )}
+          {toast.kind === 'info' && <IconInfo className="w-4 h-4 shrink-0" />}
+          <span className="truncate">{toast.msg}</span>
         </div>
       )}
 
@@ -34,24 +42,31 @@ export function Layout({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      <div className="flex-1 pb-20">{children}</div>
+      <div className="flex-1 pb-24">{children}</div>
 
       <nav className="fixed bottom-0 inset-x-0 z-40">
-        <div className="app-shell-safe mx-auto max-w-[480px] bg-white/95 dark:bg-[#0e1823]/95 backdrop-blur border-t border-[#e8e3d9] dark:border-[#1d2b3a] grid grid-cols-3 safe-b">
+        <div className="app-shell-safe mx-auto max-w-[480px] bg-white/95 dark:bg-[#0e1823]/95 backdrop-blur border-t border-line dark:border-line-dark grid grid-cols-3 safe-b">
           {tabs.map(({ to, label, Icon }) => (
             <NavLink
               key={to}
               to={to}
               className={({ isActive }) =>
                 cx(
-                  'flex flex-col items-center gap-1 py-2.5 text-[11px] font-semibold transition',
-                  isActive ? 'text-[#12314f] dark:text-[#7fb3e0]' : 'text-[#a29b8d] dark:text-[#5f7a92]',
+                  'flex flex-col items-center gap-0.5 pt-2.5 pb-1.5 text-[11px] font-semibold transition',
+                  isActive ? 'text-ink dark:text-accent-dark' : 'text-faint dark:text-[#5f7a92]',
                 )
               }
             >
               {({ isActive }) => (
                 <>
-                  <Icon className={cx('w-[22px] h-[22px]', isActive && 'stroke-[2.4]')} />
+                  <span
+                    className={cx(
+                      'w-11 h-7 rounded-full grid place-items-center transition',
+                      isActive && 'bg-ink/10 dark:bg-accent-dark/15',
+                    )}
+                  >
+                    <Icon className={cx('w-[22px] h-[22px]', isActive && 'stroke-[2.3]')} />
+                  </span>
                   {label}
                 </>
               )}
@@ -59,7 +74,7 @@ export function Layout({ children }: { children: ReactNode }) {
           ))}
         </div>
         {syncing && (
-          <div className="max-w-[480px] mx-auto flex items-center justify-center gap-1.5 bg-[#12314f]/95 text-white text-[11px] py-1">
+          <div className="max-w-[480px] mx-auto flex items-center justify-center gap-1.5 bg-ink/95 dark:bg-ink-soft/95 text-white text-[11px] py-1">
             <IconSync className="w-3.5 h-3.5 animate-spin" /> Syncing…
           </div>
         )}
@@ -73,7 +88,7 @@ export function SyncIndicator() {
   return (
     <button
       onClick={() => void syncNow()}
-      className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[#8a8578] dark:text-[#93a7bb]"
+      className="inline-flex items-center gap-1.5 text-[12px] font-medium text-muted dark:text-muted-dark"
     >
       <IconSync className={cx('w-3.5 h-3.5', syncing && 'animate-spin')} />
       {syncing ? 'Syncing…' : lastSyncAt ? 'Synced' : 'Sync'}

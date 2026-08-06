@@ -4,12 +4,27 @@
 
 @theme {
   --color-ink: #12314f;
+  --color-ink-soft: #1d4570;
   --color-ink-deep: #0b2136;
   --color-teal: #0f766e;
+  --color-teal-bright: #2dd4bf;
   --color-cream: #f5f3ee;
   --color-paper: #fffdf8;
+  --color-body: #1c2936;
+  --color-muted: #8a8578;
+  --color-faint: #a9a294;
+  --color-line: #e8e3d9;
   --color-amber: #b45309;
   --color-mint: #ecfdf5;
+  --color-danger: #dc2626;
+  --color-card-dark: #141f2c;
+  --color-bg-dark: #101a26;
+  --color-input-dark: #0f1822;
+  --color-line-dark: #253546;
+  --color-text-dark: #dbe4ec;
+  --color-muted-dark: #93a7bb;
+  --color-accent-dark: #7fb3e0;
+  --color-hover-dark: #1d3144;
   --font-sans: "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-serif: Georgia, "Times New Roman", serif;
 }
@@ -24,14 +39,15 @@ body {
   margin: 0;
   font-family: var(--font-sans);
   background: var(--color-cream);
-  color: #1c2936;
+  color: var(--color-body);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .dark body {
-  background: #0f1720;
-  color: #dbe4ec;
+  background: var(--color-bg-dark);
+  color: var(--color-text-dark);
 }
 
 .app-shell {
@@ -43,12 +59,17 @@ body {
 }
 
 .dark .app-shell {
-  background: #101a26;
+  background: var(--color-bg-dark);
   box-shadow: none;
 }
 
 .safe-b {
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+:focus-visible {
+  outline: 2px solid rgba(15, 118, 110, 0.55);
+  outline-offset: 2px;
 }
 
 input[type="number"]::-webkit-outer-spin-button,
@@ -127,4 +148,27 @@ input[type="number"] {
 }
 .rise {
   animation: rise 0.25s ease-out both;
+}
+
+/* toast slide */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+.toast-in {
+  animation: toast-in 0.22s ease-out both;
+}
+
+/* hide horizontal scrollbars on chip rows */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
 }

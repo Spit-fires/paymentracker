@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useApp } from '../state/AppContext'
 import { studentPeriodPaidAny } from '../lib/ledger'
 import { periodNow } from '../lib/format'
-import { Card, EmptyState, Modal, Button } from '../components/ui'
+import { Card, EmptyState, Modal, Button, useBlobUrl } from '../components/ui'
 import { StudentForm, type FormValue } from '../components/StudentForm'
 import {
   IconPlus,
@@ -14,6 +14,21 @@ import {
 
 type SortKey = 'name' | 'batch' | 'recent'
 const SORT_LABELS: Record<SortKey, string> = { name: 'Name', batch: 'Batch', recent: 'Recently added' }
+
+function StudentAvatar({ s }: { s: { name: string; photoBlob?: Blob } }) {
+  const url = useBlobUrl(s.photoBlob)
+  if (url) return <img src={url} alt="" className="w-11 h-11 rounded-full object-cover shrink-0" />
+  return (
+    <div className="w-11 h-11 rounded-full bg-[#e8f0f7] dark:bg-hover-dark grid place-items-center text-ink dark:text-accent-dark font-bold text-[14px] shrink-0">
+      {s.name
+        .split(' ')
+        .slice(0, 2)
+        .map((x) => x[0])
+        .join('')
+        .toUpperCase()}
+    </div>
+  )
+}
 
 export function Students() {
   const { students, payments, online, addStudent, showToast } = useApp()
@@ -87,8 +102,8 @@ export function Students() {
       <div className="px-4 pt-5 pb-2">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-[22px] font-bold text-[#12314f] dark:text-white">Students</div>
-            <div className="text-[13px] text-[#8a8578] dark:text-[#93a7bb]">
+            <div className="text-[22px] font-bold text-ink dark:text-white">Students</div>
+            <div className="text-[13px] text-muted dark:text-muted-dark">
               {students.filter((s) => !s.archived).length} active
             </div>
           </div>
@@ -98,18 +113,18 @@ export function Students() {
         </div>
 
         {mode === 'record' && (
-          <div className="mt-3 rounded-xl bg-[#0f766e]/10 dark:bg-[#0f766e]/20 border border-[#0f766e]/20 px-3.5 py-2.5 text-[13px] font-medium text-[#0f766e]">
+          <div className="mt-3 rounded-xl bg-teal/10 dark:bg-teal/20 border border-teal/20 px-3.5 py-2.5 text-[13px] font-medium text-teal">
             Pick a student to record their payment
           </div>
         )}
 
         <div className="relative mt-3">
-          <IconSearch className="w-[18px] h-[18px] absolute left-3.5 top-1/2 -translate-y-1/2 text-[#a29b8d]" />
+          <IconSearch className="w-[18px] h-[18px] absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />
           <input
             value={q}
             onChange={(e) => setParams({ q: e.target.value, ...(mode ? { mode } : {}) }, { replace: true })}
             placeholder="Search by name or batch…"
-            className="w-full rounded-xl bg-white dark:bg-[#141f2c] border border-[#e8e3d9] dark:border-[#253546] pl-10 pr-4 py-2.5 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#12314f]/20"
+            className="w-full rounded-xl bg-white dark:bg-card-dark border border-line dark:border-line-dark pl-10 pr-4 py-3 text-[15px] text-body dark:text-text-dark placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-teal/25"
           />
         </div>
 
@@ -117,17 +132,17 @@ export function Students() {
         <div className="flex items-center gap-2 mt-3">
           <button
             onClick={() => setSortOpen(true)}
-            className="rounded-lg border border-[#e8e3d9] dark:border-[#253546] bg-white dark:bg-[#141f2c] px-3 py-1.5 text-[13px] font-semibold text-[#12314f] dark:text-white"
+            className="rounded-lg border border-line dark:border-line-dark bg-white dark:bg-card-dark px-3 py-2 text-[13px] font-semibold text-ink dark:text-white active:scale-95 transition"
           >
             Sort: {SORT_LABELS[sort]}
           </button>
           <div className="flex-1" />
           <button
             onClick={() => setShowArchived((v) => !v)}
-            className={`rounded-lg px-3 py-1.5 text-[13px] font-semibold transition ${
+            className={`rounded-lg px-3 py-2 text-[13px] font-semibold transition ${
               showArchived
-                ? 'bg-[#12314f] text-white'
-                : 'border border-[#e8e3d9] dark:border-[#253546] bg-white dark:bg-[#141f2c] text-[#8a8578] dark:text-[#93a7bb]'
+                ? 'bg-ink text-white'
+                : 'border border-line dark:border-line-dark bg-white dark:bg-card-dark text-muted dark:text-muted-dark'
             }`}
           >
             Archived
@@ -136,11 +151,13 @@ export function Students() {
 
         {/* Batch filter chips */}
         {batches.length > 0 && (
-          <div className="flex gap-1.5 overflow-x-auto mt-2 pb-1 -mx-4 px-4">
+          <div className="flex gap-1.5 overflow-x-auto no-scrollbar mt-2.5 pb-1 -mx-4 px-4">
             <button
               onClick={() => setBatchFilter('')}
-              className={`shrink-0 rounded-full px-3 py-1 text-[12px] font-semibold ${
-                !batchFilter ? 'bg-[#12314f] text-white' : 'bg-white dark:bg-[#141f2c] text-[#3d4c5c] dark:text-[#b8c6d4] border border-[#e8e3d9] dark:border-[#253546]'
+              className={`shrink-0 rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold transition ${
+                !batchFilter
+                  ? 'bg-ink text-white'
+                  : 'bg-white dark:bg-card-dark text-body/70 dark:text-muted-dark border border-line dark:border-line-dark'
               }`}
             >
               All
@@ -149,10 +166,10 @@ export function Students() {
               <button
                 key={b}
                 onClick={() => setBatchFilter(batchFilter === b ? '' : b)}
-                className={`shrink-0 rounded-full px-3 py-1 text-[12px] font-semibold ${
+                className={`shrink-0 rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold transition ${
                   batchFilter === b
-                    ? 'bg-[#12314f] text-white'
-                    : 'bg-white dark:bg-[#141f2c] text-[#3d4c5c] dark:text-[#b8c6d4] border border-[#e8e3d9] dark:border-[#253546]'
+                    ? 'bg-ink text-white'
+                    : 'bg-white dark:bg-card-dark text-body/70 dark:text-muted-dark border border-line dark:border-line-dark'
                 }`}
               >
                 {b}
@@ -193,36 +210,23 @@ export function Students() {
                   to={mode === 'record' ? `/payment/${s.id}` : `/student/${s.id}`}
                   className="block"
                 >
-                  <Card className="!rounded-xl p-3 flex items-center gap-3">
-                    {s.photoBlob ? (
-                      <img
-                        src={URL.createObjectURL(s.photoBlob)}
-                        alt=""
-                        className="w-11 h-11 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-11 h-11 rounded-full bg-[#e8f0f7] dark:bg-[#1d3144] grid place-items-center text-[#12314f] dark:text-[#cfe2f4] font-bold text-[15px] shrink-0">
-                        {s.name
-                          .split(' ')
-                          .slice(0, 2)
-                          .map((x) => x[0])
-                          .join('')
-                          .toUpperCase()}
-                      </div>
-                    )}
+                  <Card className="!rounded-xl p-3 flex items-center gap-3 active:scale-[0.99] transition">
+                    <StudentAvatar s={s} />
                     <div className="flex-1 min-w-0">
-                      <div className="text-[14.5px] font-bold text-[#12314f] dark:text-white truncate flex items-center gap-2">
+                      <div className="text-[14.5px] font-bold text-ink dark:text-white truncate flex items-center gap-2">
                         {s.name}
                         {s.archived && (
-                          <span className="text-[10px] font-semibold text-[#8a8578] border border-[#d8d3c8] rounded px-1">archived</span>
+                          <span className="text-[10px] font-semibold text-muted border border-line dark:border-line-dark rounded px-1">
+                            archived
+                          </span>
                         )}
                       </div>
-                      <div className="text-[12px] text-[#8a8578] dark:text-[#93a7bb]">
+                      <div className="text-[12px] text-muted dark:text-muted-dark">
                         {s.batch || 'No batch'}
                       </div>
                     </div>
                     <div
-                      className={`text-[11px] font-bold px-2 py-1 rounded-full ${
+                      className={`text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0 ${
                         paid
                           ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
                           : 'bg-red-50 text-red-600 dark:bg-red-900/40 dark:text-red-300'
@@ -230,7 +234,7 @@ export function Students() {
                     >
                       {paid ? 'Paid' : 'Due'}
                     </div>
-                    <IconArrow className="w-4 h-4 text-[#c4beb0] dark:text-[#5f7a92]" />
+                    <IconArrow className="w-4 h-4 text-faint dark:text-[#5f7a92]" />
                   </Card>
                 </Link>
               )
@@ -249,13 +253,20 @@ export function Students() {
                 setSort(k)
                 setSortOpen(false)
               }}
-              className={`w-full text-left rounded-xl px-4 py-3 text-[15px] font-semibold ${
+              className={`w-full text-left rounded-xl px-4 py-3.5 text-[15px] font-semibold transition ${
                 sort === k
-                  ? 'bg-[#e8f0f7] text-[#12314f] dark:bg-[#1d3144] dark:text-[#cfe2f4]'
-                  : 'text-[#3d4c5c] dark:text-[#b8c6d4]'
+                  ? 'bg-[#e8f0f7] text-ink dark:bg-hover-dark dark:text-accent-dark'
+                  : 'text-body dark:text-text-dark'
               }`}
             >
               {SORT_LABELS[k]}
+              {sort === k && (
+                <span className="float-right text-teal">
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                </span>
+              )}
             </button>
           ))}
         </div>

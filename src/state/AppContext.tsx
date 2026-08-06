@@ -125,12 +125,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSyncing(true)
     try {
       await ensureDriveStructure()
+      // merge remote changes first (local-newer records win), then push local,
+      // then pull again to re-apply everything we just pushed plus new remote state
+      await pull()
       await flushOutbox()
-      const pending = await db.outbox.count()
-      if (pending === 0) {
-        await pull()
-        await refreshData()
-      }
+      await pull()
+      await refreshData()
       setLastSyncAt(Date.now())
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Sync failed', 'err')
@@ -158,6 +158,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (session?.theme) document.documentElement.classList.toggle('dark', session.theme === 'dark')
       await refreshData()
       if (session?.clientId && session?.user) {
+        if (!navigator.onLine) {
+          // offline: keep the session, data lives locally anyway
+          if (alive) setInitialized(true)
+          return
+        }
         const token = await silentSignIn(session.clientId)
         if (token) {
           setToken(token)
@@ -267,13 +272,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!cur) return
       const updated = { ...cur, ...patch, updatedAt: Date.now() }
       await db.students.put(updated)
-      if (
-        patch.name !== undefined ||
-        patch.batch !== undefined ||
-        patch.email !== undefined ||
-        patch.folderId === undefined
-      ) {
-        if (patch.email !== undefined && patch.email !== cur.email) {
+      const renamed = patch.name !== undefined || patch.batch !== undefined
+      const emailChanged = patch.email !== undefined && patch.email !== cur.email
+      if (renamed || emailChanged || !cur.folderId) {
+        if (emailChanged) {
           await db.students.update(id, { folderShared: false })
         }
         await queueOp({ kind: 'ensureStudentFolder', studentId: id })
@@ -286,6 +288,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           fileName: 'photo.jpg',
           blob: patch.photoBlob,
         })
+        if (cur.photoFileId) {
+          await queueOp({ kind: 'deleteMedia', fileId: cur.photoFileId })
+        }
       }
       await queueOp({ kind: 'pushJSON', file: 'students' })
       await refreshData()
@@ -367,7 +372,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const updated = { ...cur, ...patch, updatedAt: Date.now() }
       await db.payments.put(updated)
       if (patch.pngBlob && patch.pngBlob !== cur.pngBlob) {
-        if (cur.pngFileId) await queueOp({ kind: 'deleteMedia', fileId: cur.pngFileId })
+        // upload the new PNG first, then delete the old one — a crash in
+        // between leaves the old file intact and the id still referenced
         await queueOp({
           kind: 'uploadMedia',
           type: 'receipt',
@@ -376,7 +382,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           fileName: receiptFileName(cur.receiptNo, cur.date),
           blob: patch.pngBlob,
         })
-        await db.payments.update(cur.id, { pngFileId: undefined })
+        if (cur.pngFileId) {
+          await queueOp({ kind: 'deleteMedia', fileId: cur.pngFileId })
+        }
       }
       await queueOp({ kind: 'pushJSON', file: 'payments' })
       await refreshData()
