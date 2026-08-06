@@ -58,7 +58,7 @@ export function Settings() {
     getKV<DriveRefs>(K.DRIVE)
       .then((d) => d && setDriveRefs(d))
       .catch(() => undefined)
-  }, [])
+  }, [syncing])
 
   const period = periodNow()
   const driveRootUrl = driveRefs?.rootFolderId

@@ -40,6 +40,8 @@ export interface Center {
 export interface DriveRefs {
   rootFolderId?: string
   studentsFolderId?: string
+  /** Google account that owns this folder — refs are only trusted for that account. */
+  ownerEmail?: string
   fileIds: { students?: string; payments?: string; meta?: string }
 }
 

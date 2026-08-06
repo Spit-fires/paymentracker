@@ -217,12 +217,33 @@ export async function pull(): Promise<boolean> {
   return changed
 }
 
+function isNotFound(e: unknown): boolean {
+  const status = (e as { status?: number }).status
+  if (status === 404) return true
+  return /not found/i.test(String((e as Error).message || ''))
+}
+
 export async function ensureDriveStructure(): Promise<DriveRefs> {
-  const existing = await getKV<DriveRefs>(K.DRIVE)
-  if (existing?.rootFolderId) return existing
   const c = client()
-  // prefer the app-marked root folder, fall back to a plain name match
-  // (covers folders created by an older app version or manually)
+  const session = (await getKV<Session>(K.SESSION)) || { theme: 'light', lastPulledAt: 0 }
+  const email = session.user?.email
+
+  const existing = await getKV<DriveRefs>(K.DRIVE)
+  // only trust refs recorded for the signed-in account, and only if the
+  // folder still exists — it may have been deleted inside Drive
+  if (existing?.rootFolderId && existing.ownerEmail === email) {
+    try {
+      await c.get(existing.rootFolderId)
+      return existing
+    } catch (e) {
+      if (!isNotFound(e)) throw e
+      // deleted → rebuild below
+    }
+  }
+
+  // (re)discover in the CURRENT account: app-marked root first, then a plain
+  // name match (covers folders from older versions or created manually),
+  // otherwise create a fresh root folder
   let roots = await c.list(
     "appProperties has { key='pt' and value='root' } and trashed=false",
     'files(id,name,mimeType)',
@@ -233,8 +254,7 @@ export async function ensureDriveStructure(): Promise<DriveRefs> {
       'files(id,name,mimeType)',
     )
   }
-  let rootId = roots[0]?.id
-  if (!rootId) rootId = await c.createFolder('PaymentTracker', 'root', { pt: 'root' })
+  const rootId = roots[0]?.id || (await c.createFolder('PaymentTracker', 'root', { pt: 'root' }))
 
   const files = await c.list(`'${rootId}' in parents and trashed=false`)
   const mk = async (name: string): Promise<string> => {
@@ -244,8 +264,19 @@ export async function ensureDriveStructure(): Promise<DriveRefs> {
       pt: name,
     })
   }
+
+  let studentsFolderId: string | undefined
+  const studentFolders = files.filter((f) => f.mimeType === 'application/vnd.google-apps.folder')
+  const hit = studentFolders.find((f) => f.name === 'Students')
+  studentsFolderId = hit?.id || studentsFolderId
+  if (!studentsFolderId) {
+    studentsFolderId = await c.createFolder('Students', rootId, { pt: 'students' })
+  }
+
   const drive: DriveRefs = {
     rootFolderId: rootId,
+    studentsFolderId,
+    ownerEmail: email,
     fileIds: {
       students: await mk('_students.json'),
       payments: await mk('_payments.json'),

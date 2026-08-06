@@ -38,7 +38,9 @@ export class DriveClient {
       } catch {
         /* ignore */
       }
-      throw new Error(msg)
+      const err = new Error(msg) as Error & { status?: number }
+      err.status = res.status
+      throw err
     }
     return res
   }
