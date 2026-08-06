@@ -10,7 +10,7 @@ import {
 } from 'react'
 import type { Student, Payment, Center, Session, SessionUser, PaymentMode } from '../types'
 import { db, getKV, setKV, queueOp, K } from '../lib/db'
-import { signIn, silentSignIn, revoke } from '../lib/auth'
+import { signIn, silentSignIn, revoke, lastSilentError } from '../lib/auth'
 import {
   ensureDriveStructure,
   flushOutbox,
@@ -56,6 +56,8 @@ interface Ctx {
   locked: boolean
   /** saved session exists but silent re-auth failed — app stays usable, sync paused */
   needsReauth: boolean
+  /** Google's error string for the last failed silent re-auth (diagnosis). */
+  reauthError: string | null
   students: Student[]
   payments: Payment[]
   center: Center
@@ -105,6 +107,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [lastSyncAt, setLastSyncAt] = useState(0)
   const [locked, setLocked] = useState(false)
   const [needsReauth, setNeedsReauth] = useState(false)
+  const [reauthError, setReauthError] = useState<string | null>(null)
   const [students, setStudents] = useState<Student[]>([])
   const [payments, setPayments] = useState<Payment[]>([])
   const [center, setCenter] = useState<Center>(defaultCenter())
@@ -210,15 +213,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
           // a small banner offers one-tap re-auth. No forced login screen.
           if (alive) {
             setNeedsReauth(true)
+            setReauthError(lastSilentError)
             const cid = session.clientId
             retry = window.setInterval(async () => {
               const t = await silentSignIn(cid)
-              if (!t) return
+              if (!t) {
+                setReauthError(lastSilentError)
+                return
+              }
               window.clearInterval(retry)
               if (!alive) return
               setToken(t.token, t.expiresIn)
               setDriveToken(t.token)
               setNeedsReauth(false)
+              setReauthError(null)
               void syncNow()
             }, 30000)
           }
@@ -261,6 +269,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setClientId(cid)
       showToast(`Signed in as ${user.email}`, 'ok')
       setNeedsReauth(false)
+      setReauthError(null)
       setInitialized(true)
       await ensureDriveStructure().catch((e) => showToast(e.message, 'err'))
       void syncNow()
@@ -492,6 +501,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       lastSyncAt,
       locked,
       needsReauth,
+      reauthError,
       students,
       payments,
       center,
@@ -525,6 +535,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       lastSyncAt,
       locked,
       needsReauth,
+      reauthError,
       students,
       payments,
       center,

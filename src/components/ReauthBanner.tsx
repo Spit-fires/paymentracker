@@ -4,7 +4,7 @@ import { IconSync } from './Icons'
 /** Slim, tappable banner shown when the saved session can't silently re-auth.
  *  The app stays fully usable offline — only sync is paused. */
 export function ReauthBanner() {
-  const { clientId, login } = useApp()
+  const { clientId, login, reauthError } = useApp()
   if (!clientId) return null
   return (
     <button
@@ -20,6 +20,11 @@ export function ReauthBanner() {
           <div className="text-[12px] text-muted dark:text-muted-dark truncate">
             Tap to sign back in. Your data is safe on this device.
           </div>
+          {reauthError && (
+            <div className="text-[11px] text-muted dark:text-muted-dark truncate mt-0.5">
+              Google says: {reauthError}
+            </div>
+          )}
         </div>
       </div>
       <span className="text-[13px] font-semibold text-amber-700 dark:text-amber-300 shrink-0">
