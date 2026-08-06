@@ -20,6 +20,7 @@ import {
 } from '../lib/sync'
 import { newId, receiptFileName } from '../lib/format'
 import { setToken, getToken, clearToken, tokenNeedsRefresh } from '../lib/token'
+import { CLIENT_ID } from '../config'
 
 export interface Toast {
   id: number
@@ -183,22 +184,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ;(async () => {
       const session = await getKV<Session>(K.SESSION)
       if (!alive) return
-      setClientId(session?.clientId)
+      // the deployed CLIENT_ID always wins over any ID pasted into an
+      // earlier build — a stale stored ID is a silent origin_mismatch trap
+      const cid = CLIENT_ID || session?.clientId
+      setClientId(cid)
       if (session?.user) setUser(session.user)
       if (session?.pinHash && session.user) setLocked(true)
       if (session?.theme) document.documentElement.classList.toggle('dark', session.theme === 'dark')
       await refreshData()
-      if (session?.clientId && session?.user) {
+      if (cid && session?.user) {
         if (!navigator.onLine) {
           // offline: keep the session, data lives locally anyway
           if (alive) setInitialized(true)
           return
         }
-        let tok = await silentSignIn(session.clientId)
+        let tok = await silentSignIn(cid)
         // GIS can hiccup on cold start — retry once before giving up
         if (!tok && alive) {
           await new Promise((r) => setTimeout(r, 900))
-          tok = await silentSignIn(session.clientId)
+          tok = await silentSignIn(cid)
         }
         if (tok) {
           setToken(tok.token, tok.expiresIn)
@@ -214,7 +218,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (alive) {
             setNeedsReauth(true)
             setReauthError(lastSilentError)
-            const cid = session.clientId
             retry = window.setInterval(async () => {
               const t = await silentSignIn(cid)
               if (!t) {

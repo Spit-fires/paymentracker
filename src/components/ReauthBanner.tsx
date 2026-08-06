@@ -25,6 +25,11 @@ export function ReauthBanner() {
               Google says: {reauthError} · origin: {location.origin}
             </div>
           )}
+          {clientId && (
+            <div className="text-[11px] text-muted dark:text-muted-dark truncate mt-0.5">
+              client: {clientId.slice(0, 20)}…
+            </div>
+          )}
         </div>
       </div>
       <span className="text-[13px] font-semibold text-amber-700 dark:text-amber-300 shrink-0">
