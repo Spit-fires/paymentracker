@@ -54,6 +54,8 @@ interface Ctx {
   syncing: boolean
   lastSyncAt: number
   locked: boolean
+  /** saved session exists but silent re-auth failed — app stays usable, sync paused */
+  needsReauth: boolean
   students: Student[]
   payments: Payment[]
   center: Center
@@ -63,7 +65,7 @@ interface Ctx {
   saveClientId: (id: string) => void
   login: (clientId: string) => Promise<void>
   logout: () => Promise<void>
-  syncNow: () => Promise<void>
+  syncNow: (manual?: boolean) => Promise<void>
   refreshData: () => Promise<void>
 
   addStudent: (input: NewStudentInput) => Promise<Student>
@@ -102,6 +104,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [syncing, setSyncing] = useState(false)
   const [lastSyncAt, setLastSyncAt] = useState(0)
   const [locked, setLocked] = useState(false)
+  const [needsReauth, setNeedsReauth] = useState(false)
   const [students, setStudents] = useState<Student[]>([])
   const [payments, setPayments] = useState<Payment[]>([])
   const [center, setCenter] = useState<Center>(defaultCenter())
@@ -123,33 +126,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setReceiptSeq((await getKV<number>(K.RECEIPT_SEQ)) || 0)
   }, [])
 
-  const syncNow = useCallback(async () => {
-    if (!online) return
-    // Google access tokens live ~1h; silently renew before hitting the API
-    if (tokenNeedsRefresh() && clientId) {
-      const fresh = await silentSignIn(clientId)
-      if (fresh?.token) {
-        setToken(fresh.token, fresh.expiresIn)
-        setDriveToken(fresh.token)
+  const syncNow = useCallback(
+    async (manual = false) => {
+      if (!online) {
+        if (manual) showToast('Offline — changes saved locally', 'info')
+        return
       }
-    }
-    if (!getToken()) return
-    setSyncing(true)
-    try {
-      await ensureDriveStructure()
-      // merge remote changes first (local-newer records win), then push local,
-      // then pull again to re-apply everything we just pushed plus new remote state
-      await pull()
-      await flushOutbox()
-      await pull()
-      await refreshData()
-      setLastSyncAt(Date.now())
-    } catch (e) {
-      showToast(e instanceof Error ? e.message : 'Sync failed', 'err')
-    } finally {
-      setSyncing(false)
-    }
-  }, [online, showToast, refreshData, clientId])
+      // Google access tokens live ~1h; silently renew before hitting the API
+      if (tokenNeedsRefresh() && clientId) {
+        const fresh = await silentSignIn(clientId)
+        if (fresh?.token) {
+          setToken(fresh.token, fresh.expiresIn)
+          setDriveToken(fresh.token)
+          setNeedsReauth(false)
+        }
+      }
+      if (!getToken()) {
+        if (manual) showToast('Sign in to sync', 'info')
+        return
+      }
+      setSyncing(true)
+      try {
+        await ensureDriveStructure()
+        // merge remote changes first (local-newer records win), then push local,
+        // then pull again to re-apply everything we just pushed plus new remote state
+        await pull()
+        await flushOutbox()
+        await pull()
+        await refreshData()
+        setLastSyncAt(Date.now())
+      } catch (e) {
+        showToast(e instanceof Error ? e.message : 'Sync failed', 'err')
+      } finally {
+        setSyncing(false)
+      }
+    },
+    [online, showToast, refreshData, clientId],
+  )
 
   const scheduleSync = useCallback(() => {
     window.clearTimeout(syncTimer.current)
@@ -163,6 +176,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (bootStarted) return
     bootStarted = true
     let alive = true
+    let retry: number | undefined
     ;(async () => {
       const session = await getKV<Session>(K.SESSION)
       if (!alive) return
@@ -191,15 +205,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
             void syncNow()
           }
         } else {
-          // token expired / revoked — keep the saved session so the PIN
-          // screen survives and re-login is a single tap, not a wipe
-          if (alive) setUser(null)
+          // saved session but silent re-auth failed — keep the user signed
+          // in locally (data is on-device anyway) and retry in the background;
+          // a small banner offers one-tap re-auth. No forced login screen.
+          if (alive) {
+            setNeedsReauth(true)
+            const cid = session.clientId
+            retry = window.setInterval(async () => {
+              const t = await silentSignIn(cid)
+              if (!t) return
+              window.clearInterval(retry)
+              if (!alive) return
+              setToken(t.token, t.expiresIn)
+              setDriveToken(t.token)
+              setNeedsReauth(false)
+              void syncNow()
+            }, 30000)
+          }
         }
       }
       if (alive) setInitialized(true)
     })()
     return () => {
       alive = false
+      window.clearInterval(retry)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -231,6 +260,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await setKV(K.SESSION, { ...session, clientId: cid, user })
       setClientId(cid)
       showToast(`Signed in as ${user.email}`, 'ok')
+      setNeedsReauth(false)
       setInitialized(true)
       await ensureDriveStructure().catch((e) => showToast(e.message, 'err'))
       void syncNow()
@@ -245,6 +275,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setDriveToken('')
     setUser(null)
     setLocked(false)
+    setNeedsReauth(false)
     const session = await getKV<Session>(K.SESSION)
     await setKV(K.SESSION, { ...session, user: undefined })
     // keep local data for next login
@@ -460,6 +491,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       syncing,
       lastSyncAt,
       locked,
+      needsReauth,
       students,
       payments,
       center,
@@ -492,6 +524,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       syncing,
       lastSyncAt,
       locked,
+      needsReauth,
       students,
       payments,
       center,

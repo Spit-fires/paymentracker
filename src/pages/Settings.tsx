@@ -6,6 +6,7 @@ import { hashPin } from '../lib/pin'
 import { periodNow, periodLabel, fmtDate } from '../lib/format'
 import { defaultCenter } from '../lib/sync'
 import { Card, Button, Field, Input, PageHeader, Modal, Avatar, SectionLabel } from '../components/ui'
+import { ReauthBanner } from '../components/ReauthBanner'
 import {
   IconSun,
   IconMoon,
@@ -42,6 +43,7 @@ export function Settings() {
     students,
     payments,
     showToast,
+    needsReauth,
   } = useApp()
 
   const [form, setForm] = useState<Center>(center)
@@ -167,6 +169,12 @@ export function Settings() {
     <div className="pb-4">
       <PageHeader title="Settings" />
 
+      {needsReauth && (
+        <div className="px-4 mb-1">
+          <ReauthBanner />
+        </div>
+      )}
+
       {/* Account */}
       <SectionLabel>Account</SectionLabel>
       <div className="px-4">
@@ -185,7 +193,7 @@ export function Settings() {
       {/* Sync + shortcuts */}
       <SectionLabel>Quick links</SectionLabel>
       <div className="px-4 space-y-2">
-        <button onClick={() => void syncNow()} className="w-full text-left">
+        <button onClick={() => void syncNow(true)} className="w-full text-left">
           <Card className="!rounded-xl p-3.5 flex items-center gap-3 active:scale-[0.99] transition">
             <div className="w-10 h-10 rounded-xl bg-teal/10 dark:bg-teal/20 grid place-items-center shrink-0">
               <IconSync className={`w-5 h-5 text-teal ${syncing ? 'animate-spin' : ''}`} />

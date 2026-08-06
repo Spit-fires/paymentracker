@@ -5,6 +5,7 @@ import { duesForPeriod, monthTotals, type DuesRow } from '../lib/ledger'
 import { fmtTaka, periodNow, periodLabel } from '../lib/format'
 import { Card, EmptyState, Button } from '../components/ui'
 import { SyncIndicator } from '../components/Layout'
+import { ReauthBanner } from '../components/ReauthBanner'
 import { IconReceipt, IconPlus, IconSearch, IconCheck, IconArrow, IconCalendar, IconUsers } from '../components/Icons'
 
 function shiftPeriod(p: string, delta: number): string {
@@ -14,7 +15,7 @@ function shiftPeriod(p: string, delta: number): string {
 }
 
 export function Dashboard() {
-  const { user, students, payments } = useApp()
+  const { user, students, payments, needsReauth } = useApp()
   const navigate = useNavigate()
   const now = periodNow()
   const [period, setPeriod] = useState(now)
@@ -67,6 +68,8 @@ export function Dashboard() {
           </div>
           <SyncIndicator />
         </div>
+
+        {needsReauth && <ReauthBanner />}
 
         <form onSubmit={onSearch} className="mt-4">
           <div className="relative">

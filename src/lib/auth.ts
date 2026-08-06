@@ -101,10 +101,13 @@ export async function signIn(
   return { token, expiresIn, user }
 }
 
-/** Silent re-auth on app load / before sync; never opens a popup. */
+/** Silent re-auth on app load / before sync. Uses prompt 'none': no popup,
+ *  no account picker — returns the token when the grant is valid, errors
+ *  otherwise (the default 'select_account' prompt pops the picker on every
+ *  page load, which is why refreshes looked like forced re-logins). */
 export async function silentSignIn(clientId: string): Promise<TokenResult | null> {
   try {
-    return await requestToken(clientId, undefined, 10000)
+    return await requestToken(clientId, 'none', 10000)
   } catch {
     return null
   }
