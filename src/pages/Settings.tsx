@@ -4,7 +4,7 @@ import { useApp } from '../state/AppContext'
 import { db, setKV, queueOp, K, getKV } from '../lib/db'
 import { hashPin } from '../lib/pin'
 import { periodNow, periodLabel, fmtDate } from '../lib/format'
-import { defaultCenter } from '../lib/sync'
+import { defaultCenter, exportToSheet } from '../lib/sync'
 import { Card, Button, Field, Input, PageHeader, Modal, Avatar, SectionLabel, Textarea } from '../components/ui'
 import { ReauthBanner } from '../components/ReauthBanner'
 import {
@@ -139,6 +139,16 @@ export function Settings() {
       showToast('Backup restored', 'ok')
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Restore failed', 'err')
+    }
+  }
+
+  const exportSheet = async () => {
+    try {
+      const link = await exportToSheet(students, payments, center)
+      showToast('Google Sheet created', 'ok')
+      window.open(link, '_blank', 'noopener')
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Sheet export failed', 'err')
     }
   }
 
@@ -436,6 +446,9 @@ export function Settings() {
         <Button variant="secondary" onClick={() => exportCSV(true)}>
           <IconDownload className="w-4 h-4" /> All CSV
         </Button>
+        <Button variant="secondary" onClick={() => void exportSheet()}>
+          <IconUpload className="w-4 h-4" /> Google Sheet
+        </Button>
       </div>
 
       <SectionLabel>Session</SectionLabel>
@@ -444,7 +457,7 @@ export function Settings() {
           <IconLogout className="w-5 h-5" /> Sign out
         </Button>
         <p className="text-[11.5px] text-faint mt-3 text-center">
-          Utsaho Educare Payment Tracker · data stored in your Google Drive
+          UTSAHO EDUCARE Payment Tracker · data stored in your Google Drive
         </p>
       </div>
 

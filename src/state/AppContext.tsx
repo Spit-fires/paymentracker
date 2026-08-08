@@ -19,7 +19,7 @@ import type {
   ReceivedBy,
 } from '../types'
 import { db, getKV, setKV, queueOp, K } from '../lib/db'
-import { signIn, silentSignIn, revoke, lastSilentError } from '../lib/auth'
+import { signIn, silentSignIn, revoke, lastSilentError, type TokenResult } from '../lib/auth'
 import {
   ensureDriveStructure,
   flushOutbox,
@@ -218,14 +218,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (alive) setInitialized(true)
           return
         }
-        let tok = await silentSignIn(cid)
-        // GIS can hiccup on cold start — retry once before giving up
-        if (!tok && alive) {
-          await new Promise((r) => setTimeout(r, 900))
+        // Token-first: a stored token that is still valid needs no OAuth at
+        // all — skip GIS entirely so a plain refresh never touches the login
+        // flow (the popup the user saw was Google's picker, which prompt:'none'
+        // avoids but which is still better to not reach at all).
+        const stored = getToken()
+        let tok: TokenResult | null =
+          stored && !tokenNeedsRefresh() ? { token: stored } : null
+        if (!tok) {
           tok = await silentSignIn(cid)
+          // GIS can hiccup on cold start — retry once before giving up
+          if (!tok && alive) {
+            await new Promise((r) => setTimeout(r, 900))
+            tok = await silentSignIn(cid)
+          }
         }
         if (tok) {
-          setToken(tok.token, tok.expiresIn)
+          if (tok.token !== stored) setToken(tok.token, tok.expiresIn)
           setDriveToken(tok.token)
           if (alive) {
             await ensureDriveStructure().catch(() => undefined)

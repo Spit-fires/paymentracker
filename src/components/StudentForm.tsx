@@ -29,13 +29,16 @@ export function StudentForm({
   submitLabel = 'Save student',
   onSubmit,
   onCancel,
+  batches = [],
 }: {
   initial?: Student
   submitLabel?: string
   onSubmit: (v: FormValue) => void
   onCancel?: () => void
+  batches?: string[]
 }) {
   const [f, setF] = useState<FormValue>(initialForm(initial))
+  const [newBatch, setNewBatch] = useState('')
   const [err, setErr] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const previewUrl = useRef<string | null>(null)
@@ -119,10 +122,60 @@ export function StudentForm({
         </Field>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      {batches.length > 0 ? (
+        <div>
+          <div className="text-[12.5px] font-semibold text-body/80 dark:text-muted-dark mb-1.5">
+            Batch / Class
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {batches.map((b) => (
+              <button
+                key={b}
+                type="button"
+                onClick={() => {
+                  setNewBatch('')
+                  set('batch', b)
+                }}
+                className={`px-3 py-1.5 rounded-full text-[12px] font-semibold border transition-colors ${
+                  f.batch === b && !newBatch
+                    ? 'bg-ink text-white border-ink'
+                    : 'bg-white dark:bg-card-dark text-body/70 dark:text-muted-dark border-line dark:border-line-dark hover:border-ink'
+                }`}
+              >
+                {b}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setNewBatch(f.batch)}
+              className={`px-3 py-1.5 rounded-full text-[12px] font-semibold border border-dashed transition-colors ${
+                newBatch !== ''
+                  ? 'bg-ink text-white border-ink'
+                  : 'bg-white dark:bg-card-dark text-muted dark:text-muted-dark border-line dark:border-line-dark hover:border-ink hover:text-ink'
+              }`}
+            >
+              + New batch
+            </button>
+          </div>
+          {(newBatch !== '' || !batches.includes(f.batch)) && (
+            <Input
+              className="mt-2"
+              value={newBatch !== '' ? newBatch : f.batch}
+              onChange={(e) => {
+                setNewBatch(e.target.value)
+                set('batch', e.target.value)
+              }}
+              placeholder="Type a new batch name"
+            />
+          )}
+        </div>
+      ) : (
         <Field label="Batch / Class">
           <Input value={f.batch} onChange={(e) => set('batch', e.target.value)} placeholder="Batch 2026" />
         </Field>
+      )}
+
+      <div className="w-1/2">
         <Field label="Default fee (৳)">
           <Input
             value={f.defaultFee}

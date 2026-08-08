@@ -322,6 +322,7 @@ export function StudentDetail() {
       <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Edit student">
         <StudentForm
           initial={student}
+          batches={Array.from(new Set(students.map((s) => s.batch))).filter(Boolean).sort()}
           submitLabel={busy ? 'Saving…' : 'Save changes'}
           onSubmit={(v) => void onEdit(v)}
           onCancel={() => setEditOpen(false)}

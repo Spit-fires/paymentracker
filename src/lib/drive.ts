@@ -144,4 +144,46 @@ export class DriveClient {
   async deleteFile(fileId: string): Promise<void> {
     await this.req(`${API}/files/${fileId}`, { method: 'DELETE' })
   }
+
+  /** Create an empty spreadsheet inside the given Drive folder. */
+  async createSpreadsheet(
+    name: string,
+    parentId: string,
+  ): Promise<{ id: string; webViewLink: string }> {
+    const res = await this.req(`${API}/files`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        mimeType: 'application/vnd.google-apps.spreadsheet',
+        parents: [parentId],
+      }),
+    })
+    const j = await res.json()
+    return {
+      id: j.id as string,
+      webViewLink: j.webViewLink || `https://docs.google.com/spreadsheets/d/${j.id}`,
+    }
+  }
+
+  /** Sheets API: batch structure changes (rename sheet, add sheet…). */
+  async sheetUpdate(spreadsheetId: string, requests: unknown[]): Promise<void> {
+    await this.req(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requests }),
+    })
+  }
+
+  /** Sheets API: write a block of values starting at the given A1 range. */
+  async sheetValues(spreadsheetId: string, range: string, values: (string | number)[][]): Promise<void> {
+    await this.req(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=RAW`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values }),
+      },
+    )
+  }
 }

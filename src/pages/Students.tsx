@@ -275,6 +275,7 @@ export function Students() {
       {/* Add student modal */}
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add student">
         <StudentForm
+          batches={batches}
           submitLabel={adding ? 'Adding…' : 'Add student'}
           onSubmit={(v) => void onAdd(v)}
           onCancel={() => setAddOpen(false)}

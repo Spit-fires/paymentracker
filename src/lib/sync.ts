@@ -1,5 +1,6 @@
 import { DriveClient } from './drive'
 import { db, getKV, setKV, queueOp, getStudents, getPayments, K } from './db'
+import { fmtDate } from './format'
 import type { DriveRefs, OutboxOp, Student, Payment, Center, Session } from '../types'
 
 let _client: DriveClient | null = null
@@ -53,11 +54,58 @@ async function buildJSON(file: 'students' | 'payments' | 'meta'): Promise<string
 
 export function defaultCenter(): Center {
   return {
-    name: 'Utsaho Educare',
+    name: 'UTSAHO EDUCARE',
     tagline: 'Learn · Grow · Succeed',
     address: '',
     phone: '',
   }
+}
+
+/** Create a Google Spreadsheet inside the Drive root with Students and
+ *  Payments tabs, then return its view link. The Sheets API accepts our
+ *  drive.file token because the spreadsheet is created by this app. */
+export async function exportToSheet(
+  students: Student[],
+  payments: Payment[],
+  center: Center,
+): Promise<string> {
+  const drive = await getKV<DriveRefs>(K.DRIVE)
+  if (!drive?.rootFolderId) throw new Error('Drive not ready — sign in first')
+  const { id, webViewLink } = await client().createSpreadsheet(
+    `${center.name || 'Utsaho Educare'} Data - ${fmtDate(Date.now())}`,
+    drive.rootFolderId,
+  )
+  const names = new Map(students.map((s) => [s.id, s.name]))
+  await client().sheetUpdate(id, [
+    { updateSheetProperties: { properties: { sheetId: 0, title: 'Students' }, fields: 'title' } },
+    { addSheet: { properties: { title: 'Payments' } } },
+  ])
+  await client().sheetValues(id, 'Students!A1', [
+    ['Name', 'Phone', 'Alt number', 'Batch / Class', 'Default fee (৳)', 'Notes', 'Archived'],
+    ...students.map((s) => [
+      s.name,
+      s.phone || '',
+      s.phone2 || '',
+      s.batch,
+      s.defaultFee || 0,
+      s.notes || '',
+      s.archived ? 'yes' : '',
+    ]),
+  ])
+  await client().sheetValues(id, 'Payments!A1', [
+    ['Receipt No', 'Date', 'Student', 'Period', 'Mode', 'Amount (৳)', 'Due (৳)', 'Received by'],
+    ...payments.map((p) => [
+      p.receiptNo,
+      fmtDate(p.date),
+      names.get(p.studentId) || '',
+      p.period,
+      p.mode,
+      p.amount,
+      p.due || 0,
+      p.receivedBy?.name || '',
+    ]),
+  ])
+  return webViewLink
 }
 
 async function ensureStudentFolder(student: Student): Promise<void> {

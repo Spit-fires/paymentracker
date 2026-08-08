@@ -28,7 +28,7 @@ export function ReceiptCard({ center, student, payment }: Props) {
         border: `2px solid ${NAVY}`,
         outline: `1px solid ${NAVY}`,
         outlineOffset: 4,
-        borderRadius: 6,
+        borderRadius: 0,
         padding: 20,
         color: INK,
         fontFamily: "'Segoe UI', system-ui, sans-serif",
@@ -40,14 +40,14 @@ export function ReceiptCard({ center, student, payment }: Props) {
           <img
             src={center.logo}
             alt=""
-            style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 6, background: CREAM, border: `1px solid ${LINE}`, padding: 4 }}
+            style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 0, background: CREAM, border: `1px solid ${LINE}`, padding: 4 }}
           />
         ) : (
           <div
             style={{
               width: 64,
               height: 64,
-              borderRadius: 6,
+              borderRadius: 0,
               background: NAVY,
               color: '#fff',
               display: 'grid',
@@ -56,12 +56,12 @@ export function ReceiptCard({ center, student, payment }: Props) {
               fontWeight: 700,
             }}
           >
-            {(center.name || 'Utsaho Educare').slice(0, 2).toUpperCase()}
+            {(center.name || 'UTSAHO EDUCARE').slice(0, 2).toUpperCase()}
           </div>
         )}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: '0.04em', color: NAVY }}>
-            {center.name || 'Utsaho Educare'}
+            {center.name || 'UTSAHO EDUCARE'}
           </div>
           {center.tagline && (
             <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: GOLD, marginTop: 2 }}>
@@ -109,7 +109,7 @@ export function ReceiptCard({ center, student, payment }: Props) {
         style={{
           marginTop: 14,
           border: `1.5px solid ${NAVY}`,
-          borderRadius: 6,
+          borderRadius: 0,
           background: CREAM,
           overflow: 'hidden',
         }}
@@ -141,9 +141,9 @@ export function ReceiptCard({ center, student, payment }: Props) {
 
       {/* Rules */}
       {center.rules?.trim() && (
-        <div style={{ marginTop: 14, border: `1px solid ${LINE}`, borderRadius: 6, padding: '10px 12px', background: '#fff' }}>
+        <div style={{ marginTop: 14, border: `1px solid ${LINE}`, borderRadius: 0, padding: '10px 12px', background: '#fff' }}>
           <div style={{ fontSize: 9.5, letterSpacing: '0.18em', textTransform: 'uppercase', color: GOLD, fontWeight: 700, marginBottom: 4 }}>
-            নিয়মাবলী / Rules
+            নিয়মাবলী
           </div>
           <div style={{ fontSize: 11, color: INK, whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>
             {center.rules}
@@ -158,7 +158,7 @@ export function ReceiptCard({ center, student, payment }: Props) {
             Received by
           </div>
           <div style={{ fontWeight: 700, fontSize: 13, color: NAVY, marginTop: 3 }}>
-            {receivedBy?.name || center.name || 'Utsaho Educare'}
+            {receivedBy?.name || center.name || 'UTSAHO EDUCARE'}
           </div>
           {receivedBy?.phone && (
             <div style={{ fontSize: 10.5, color: MUTED, marginTop: 1 }}>{receivedBy.phone}</div>
@@ -169,7 +169,7 @@ export function ReceiptCard({ center, student, payment }: Props) {
         </div>
         <div style={{ textAlign: 'right', fontSize: 10, color: MUTED, fontStyle: 'italic' }}>
           {center.tagline || 'Thank you!'}
-          <div style={{ marginTop: 2, fontSize: 9, color: GOLD, fontWeight: 600 }}>উৎসাহো এডুকেয়ার</div>
+          <div style={{ marginTop: 2, fontSize: 9, color: GOLD, fontWeight: 600 }}>উৎসাহ এডুকেয়ার</div>
         </div>
       </div>
     </div>
