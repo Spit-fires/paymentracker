@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toPng } from 'html-to-image'
 import { useApp } from '../state/AppContext'
-import { receiptFileName } from '../lib/format'
+import { receiptFileName, periodLabel } from '../lib/format'
 import { Button, PageHeader } from '../components/ui'
 import { ReceiptCard } from '../components/ReceiptCard'
 import { IconPrint, IconShare, IconDownload, IconWhatsApp } from '../components/Icons'
-import { defaultCenter } from '../lib/sync'
+import { defaultCenter, receiptViewLink } from '../lib/sync'
 import { waLink } from '../lib/phone'
 
 export function ReceiptView() {
@@ -70,6 +70,40 @@ export function ReceiptView() {
     return fetch(dataUrl).then((r) => r.blob())
   }
 
+  /** WhatsApp gets a direct viewable Drive link (wa.me can't attach images;
+   *  sending the PNG file also doesn't auto-open for the parent). */
+  const onWhatsApp = async () => {
+    try {
+      const link = await receiptViewLink(payment.id)
+      if (link) {
+        const text = `Here is the receipt for ${student.name} (${periodLabel(payment.period)}): ${link}`
+        window.open(waLink(student.phone, text), '_blank')
+        return
+      }
+    } catch {
+      /* fall through to file sharing */
+    }
+    // PNG not uploaded yet (e.g. offline) — share the image file instead
+    try {
+      const blob = await pngBlob()
+      const file = new File([blob], fileName, { type: 'image/png' })
+      const nav = navigator as Navigator & {
+        canShare?: (d: { files: File[] }) => boolean
+      }
+      if (nav.canShare && nav.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          text: `Here is the receipt for ${student.name} (${periodLabel(payment.period)})`,
+          title: `Receipt #${payment.receiptNo}`,
+        })
+      } else {
+        window.open(waLink(student.phone, `Here is the receipt for ${student.name} (${periodLabel(payment.period)}).`), '_blank')
+      }
+    } catch {
+      /* user closed the share sheet */
+    }
+  }
+
   const onShare = async () => {
     try {
       const blob = await pngBlob()
@@ -103,33 +137,6 @@ export function ReceiptView() {
     a.download = fileName
     a.click()
     URL.revokeObjectURL(url)
-  }
-
-  const whatsappText = `Here is the receipt for ${student.name} · ${payment.mode} · ${fileName}`
-
-  /** wa.me links can only carry text — the image is sent via the Web Share
-   *  API (share sheet → WhatsApp), with the text link as a desktop fallback. */
-  const onWhatsApp = async () => {
-    try {
-      const blob = await pngBlob()
-      const file = new File([blob], fileName, { type: 'image/png' })
-      const nav = navigator as Navigator & {
-        canShare?: (d: { files: File[] }) => boolean
-      }
-      if (nav.canShare && nav.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          text: whatsappText,
-          title: `Receipt #${payment.receiptNo}`,
-        })
-      } else {
-        window.open(waLink(student.phone, whatsappText), '_blank')
-      }
-    } catch (e) {
-      if ((e as Error).name !== 'AbortError') {
-        window.open(waLink(student.phone, whatsappText), '_blank')
-      }
-    }
   }
 
   return (

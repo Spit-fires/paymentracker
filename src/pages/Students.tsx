@@ -80,8 +80,8 @@ export function Students() {
     try {
       await addStudent({
         name: v.name,
-        email: v.email,
         phone: v.phone,
+        phone2: v.phone2,
         batch: v.batch,
         defaultFee: v.defaultFee ? Number(v.defaultFee) : 0,
         notes: v.notes,

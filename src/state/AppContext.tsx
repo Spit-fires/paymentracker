@@ -8,7 +8,16 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type { Student, Payment, Center, Session, SessionUser, PaymentMode } from '../types'
+import type {
+  Student,
+  Payment,
+  Center,
+  Session,
+  SessionUser,
+  PaymentMode,
+  Teacher,
+  ReceivedBy,
+} from '../types'
 import { db, getKV, setKV, queueOp, K } from '../lib/db'
 import { signIn, silentSignIn, revoke, lastSilentError } from '../lib/auth'
 import {
@@ -30,8 +39,8 @@ export interface Toast {
 
 export interface NewStudentInput {
   name: string
-  email: string
   phone?: string
+  phone2?: string
   batch: string
   defaultFee: number
   notes?: string
@@ -41,7 +50,9 @@ export interface NewStudentInput {
 export interface NewPaymentInput {
   studentId: string
   amount: number
+  due?: number
   mode: PaymentMode
+  receivedBy?: ReceivedBy
   period: string
   date: number
   pngBlob: Blob
@@ -61,6 +72,7 @@ interface Ctx {
   reauthError: string | null
   students: Student[]
   payments: Payment[]
+  teachers: Teacher[]
   center: Center
   receiptSeq: number
   toast: Toast | null
@@ -70,6 +82,7 @@ interface Ctx {
   logout: () => Promise<void>
   syncNow: (manual?: boolean) => Promise<void>
   refreshData: () => Promise<void>
+  saveTeachers: (t: Teacher[]) => Promise<void>
 
   addStudent: (input: NewStudentInput) => Promise<Student>
   updateStudent: (id: string, patch: Partial<Student>) => Promise<void>
@@ -111,6 +124,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [reauthError, setReauthError] = useState<string | null>(null)
   const [students, setStudents] = useState<Student[]>([])
   const [payments, setPayments] = useState<Payment[]>([])
+  const [teachers, setTeachers] = useState<Teacher[]>([])
   const [center, setCenter] = useState<Center>(defaultCenter())
   const [receiptSeq, setReceiptSeq] = useState(0)
   const [toast, setToast] = useState<Toast | null>(null)
@@ -127,7 +141,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setStudents(await db.students.toArray())
     setPayments(await db.payments.toArray())
     setCenter((await getKV<Center>(K.CENTER)) || defaultCenter())
+    setTeachers((await getKV<Teacher[]>(K.TEACHERS)) || [])
     setReceiptSeq((await getKV<number>(K.RECEIPT_SEQ)) || 0)
+  }, [])
+
+  const saveTeachers = useCallback(async (t: Teacher[]) => {
+    await setKV(K.TEACHERS, t)
+    setTeachers(t)
   }, [])
 
   const syncNow = useCallback(
@@ -299,8 +319,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const s: Student = {
         id: newId(),
         name: input.name.trim(),
-        email: input.email.trim(),
         phone: input.phone?.trim(),
+        phone2: input.phone2?.trim(),
         batch: input.batch.trim() || 'General',
         defaultFee: input.defaultFee,
         notes: input.notes?.trim(),
@@ -335,11 +355,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const updated = { ...cur, ...patch, updatedAt: Date.now() }
       await db.students.put(updated)
       const renamed = patch.name !== undefined || patch.batch !== undefined
-      const emailChanged = patch.email !== undefined && patch.email !== cur.email
-      if (renamed || emailChanged || !cur.folderId) {
-        if (emailChanged) {
-          await db.students.update(id, { folderShared: false })
-        }
+      if (renamed || !cur.folderId) {
         await queueOp({ kind: 'ensureStudentFolder', studentId: id })
       }
       if (patch.photoBlob && patch.photoBlob !== cur.photoBlob) {
@@ -403,7 +419,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         receiptNo: next,
         studentId: input.studentId,
         amount: input.amount,
+        due: input.due || 0,
         mode: input.mode,
+        receivedBy: input.receivedBy,
         period: input.period,
         date: input.date,
         pngBlob: input.pngBlob,
@@ -507,6 +525,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       reauthError,
       students,
       payments,
+      teachers,
       center,
       receiptSeq,
       toast,
@@ -515,6 +534,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       logout,
       syncNow,
       refreshData,
+      saveTeachers,
       addStudent,
       updateStudent,
       archiveStudent,
@@ -541,6 +561,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       reauthError,
       students,
       payments,
+      teachers,
       center,
       receiptSeq,
       toast,
@@ -549,6 +570,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       logout,
       syncNow,
       refreshData,
+      saveTeachers,
       addStudent,
       updateStudent,
       archiveStudent,
@@ -560,6 +582,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setTheme,
       setPin,
       clearPin,
+      setLocked,
       showToast,
     ],
   )

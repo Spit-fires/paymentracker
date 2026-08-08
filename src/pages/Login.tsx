@@ -51,7 +51,7 @@ export function Login() {
             <Logo />
             <div>
               <div className="text-[18px] font-bold text-ink dark:text-white leading-tight">
-                Utshaho Educare
+                Utsaho Educare
               </div>
               <div className="text-[12.5px] text-muted dark:text-muted-dark">
                 Payment Tracker
@@ -60,7 +60,7 @@ export function Login() {
           </div>
 
           <p className="text-[13.5px] text-muted dark:text-muted-dark mb-5 leading-relaxed">
-            Sign in with the dedicated Utshaho Educare Google account to manage students, record
+            Sign in with the dedicated Utsaho Educare Google account to manage students, record
             payments and issue receipts.
           </p>
 

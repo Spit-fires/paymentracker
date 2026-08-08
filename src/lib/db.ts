@@ -1,22 +1,55 @@
 import Dexie, { type Table } from 'dexie'
 import type { Student, Payment, OutboxEntry, OutboxOp } from '../types'
 
-export interface KV {
-  key: string
-  value: unknown
-}
-
 export const K = {
   CENTER: 'center',
   RECEIPT_SEQ: 'receiptSeq',
   DRIVE: 'driveRefs',
   SESSION: 'session',
+  TEACHERS: 'teachers',
 } as const
+
+/**
+ * Small KV state (session, drive refs, center, receipt seq, teachers) lives in
+ * localStorage — a single synchronous JSON blob. Keeping it out of IndexedDB
+ * avoids the mobile-browser IndexedDB staleness/corruption that caused the
+ * "refresh → login loop" (clearing IndexedDB was the only fix).
+ */
+const LS_KEY = 'pt_kv'
+
+function readAll(): Record<string, unknown> {
+  try {
+    const raw = localStorage.getItem(LS_KEY)
+    if (!raw) return {}
+    const j = JSON.parse(raw)
+    return j && typeof j === 'object' ? j : {}
+  } catch {
+    return {}
+  }
+}
+
+function writeAll(m: Record<string, unknown>): void {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(m))
+  } catch {
+    /* quota exceeded — non-critical small values only */
+  }
+}
+
+export async function getKV<T>(key: string): Promise<T | undefined> {
+  return readAll()[key] as T | undefined
+}
+
+export async function setKV(key: string, value: unknown): Promise<void> {
+  const all = readAll()
+  if (value === undefined) delete all[key]
+  else all[key] = value
+  writeAll(all)
+}
 
 class PTDatabase extends Dexie {
   students!: Table<Student, string>
   payments!: Table<Payment, string>
-  kv!: Table<KV, string>
   outbox!: Table<OutboxEntry, number>
 
   constructor() {
@@ -24,22 +57,12 @@ class PTDatabase extends Dexie {
     this.version(1).stores({
       students: 'id, batch, archived',
       payments: 'id, studentId, receiptNo, period',
-      kv: 'key',
       outbox: '++id, at',
     })
   }
 }
 
 export const db = new PTDatabase()
-
-export async function getKV<T>(key: string): Promise<T | undefined> {
-  const row = await db.kv.get(key)
-  return row?.value as T | undefined
-}
-
-export async function setKV(key: string, value: unknown): Promise<void> {
-  await db.kv.put({ key, value })
-}
 
 export async function getStudents(): Promise<Student[]> {
   return db.students.toArray()

@@ -13,6 +13,21 @@ function client(): DriveClient {
   return _client
 }
 
+/**
+ * Public "anyone with the link" URL for a receipt PNG, so WhatsApp messages
+ * can carry a directly viewable link instead of an attachment. Returns null
+ * when the file isn't uploaded yet or we're offline.
+ */
+export async function receiptViewLink(paymentId: string): Promise<string | null> {
+  const payment = await db.payments.get(paymentId)
+  if (!payment?.pngFileId) return null
+  try {
+    return await client().ensurePublic(payment.pngFileId)
+  } catch {
+    return null
+  }
+}
+
 function cleanStudent(s: Student) {
   const { photoBlob: _pb, ...rest } = s
   return rest
@@ -38,7 +53,7 @@ async function buildJSON(file: 'students' | 'payments' | 'meta'): Promise<string
 
 export function defaultCenter(): Center {
   return {
-    name: 'Utshaho Educare',
+    name: 'Utsaho Educare',
     tagline: 'Learn · Grow · Succeed',
     address: '',
     phone: '',
@@ -60,14 +75,6 @@ async function ensureStudentFolder(student: Student): Promise<void> {
     )
     await db.students.update(student.id, { folderId: fid })
     student.folderId = fid
-  }
-  if (student.email && !student.folderShared) {
-    try {
-      await client().shareWith(student.folderId, student.email)
-      await db.students.update(student.id, { folderShared: true })
-    } catch {
-      // sharing can fail (no Google account) — retried on next sync
-    }
   }
 }
 
@@ -100,6 +107,12 @@ async function applyOp(op: OutboxOp): Promise<void> {
       } else if (op.paymentId) {
         await db.payments.update(op.paymentId, { pngFileId: id })
         await queueOp({ kind: 'pushJSON', file: 'payments' })
+        // make the receipt publicly viewable so the WhatsApp link works
+        try {
+          await client().ensurePublic(id)
+        } catch {
+          /* retried on demand in ReceiptView */
+        }
       }
       break
     }

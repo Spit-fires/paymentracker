@@ -126,6 +126,21 @@ export class DriveClient {
     })
   }
 
+  /** Share a file with anyone holding the link; returns its webViewLink. */
+  async ensurePublic(fileId: string): Promise<string> {
+    try {
+      await this.req(`${API}/files/${fileId}/permissions?supportsAllDrives=true`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: 'reader', type: 'anyone' }),
+      })
+    } catch {
+      // permission already exists
+    }
+    const f = await this.get(fileId, 'id,name,webViewLink')
+    return f.webViewLink || `https://drive.google.com/file/d/${fileId}/view`
+  }
+
   async deleteFile(fileId: string): Promise<void> {
     await this.req(`${API}/files/${fileId}`, { method: 'DELETE' })
   }

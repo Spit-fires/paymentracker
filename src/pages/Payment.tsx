@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom'
 import { toPng } from 'html-to-image'
 import { useApp } from '../state/AppContext'
 import {
@@ -8,10 +8,10 @@ import {
   autofillAmount,
 } from '../lib/ledger'
 import { fmtTaka, takaToWords, periodNow, periodLabel, receiptFileName } from '../lib/format'
-import type { PaymentMode } from '../types'
+import type { PaymentMode, Teacher } from '../types'
 import { Card, Button, PageHeader, Spinner, useBlobUrl } from '../components/ui'
 import { ReceiptCard } from '../components/ReceiptCard'
-import { IconCheck, IconReceipt } from '../components/Icons'
+import { IconCheck, IconReceipt, IconPlus } from '../components/Icons'
 
 const MODES: PaymentMode[] = ['Cash', 'Bkash', 'Nagad', 'Other']
 
@@ -25,7 +25,7 @@ export function Payment() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [params] = useSearchParams()
-  const { students, payments, center, receiptSeq, addPayment, updatePayment, showToast } = useApp()
+  const { students, payments, center, receiptSeq, teachers, addPayment, updatePayment, showToast } = useApp()
 
   const student = students.find((s) => s.id === id)
   const photoUrl = useBlobUrl(student?.photoBlob)
@@ -37,7 +37,9 @@ export function Payment() {
 
   const period = periodNow()
   const [amount, setAmount] = useState('')
+  const [due, setDue] = useState('0')
   const [mode, setMode] = useState<PaymentMode>('Cash')
+  const [receivedBy, setReceivedBy] = useState<Teacher | undefined>()
   const [selPeriod, setSelPeriod] = useState(period)
   const [busy, setBusy] = useState(false)
   const previewRef = useRef<HTMLDivElement>(null)
@@ -49,7 +51,12 @@ export function Payment() {
       const p = payments.find((x) => x.id === prefill)
       if (p) {
         setAmount(String(p.amount))
+        setDue(String(p.due || 0))
         setMode(p.mode)
+        if (p.receivedBy) {
+          const t = teachers.find((x) => x.name === p.receivedBy?.name)
+          setReceivedBy(t || { id: p.receivedBy.name, name: p.receivedBy.name, phone: p.receivedBy.phone })
+        }
         setSelPeriod(p.period)
         return
       }
@@ -67,6 +74,7 @@ export function Payment() {
     [student, payments],
   )
   const amountNum = Number(amount) || 0
+  const dueNum = Math.max(0, Number(due) || 0)
 
   const draftPayment = useMemo(() => {
     if (!student) return null
@@ -75,12 +83,14 @@ export function Payment() {
       receiptNo: existing ? existing.receiptNo : receiptSeq + 1,
       studentId: student.id,
       amount: amountNum,
+      due: dueNum,
       mode,
+      receivedBy: receivedBy ? { name: receivedBy.name, phone: receivedBy.phone } : undefined,
       period: selPeriod,
       date: existing ? existing.date : Date.now(),
       updatedAt: Date.now(),
     }
-  }, [student, existing, amountNum, mode, selPeriod, receiptSeq])
+  }, [student, existing, amountNum, dueNum, mode, receivedBy, selPeriod, receiptSeq])
 
   if (!student) {
     return (
@@ -104,7 +114,9 @@ export function Payment() {
       if (existing) {
         await updatePayment(existing.id, {
           amount: amountNum,
+          due: dueNum,
           mode,
+          receivedBy: receivedBy ? { name: receivedBy.name, phone: receivedBy.phone } : undefined,
           period: selPeriod,
           pngBlob: blob,
         })
@@ -114,7 +126,9 @@ export function Payment() {
         const payment = await addPayment({
           studentId: student.id,
           amount: amountNum,
+          due: dueNum,
           mode,
+          receivedBy: receivedBy ? { name: receivedBy.name, phone: receivedBy.phone } : undefined,
           period: selPeriod,
           date: Date.now(),
           pngBlob: blob,
@@ -189,6 +203,25 @@ export function Payment() {
           )}
         </Card>
 
+        {/* Due (partial payments) */}
+        <Card className="!rounded-2xl p-4">
+          <div className="text-[13px] font-semibold text-body/80 dark:text-muted-dark mb-1.5">
+            Due (remaining on this receipt) · defaults to ৳0
+          </div>
+          <div className="relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[18px] font-bold text-ink dark:text-white">
+              ৳
+            </span>
+            <input
+              value={due}
+              onChange={(e) => setDue(e.target.value.replace(/[^\d.]/g, ''))}
+              inputMode="numeric"
+              placeholder="0"
+              className="w-full rounded-xl border border-line dark:border-line-dark bg-white dark:bg-input-dark pl-11 pr-4 py-3 text-[18px] font-bold text-ink dark:text-white tabular-nums focus:outline-none focus:ring-2 focus:ring-teal/30"
+            />
+          </div>
+        </Card>
+
         {/* Mode */}
         <div>
           <div className="text-[13px] font-semibold text-body/80 dark:text-muted-dark mb-1.5">
@@ -209,6 +242,50 @@ export function Payment() {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Received by */}
+        <div>
+          <div className="text-[13px] font-semibold text-body/80 dark:text-muted-dark mb-1.5">
+            Received by
+          </div>
+          {teachers.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setReceivedBy(undefined)}
+                className={`rounded-xl px-4 py-2.5 text-[13.5px] font-bold transition active:scale-[0.97] ${
+                  !receivedBy
+                    ? 'bg-ink text-white shadow-[0_2px_8px_rgba(18,49,79,0.25)] dark:bg-ink-soft'
+                    : 'bg-white dark:bg-card-dark border border-line dark:border-line-dark text-body/70 dark:text-muted-dark'
+                }`}
+              >
+                None
+              </button>
+              {teachers.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setReceivedBy(t)}
+                  className={`rounded-xl px-4 py-2.5 text-[13.5px] font-bold transition active:scale-[0.97] ${
+                    receivedBy?.id === t.id
+                      ? 'bg-ink text-white shadow-[0_2px_8px_rgba(18,49,79,0.25)] dark:bg-ink-soft'
+                      : 'bg-white dark:bg-card-dark border border-line dark:border-line-dark text-body/70 dark:text-muted-dark'
+                  }`}
+                >
+                  {t.name}
+                </button>
+              ))}
+              <Link to="/settings" className="rounded-xl px-4 py-2.5 text-[13.5px] font-semibold text-teal border border-dashed border-teal/40 flex items-center gap-1.5">
+                <IconPlus className="w-3.5 h-3.5" /> Add teacher
+              </Link>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-[12.5px] text-muted dark:text-muted-dark">
+              <Link to="/settings" className="flex items-center gap-1.5 text-teal font-semibold">
+                <IconPlus className="w-3.5 h-3.5" /> Add teachers
+              </Link>
+              in Settings to show who received this payment.
+            </div>
+          )}
         </div>
 
         {/* Period */}

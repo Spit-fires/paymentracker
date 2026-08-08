@@ -7,79 +7,169 @@ interface Props {
   payment: Payment
 }
 
+const NAVY = '#12314f'
+const GOLD = '#b98a2f'
+const INK = '#1c2936'
+const MUTED = '#7c7668'
+const CREAM = '#fbfaf5'
+const LINE = '#e2dccd'
+
 export function ReceiptCard({ center, student, payment }: Props) {
+  const due = payment.due || 0
+  const showDue = due > 0
+  const receivedBy = payment.receivedBy
+
   return (
-    <div className="receipt-card">
-      {/* Header */}
-      <div className="bg-[#12314f] text-white rounded-t-lg overflow-hidden">
-        <div className="flex items-center justify-between px-7 pt-6 pb-5">
-          <div>
-            <div className="text-[15px] uppercase tracking-[0.28em] font-semibold">
-              {center.name || 'Utshaho Educare'}
-            </div>
-            {center.tagline && (
-              <div className="text-white/70 text-[11px] tracking-[0.14em] mt-1">
-                {center.tagline}
-              </div>
-            )}
-            {(center.address || center.phone) && (
-              <div className="text-white/60 text-[10.5px] mt-1.5">
-                {[center.address, center.phone].filter(Boolean).join(' · ')}
-              </div>
-            )}
+    <div
+      className="receipt-card"
+      style={{
+        width: 480,
+        background: '#ffffff',
+        border: `2px solid ${NAVY}`,
+        outline: `1px solid ${NAVY}`,
+        outlineOffset: 4,
+        borderRadius: 6,
+        padding: 20,
+        color: INK,
+        fontFamily: "'Segoe UI', system-ui, sans-serif",
+      }}
+    >
+      {/* Header: logo + center identity */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        {center.logo ? (
+          <img
+            src={center.logo}
+            alt=""
+            style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 6, background: CREAM, border: `1px solid ${LINE}`, padding: 4 }}
+          />
+        ) : (
+          <div
+            style={{
+              width: 64,
+              height: 64,
+              borderRadius: 6,
+              background: NAVY,
+              color: '#fff',
+              display: 'grid',
+              placeItems: 'center',
+              fontSize: 26,
+              fontWeight: 700,
+            }}
+          >
+            {(center.name || 'Utsaho Educare').slice(0, 2).toUpperCase()}
           </div>
-          <div className="text-right shrink-0">
-            <div className="text-[11px] tracking-[0.24em] text-white/70 font-medium">
-              PAYMENT RECEIPT
-            </div>
-            <div className="text-[22px] font-semibold tabular-nums mt-1">
-              #{String(payment.receiptNo).padStart(4, '0')}
-            </div>
+        )}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: '0.04em', color: NAVY }}>
+            {center.name || 'Utsaho Educare'}
           </div>
+          {center.tagline && (
+            <div style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: GOLD, marginTop: 2 }}>
+              {center.tagline}
+            </div>
+          )}
+          {(center.address || center.phone) && (
+            <div style={{ fontSize: 9.5, color: MUTED, marginTop: 4 }}>
+              {[center.address, center.phone].filter(Boolean).join(' · ')}
+            </div>
+          )}
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: 9, letterSpacing: '0.22em', color: MUTED, fontWeight: 600 }}>
+            PAYMENT RECEIPT
+          </div>
+          <div style={{ fontSize: 26, fontWeight: 800, color: NAVY, marginTop: 2, letterSpacing: '0.02em' }}>
+            #{String(payment.receiptNo).padStart(4, '0')}
+          </div>
+          <div style={{ fontSize: 9.5, color: MUTED, marginTop: 2 }}>{fmtDate(payment.date)}</div>
         </div>
       </div>
 
-      {/* Body */}
-      <div className="px-7 py-6">
-        <div className="text-[10.5px] uppercase tracking-[0.2em] text-[#8a8578] mb-3">
-          Received from
-        </div>
-        <div className="grid grid-cols-[110px_1fr] gap-y-2.5 text-[14px]">
-          <div className="text-[#8a8578]">Student</div>
-          <div className="font-semibold text-[#1c2936]">{student.name}</div>
-          <div className="text-[#8a8578]">Batch / Class</div>
-          <div className="text-[#1c2936]">{student.batch || '—'}</div>
-          <div className="text-[#8a8578]">Payment mode</div>
-          <div className="text-[#1c2936]">{payment.mode}</div>
-          <div className="text-[#8a8578]">For the month</div>
-          <div className="text-[#1c2936]">{periodLabel(payment.period)}</div>
-          <div className="text-[#8a8578]">Date</div>
-          <div className="text-[#1c2936]">{fmtDate(payment.date)}</div>
-        </div>
+      {/* Gold rule */}
+      <div style={{ height: 2, background: `linear-gradient(90deg, ${GOLD}, ${NAVY} 60%)`, margin: '14px 0' }} />
 
-        {/* Amount */}
-        <div className="mt-6 rounded-lg border border-[#e3ded2] bg-[#faf8f2] px-5 py-4 flex items-center justify-between gap-4">
-          <div className="text-[10.5px] uppercase tracking-[0.2em] text-[#8a8578]">Amount paid</div>
-          <div className="text-right">
-            <div className="text-[26px] font-bold text-[#12314f] tabular-nums leading-none">
+      {/* Student details */}
+      <div style={{ display: 'grid', gridTemplateColumns: '96px 1fr', rowGap: 7, fontSize: 12.5 }}>
+        {[
+          ['Student', student.name],
+          ['Batch / Class', student.batch || '—'],
+          ['Payment mode', payment.mode],
+          ['For the month', periodLabel(payment.period)],
+          ['Date received', fmtDate(payment.date)],
+        ].map(([k, v]) => (
+          <div key={k} style={{ display: 'contents' }}>
+            <div style={{ color: MUTED }}>{k}</div>
+            <div style={{ fontWeight: 600 }}>{v}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Amount panel */}
+      <div
+        style={{
+          marginTop: 14,
+          border: `1.5px solid ${NAVY}`,
+          borderRadius: 6,
+          background: CREAM,
+          overflow: 'hidden',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px' }}>
+          <div>
+            <div style={{ fontSize: 9.5, letterSpacing: '0.18em', textTransform: 'uppercase', color: MUTED }}>
+              Amount paid
+            </div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: NAVY, marginTop: 3, lineHeight: 1 }}>
               {fmtTaka(payment.amount)}
             </div>
-            <div className="text-[11px] italic text-[#6b665c] mt-1.5">
-              Taka {takaToWords(payment.amount)} Only
+          </div>
+          {showDue && (
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 9.5, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#b23b3b' }}>
+                Due
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: '#b23b3b', marginTop: 3, lineHeight: 1 }}>
+                {fmtTaka(due)}
+              </div>
             </div>
+          )}
+        </div>
+        <div style={{ borderTop: `1px dashed ${LINE}`, padding: '8px 16px', fontSize: 10.5, fontStyle: 'italic', color: MUTED }}>
+          Taka {takaToWords(payment.amount)} Only
+        </div>
+      </div>
+
+      {/* Rules */}
+      {center.rules?.trim() && (
+        <div style={{ marginTop: 14, border: `1px solid ${LINE}`, borderRadius: 6, padding: '10px 12px', background: '#fff' }}>
+          <div style={{ fontSize: 9.5, letterSpacing: '0.18em', textTransform: 'uppercase', color: GOLD, fontWeight: 700, marginBottom: 4 }}>
+            নিয়মাবলী / Rules
+          </div>
+          <div style={{ fontSize: 11, color: INK, whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>
+            {center.rules}
           </div>
         </div>
+      )}
 
-        {/* Footer */}
-        <div className="mt-6 flex items-end justify-between">
-          <div>
-            <div className="text-[10.5px] uppercase tracking-[0.2em] text-[#8a8578]">
-              Received by
-            </div>
-            <div className="w-36 border-b border-[#1c2936] mt-2" />
-            <div className="text-[11px] text-[#8a8578] mt-1.5">{center.name || 'Utshaho Educare'}</div>
+      {/* Sign-off */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 16 }}>
+        <div>
+          <div style={{ fontSize: 9.5, letterSpacing: '0.18em', textTransform: 'uppercase', color: MUTED }}>
+            Received by
           </div>
-          <div className="text-right text-[12px] text-[#6b665c] italic">Thank you!</div>
+          <div style={{ fontWeight: 700, fontSize: 13, color: NAVY, marginTop: 3 }}>
+            {receivedBy?.name || center.name || 'Utsaho Educare'}
+          </div>
+          {receivedBy?.phone && (
+            <div style={{ fontSize: 10.5, color: MUTED, marginTop: 1 }}>{receivedBy.phone}</div>
+          )}
+          {!receivedBy && (
+            <div style={{ width: 150, borderBottom: `1px solid ${INK}`, marginTop: 4 }} />
+          )}
+        </div>
+        <div style={{ textAlign: 'right', fontSize: 10, color: MUTED, fontStyle: 'italic' }}>
+          {center.tagline || 'Thank you!'}
+          <div style={{ marginTop: 2, fontSize: 9, color: GOLD, fontWeight: 600 }}>উৎসাহো এডুকেয়ার</div>
         </div>
       </div>
     </div>

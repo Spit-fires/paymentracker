@@ -3,8 +3,11 @@ export type PaymentMode = 'Cash' | 'Bkash' | 'Nagad' | 'Other'
 export interface Student {
   id: string
   name: string
-  email: string
+  /** kept for legacy data only — no longer collected in the form */
+  email?: string
   phone?: string
+  /** extra number, used for calls (primary phone defaults to WhatsApp) */
+  phone2?: string
   batch: string
   defaultFee: number
   notes?: string
@@ -17,12 +20,20 @@ export interface Student {
   updatedAt: number
 }
 
+export interface ReceivedBy {
+  name: string
+  phone?: string
+}
+
 export interface Payment {
   id: string
   receiptNo: number
   studentId: string
   amount: number
+  /** remaining amount owed on this payment (partial payments), 0 = settled */
+  due?: number
   mode: PaymentMode
+  receivedBy?: ReceivedBy
   period: string // 'YYYY-MM' month paid for
   date: number // epoch ms when recorded
   pngFileId?: string
@@ -35,6 +46,17 @@ export interface Center {
   tagline: string
   address: string
   phone: string
+  /** receipt logo as a dataURL (small PNG/JPG), uploaded in Settings */
+  logo?: string
+  /** payment rules paragraph, shown in Bengali at the bottom of the receipt */
+  rules?: string
+}
+
+/** Teacher/collector who can be picked as "received by" when recording a payment. */
+export interface Teacher {
+  id: string
+  name: string
+  phone?: string
 }
 
 export interface DriveRefs {

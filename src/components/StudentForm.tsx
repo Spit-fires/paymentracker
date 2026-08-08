@@ -4,8 +4,8 @@ import { Field, Input, Textarea, Button } from './ui'
 
 export interface FormValue {
   name: string
-  email: string
   phone: string
+  phone2: string
   batch: string
   defaultFee: string
   notes: string
@@ -15,8 +15,8 @@ export interface FormValue {
 export function initialForm(s?: Student): FormValue {
   return {
     name: s?.name || '',
-    email: s?.email || '',
     phone: s?.phone || '',
+    phone2: s?.phone2 || '',
     batch: s?.batch || '',
     defaultFee: s?.defaultFee ? String(s.defaultFee) : '',
     notes: s?.notes || '',
@@ -63,8 +63,6 @@ export function StudentForm({
 
   const submit = () => {
     if (!f.name.trim()) return setErr('Student name is required')
-    if (f.email.trim() && !/^\S+@\S+\.\S+$/.test(f.email.trim()))
-      return setErr('Enter a valid email, or leave it blank')
     const fee = f.defaultFee.trim() ? Number(f.defaultFee) : 0
     if (Number.isNaN(fee) || fee < 0) return setErr('Fee must be a number')
     setErr('')
@@ -102,16 +100,6 @@ export function StudentForm({
         <Input value={f.name} onChange={(e) => set('name', e.target.value)} placeholder="e.g. Rafi Ahmed" />
       </Field>
 
-      <Field label="Google email (for sharing)" hint="Student gets view-only access to their receipts">
-        <Input
-          value={f.email}
-          onChange={(e) => set('email', e.target.value)}
-          placeholder="student@gmail.com"
-          autoCapitalize="off"
-          autoCorrect="off"
-        />
-      </Field>
-
       <div className="grid grid-cols-2 gap-3">
         <Field label="Phone (WhatsApp)">
           <Input
@@ -121,19 +109,29 @@ export function StudentForm({
             inputMode="tel"
           />
         </Field>
-        <Field label="Batch / Class">
-          <Input value={f.batch} onChange={(e) => set('batch', e.target.value)} placeholder="Batch 2026" />
+        <Field label="Alt number (Call)">
+          <Input
+            value={f.phone2}
+            onChange={(e) => set('phone2', e.target.value)}
+            placeholder="+8801…"
+            inputMode="tel"
+          />
         </Field>
       </div>
 
-      <Field label="Default monthly fee (৳)" hint="Used to pre-fill payment amounts">
-        <Input
-          value={f.defaultFee}
-          onChange={(e) => set('defaultFee', e.target.value)}
-          inputMode="numeric"
-          placeholder="e.g. 1500"
-        />
-      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Batch / Class">
+          <Input value={f.batch} onChange={(e) => set('batch', e.target.value)} placeholder="Batch 2026" />
+        </Field>
+        <Field label="Default fee (৳)">
+          <Input
+            value={f.defaultFee}
+            onChange={(e) => set('defaultFee', e.target.value)}
+            inputMode="numeric"
+            placeholder="e.g. 1500"
+          />
+        </Field>
+      </div>
 
       <Field label="Notes">
         <Textarea value={f.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Guardian, reminders, anything…" />

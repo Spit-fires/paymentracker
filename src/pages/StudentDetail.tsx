@@ -14,9 +14,10 @@ import {
   IconFolder,
   IconReceipt,
   IconArchive,
+  IconPhone,
 } from '../components/Icons'
 import { defaultCenter } from '../lib/sync'
-import { waLink } from '../lib/phone'
+import { waLink, waPhone } from '../lib/phone'
 
 export function StudentDetail() {
   const { id } = useParams<{ id: string }>()
@@ -106,8 +107,8 @@ export function StudentDetail() {
     try {
       await updateStudent(student.id, {
         name: v.name,
-        email: v.email,
         phone: v.phone,
+        phone2: v.phone2,
         batch: v.batch,
         defaultFee: v.defaultFee ? Number(v.defaultFee) : 0,
         notes: v.notes,
@@ -182,11 +183,8 @@ export function StudentDetail() {
               )}
             </div>
             <div className="text-[13px] text-muted dark:text-muted-dark truncate">
-              {student.email || 'no email set'}
+              {[student.phone, student.phone2].filter(Boolean).join(' · ') || 'no phone set'}
             </div>
-            {student.phone && (
-              <div className="text-[13px] text-muted dark:text-muted-dark">{student.phone}</div>
-            )}
           </div>
         </div>
 
@@ -234,6 +232,15 @@ export function StudentDetail() {
             title={student.phone ? undefined : 'Add a phone number to send WhatsApp reminders'}
           >
             <IconWhatsApp className="w-4.5 h-4.5" /> Remind
+          </Button>
+          <Button
+            variant="secondary"
+            size="lg"
+            onClick={() => window.open(`tel:${waPhone(student.phone2 || student.phone || '')}`, '_self')}
+            disabled={!student.phone && !student.phone2}
+            title="Call the student's number"
+          >
+            <IconPhone className="w-4.5 h-4.5" /> Call
           </Button>
         </div>
 

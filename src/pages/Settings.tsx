@@ -5,7 +5,7 @@ import { db, setKV, queueOp, K, getKV } from '../lib/db'
 import { hashPin } from '../lib/pin'
 import { periodNow, periodLabel, fmtDate } from '../lib/format'
 import { defaultCenter } from '../lib/sync'
-import { Card, Button, Field, Input, PageHeader, Modal, Avatar, SectionLabel } from '../components/ui'
+import { Card, Button, Field, Input, PageHeader, Modal, Avatar, SectionLabel, Textarea } from '../components/ui'
 import { ReauthBanner } from '../components/ReauthBanner'
 import {
   IconSun,
@@ -18,8 +18,12 @@ import {
   IconReceipt,
   IconCheck,
   IconFolder,
+  IconPlus,
+  IconTrash,
+  IconUsers,
 } from '../components/Icons'
 import type { Center, Session, DriveRefs } from '../types'
+import { newId } from '../lib/format'
 
 function csvCell(v: string | number): string {
   let s = String(v ?? '')
@@ -44,6 +48,8 @@ export function Settings() {
     payments,
     showToast,
     needsReauth,
+    teachers,
+    saveTeachers,
   } = useApp()
 
   const [form, setForm] = useState<Center>(center)
@@ -54,7 +60,10 @@ export function Settings() {
   const [hasPin, setHasPin] = useState(false)
   const [restoreOpen, setRestoreOpen] = useState(false)
   const [driveRefs, setDriveRefs] = useState<DriveRefs | null>(null)
+  const [tName, setTName] = useState('')
+  const [tPhone, setTPhone] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  const logoRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     getKV<DriveRefs>(K.DRIVE)
@@ -92,7 +101,7 @@ export function Settings() {
       version: 1,
       exportedAt: new Date().toISOString(),
       center,
-      receiptSeq: (await db.kv.get(K.RECEIPT_SEQ))?.value || 0,
+      receiptSeq: (await getKV<number>(K.RECEIPT_SEQ)) || 0,
       driveRefs,
       students: students.map(({ photoBlob: _pb, ...rest }) => rest),
       payments: payments.map(({ pngBlob: _pb, ...rest }) => rest),
@@ -112,16 +121,16 @@ export function Settings() {
     try {
       const j = JSON.parse(await file.text())
       if (!j.students || !j.payments) throw new Error('Not a PaymentTracker backup')
-      await db.transaction('rw', db.students, db.payments, db.kv, db.outbox, async () => {
+      await db.transaction('rw', db.students, db.payments, db.outbox, async () => {
         await db.students.clear()
         await db.payments.clear()
         await db.outbox.clear()
         await db.students.bulkPut(j.students)
         await db.payments.bulkPut(j.payments)
-        if (j.center) await setKV(K.CENTER, j.center)
-        await setKV(K.RECEIPT_SEQ, j.receiptSeq || 0)
-        if (j.driveRefs) await setKV(K.DRIVE, j.driveRefs)
       })
+      if (j.center) await setKV(K.CENTER, j.center)
+      await setKV(K.RECEIPT_SEQ, j.receiptSeq || 0)
+      if (j.driveRefs) await setKV(K.DRIVE, j.driveRefs)
       await queueOp({ kind: 'pushJSON', file: 'students' })
       await queueOp({ kind: 'pushJSON', file: 'payments' })
       await queueOp({ kind: 'pushJSON', file: 'meta' })
@@ -238,6 +247,45 @@ export function Settings() {
       <SectionLabel>Center profile (appears on receipts)</SectionLabel>
       <div className="px-4 space-y-3">
         <Card className="!rounded-2xl p-4 space-y-3">
+          {/* Logo */}
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => logoRef.current?.click()}
+              className="w-20 h-20 rounded-2xl overflow-hidden bg-[#e8f0f7] dark:bg-hover-dark grid place-items-center text-ink dark:text-accent-dark border-2 border-dashed border-[#c9d6e0] dark:border-line-dark shrink-0"
+            >
+              {form.logo ? (
+                <img src={form.logo} alt="Receipt logo" className="w-full h-full object-contain p-1.5" />
+              ) : (
+                <span className="text-[11px] font-semibold px-1 text-center">Add logo</span>
+              )}
+            </button>
+            <input
+              ref={logoRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                if (!f) return
+                const r = new FileReader()
+                r.onload = () => setForm((p) => ({ ...p, logo: String(r.result || '') }))
+                r.readAsDataURL(f)
+              }}
+            />
+            <div className="text-[12px] text-muted dark:text-muted-dark leading-relaxed">
+              Receipt logo (PNG/JPG). Shows at the top-left of every receipt.
+              {form.logo && (
+                <button
+                  onClick={() => setForm((p) => ({ ...p, logo: undefined }))}
+                  className="block text-[12px] font-semibold text-danger mt-1"
+                >
+                  Remove logo
+                </button>
+              )}
+            </div>
+          </div>
+
           <Field label="Center name">
             <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </Field>
@@ -252,9 +300,72 @@ export function Settings() {
               <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} inputMode="tel" />
             </Field>
           </div>
+          <Field label="Payment rules (Bengali)" hint="Shown at the bottom of every receipt">
+            <Textarea
+              value={form.rules || ''}
+              onChange={(e) => setForm({ ...form, rules: e.target.value })}
+              placeholder="যেমন: প্রতি মাসে ফি নির্ধারিত সময়ে পরিশোধ করতে হবে। দেরি করলে জরিমানা প্রযোজ্য হবে।"
+              rows={3}
+            />
+          </Field>
           <Button onClick={() => void saveCenter()} disabled={saved}>
             {saved ? <IconCheck className="w-4 h-4" /> : null} {saved ? 'Saved' : 'Save profile'}
           </Button>
+        </Card>
+      </div>
+
+      {/* Teachers (received by) */}
+      <SectionLabel>Teachers — received by</SectionLabel>
+      <div className="px-4 space-y-2">
+        {teachers.map((t) => (
+          <Card key={t.id} className="!rounded-xl p-3.5 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-teal/10 dark:bg-teal/20 grid place-items-center text-teal dark:text-teal-bright shrink-0">
+              <IconUsers className="w-4.5 h-4.5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[14px] font-bold text-ink dark:text-white truncate">{t.name}</div>
+              {t.phone && (
+                <div className="text-[12px] text-muted dark:text-muted-dark truncate">{t.phone}</div>
+              )}
+            </div>
+            <button
+              onClick={() => void saveTeachers(teachers.filter((x) => x.id !== t.id))}
+              className="text-faint hover:text-danger p-2"
+              aria-label={`Remove ${t.name}`}
+            >
+              <IconTrash className="w-4 h-4" />
+            </button>
+          </Card>
+        ))}
+        <Card className="!rounded-xl p-3.5 space-y-2">
+          <div className="text-[12.5px] font-semibold text-muted dark:text-muted-dark">
+            Add a teacher (name + phone)
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Input value={tName} onChange={(e) => setTName(e.target.value)} placeholder="Teacher name" />
+            <Input
+              value={tPhone}
+              onChange={(e) => setTPhone(e.target.value)}
+              placeholder="+8801…"
+              inputMode="tel"
+            />
+          </div>
+          <Button
+            variant="soft"
+            full
+            onClick={() => {
+              if (!tName.trim()) return showToast('Enter a teacher name', 'err')
+              void saveTeachers([...teachers, { id: newId(), name: tName.trim(), phone: tPhone.trim() || undefined }])
+              setTName('')
+              setTPhone('')
+              showToast('Teacher added', 'ok')
+            }}
+          >
+            <IconPlus className="w-4 h-4" /> Add teacher
+          </Button>
+          <p className="text-[11.5px] text-faint">
+            Pick a teacher when recording a payment — their name goes on the receipt.
+          </p>
         </Card>
       </div>
 
@@ -333,7 +444,7 @@ export function Settings() {
           <IconLogout className="w-5 h-5" /> Sign out
         </Button>
         <p className="text-[11.5px] text-faint mt-3 text-center">
-          Utshaho Educare Payment Tracker · data stored in your Google Drive
+          Utsaho Educare Payment Tracker · data stored in your Google Drive
         </p>
       </div>
 
