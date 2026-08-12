@@ -3,11 +3,11 @@ const EXP = 'pt_token_exp'
 
 export function setToken(t: string, expiresInSec?: number): void {
   try {
-    sessionStorage.setItem(KEY, t)
+    localStorage.setItem(KEY, t)
     if (expiresInSec && expiresInSec > 0) {
-      sessionStorage.setItem(EXP, String(Date.now() + expiresInSec * 1000))
+      localStorage.setItem(EXP, String(Date.now() + expiresInSec * 1000))
     } else {
-      sessionStorage.removeItem(EXP)
+      localStorage.removeItem(EXP)
     }
   } catch {
     /* ignore */
@@ -16,7 +16,7 @@ export function setToken(t: string, expiresInSec?: number): void {
 
 export function getToken(): string | null {
   try {
-    return sessionStorage.getItem(KEY)
+    return localStorage.getItem(KEY)
   } catch {
     return null
   }
@@ -24,7 +24,7 @@ export function getToken(): string | null {
 
 export function tokenExpiryMs(): number | null {
   try {
-    const v = Number(sessionStorage.getItem(EXP))
+    const v = Number(localStorage.getItem(EXP))
     return Number.isFinite(v) && v > 0 ? v : null
   } catch {
     return null
@@ -39,8 +39,8 @@ export function tokenNeedsRefresh(): boolean {
 
 export function clearToken(): void {
   try {
-    sessionStorage.removeItem(KEY)
-    sessionStorage.removeItem(EXP)
+    localStorage.removeItem(KEY)
+    localStorage.removeItem(EXP)
   } catch {
     /* ignore */
   }

@@ -5,6 +5,7 @@ import { db, setKV, queueOp, K, getKV } from '../lib/db'
 import { hashPin } from '../lib/pin'
 import { periodNow, periodLabel, fmtDate } from '../lib/format'
 import { defaultCenter, exportToSheet } from '../lib/sync'
+import { getLogs, clearLogs, onLogsChange, type LogEntry } from '../lib/logs'
 import { Card, Button, Field, Input, PageHeader, Modal, Avatar, SectionLabel, Textarea } from '../components/ui'
 import { ReauthBanner } from '../components/ReauthBanner'
 import {
@@ -62,6 +63,8 @@ export function Settings() {
   const [driveRefs, setDriveRefs] = useState<DriveRefs | null>(null)
   const [tName, setTName] = useState('')
   const [tPhone, setTPhone] = useState('')
+  const [logs, setLogs] = useState<LogEntry[]>([])
+  const [logsOpen, setLogsOpen] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const logoRef = useRef<HTMLInputElement>(null)
 
@@ -70,6 +73,11 @@ export function Settings() {
       .then((d) => d && setDriveRefs(d))
       .catch(() => undefined)
   }, [syncing])
+
+  useEffect(() => {
+    setLogs(getLogs())
+    return onLogsChange(() => setLogs(getLogs()))
+  }, [])
 
   const period = periodNow()
   const driveRootUrl = driveRefs?.rootFolderId
@@ -459,6 +467,48 @@ export function Settings() {
         <p className="text-[11.5px] text-faint mt-3 text-center">
           UTSAHO EDUCARE Payment Tracker · data stored in your Google Drive
         </p>
+      </div>
+
+      {/* Logs */}
+      <SectionLabel>Logs</SectionLabel>
+      <div className="px-4 space-y-2">
+        <button onClick={() => setLogsOpen(!logsOpen)} className="w-full text-left">
+          <Card className="!rounded-xl p-3.5 flex items-center gap-3 active:scale-[0.99] transition">
+            <div className="w-10 h-10 rounded-xl bg-amber/10 dark:bg-amber/20 grid place-items-center shrink-0">
+              <span className="text-amber text-[16px] font-bold">{logs.length}</span>
+            </div>
+            <div className="flex-1">
+              <div className="text-[14px] font-bold text-ink dark:text-white">Activity logs</div>
+              <div className="text-[12px] text-muted dark:text-muted-dark">
+                {logsOpen ? 'Tap to collapse' : `${logs.length} entries — tap to expand`}
+              </div>
+            </div>
+          </Card>
+        </button>
+        {logsOpen && (
+          <Card className="!rounded-xl p-3 space-y-1 max-h-64 overflow-y-auto">
+            {logs.length === 0 && (
+              <div className="text-[12px] text-muted dark:text-muted-dark py-4 text-center">No logs yet</div>
+            )}
+            {logs.slice().reverse().map((l) => (
+              <div key={l.id} className="text-[11px] font-mono leading-relaxed border-b border-line dark:border-line-dark last:border-0 pb-1">
+                <span className="text-faint">{new Date(l.time).toLocaleTimeString()}</span>{' '}
+                <span className={
+                  l.level === 'error' ? 'text-danger font-bold' :
+                  l.level === 'warn' ? 'text-amber' :
+                  l.level === 'sync' ? 'text-teal' : 'text-muted'
+                }>[{l.level}]</span>{' '}
+                <span className="text-ink dark:text-white">{l.msg}</span>
+                {l.detail && <span className="text-faint"> ({l.detail})</span>}
+              </div>
+            ))}
+          </Card>
+        )}
+        {logs.length > 0 && logsOpen && (
+          <Button variant="secondary" full onClick={() => { clearLogs(); setLogs([]) }}>
+            <IconTrash className="w-4 h-4" /> Clear logs
+          </Button>
+        )}
       </div>
 
       {/* PIN modal */}

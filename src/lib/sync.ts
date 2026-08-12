@@ -1,7 +1,8 @@
 import { DriveClient } from './drive'
 import { db, getKV, setKV, queueOp, getStudents, getPayments, K } from './db'
 import { fmtDate } from './format'
-import type { DriveRefs, OutboxOp, Student, Payment, Center, Session } from '../types'
+import { log } from './logs'
+import type { DriveRefs, OutboxOp, Student, Payment, Center, Session, Teacher } from '../types'
 
 let _client: DriveClient | null = null
 
@@ -24,7 +25,26 @@ export async function receiptViewLink(paymentId: string): Promise<string | null>
   if (!payment?.pngFileId) return null
   try {
     return await client().ensurePublic(payment.pngFileId)
-  } catch {
+  } catch (e) {
+    log('warn', `ensurePublic failed for ${payment.pngFileId}: ${e instanceof Error ? e.message : e}`)
+    return null
+  }
+}
+
+/**
+ * Force-retry making a receipt's PNG publicly viewable on Drive.
+ * Called on-demand when the user taps WhatsApp before the initial
+ * ensurePublic has completed.
+ */
+export async function retryEnsurePublic(paymentId: string): Promise<string | null> {
+  const payment = await db.payments.get(paymentId)
+  if (!payment?.pngFileId) return null
+  try {
+    const link = await client().ensurePublic(payment.pngFileId)
+    log('sync', `Retry ensurePublic succeeded for receipt #${payment.receiptNo}`)
+    return link
+  } catch (e) {
+    log('warn', `Retry ensurePublic failed: ${e instanceof Error ? e.message : e}`)
     return null
   }
 }
@@ -49,7 +69,8 @@ async function buildJSON(file: 'students' | 'payments' | 'meta'): Promise<string
   }
   const center = (await getKV<Center>(K.CENTER)) || defaultCenter()
   const receiptSeq = (await getKV<number>(K.RECEIPT_SEQ)) || 0
-  return JSON.stringify({ version: 1, updatedAt: Date.now(), center, receiptSeq })
+  const teachers = (await getKV<Teacher[]>(K.TEACHERS)) || []
+  return JSON.stringify({ version: 1, updatedAt: Date.now(), center, receiptSeq, teachers })
 }
 
 export function defaultCenter(): Center {
@@ -134,6 +155,7 @@ async function applyOp(op: OutboxOp): Promise<void> {
       if (!fileId) break
       const content = await buildJSON(op.file)
       await client().updateContent(fileId, 'application/json', content)
+      log('sync', `Pushed ${op.file}.json to Drive`)
       break
     }
     case 'ensureStudentFolder': {
@@ -149,6 +171,7 @@ async function applyOp(op: OutboxOp): Promise<void> {
       const cur = await db.students.get(op.studentId)
       if (!cur?.folderId) break
       const id = await client().createFile(cur.folderId, op.fileName, 'image/png', op.blob)
+      log('sync', `Uploaded ${op.fileName} to Drive`)
       if (op.type === 'photo') {
         await db.students.update(op.studentId, { photoFileId: id })
         await queueOp({ kind: 'pushJSON', file: 'students' })
@@ -158,8 +181,9 @@ async function applyOp(op: OutboxOp): Promise<void> {
         // make the receipt publicly viewable so the WhatsApp link works
         try {
           await client().ensurePublic(id)
-        } catch {
-          /* retried on demand in ReceiptView */
+          log('sync', `Made receipt ${op.fileName} publicly viewable`)
+        } catch (e) {
+          log('warn', `Failed to make receipt public: ${e instanceof Error ? e.message : e}`)
         }
       }
       break
@@ -180,9 +204,14 @@ export async function flushOutbox(): Promise<void> {
     const entries = await db.outbox.toArray()
     if (!entries.length) return
     for (const e of entries) {
-      // any failure aborts this pass and keeps the op queued for retry
-      await applyOp(e.op)
-      await db.outbox.delete(e.id!)
+      try {
+        // any failure aborts this pass and keeps the op queued for retry
+        await applyOp(e.op)
+        await db.outbox.delete(e.id!)
+      } catch (err) {
+        log('error', `Outbox op failed (${e.op.kind}): ${err instanceof Error ? err.message : err}`)
+        throw err // abort this pass — op stays queued
+      }
     }
   }
 }
@@ -265,15 +294,20 @@ export async function pull(): Promise<boolean> {
           await setKV(K.CENTER, j.center)
           const seq = Math.max(j.receiptSeq || 0, (await getKV<number>(K.RECEIPT_SEQ)) || 0)
           await setKV(K.RECEIPT_SEQ, seq)
+          if (Array.isArray(j.teachers)) {
+            await setKV(K.TEACHERS, j.teachers)
+          }
           changed = true
         }
       }
-    } catch {
-      // file missing or parse error — skip
+    } catch (e) {
+      // file missing or parse error — skip but log
+      log('warn', `Pull ${file} failed: ${e instanceof Error ? e.message : e}`)
     }
   }
   if (changed) {
     await setKV(K.SESSION, { ...session, lastPulledAt: latest })
+    log('sync', 'Pulled latest data from Drive')
   }
   return changed
 }
@@ -345,5 +379,6 @@ export async function ensureDriveStructure(): Promise<DriveRefs> {
     },
   }
   await setKV(K.DRIVE, drive)
+  log('sync', 'Drive structure ready')
   return drive
 }

@@ -29,6 +29,7 @@ import {
 } from '../lib/sync'
 import { newId, receiptFileName } from '../lib/format'
 import { setToken, getToken, clearToken, tokenNeedsRefresh } from '../lib/token'
+import { log } from '../lib/logs'
 import { CLIENT_ID } from '../config'
 
 export interface Toast {
@@ -145,11 +146,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setReceiptSeq((await getKV<number>(K.RECEIPT_SEQ)) || 0)
   }, [])
 
-  const saveTeachers = useCallback(async (t: Teacher[]) => {
-    await setKV(K.TEACHERS, t)
-    setTeachers(t)
-  }, [])
-
   const syncNow = useCallback(
     async (manual = false) => {
       if (!online) {
@@ -158,7 +154,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       // Google access tokens live ~1h; silently renew before hitting the API
       if (tokenNeedsRefresh() && clientId) {
-        const fresh = await silentSignIn(clientId)
+        const hint = (await getKV<Session>(K.SESSION))?.user?.email
+        const fresh = await silentSignIn(clientId, hint)
         if (fresh?.token) {
           setToken(fresh.token, fresh.expiresIn)
           setDriveToken(fresh.token)
@@ -170,6 +167,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return
       }
       setSyncing(true)
+      log('sync', 'Sync started')
       try {
         await ensureDriveStructure()
         // merge remote changes first (local-newer records win), then push local,
@@ -179,8 +177,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await pull()
         await refreshData()
         setLastSyncAt(Date.now())
+        log('sync', 'Sync completed')
       } catch (e) {
-        showToast(e instanceof Error ? e.message : 'Sync failed', 'err')
+        const msg = e instanceof Error ? e.message : 'Sync failed'
+        log('error', `Sync failed: ${msg}`)
+        showToast(msg, 'err')
       } finally {
         setSyncing(false)
       }
@@ -194,6 +195,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       void syncNow()
     }, 2500)
   }, [syncNow])
+
+  const saveTeachers = useCallback(async (t: Teacher[]) => {
+    await setKV(K.TEACHERS, t)
+    setTeachers(t)
+    await queueOp({ kind: 'pushJSON', file: 'meta' })
+    scheduleSync()
+  }, [scheduleSync])
 
   // init
   useEffect(() => {
@@ -226,16 +234,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
         let tok: TokenResult | null =
           stored && !tokenNeedsRefresh() ? { token: stored } : null
         if (!tok) {
-          tok = await silentSignIn(cid)
+          const hint = session?.user?.email
+          log('info', 'Stored token expired, attempting silent sign-in')
+          tok = await silentSignIn(cid, hint)
           // GIS can hiccup on cold start — retry once before giving up
           if (!tok && alive) {
             await new Promise((r) => setTimeout(r, 900))
-            tok = await silentSignIn(cid)
+            tok = await silentSignIn(cid, hint)
           }
         }
         if (tok) {
           if (tok.token !== stored) setToken(tok.token, tok.expiresIn)
           setDriveToken(tok.token)
+          log('info', 'Session restored successfully')
           if (alive) {
             await ensureDriveStructure().catch(() => undefined)
             void syncNow()
@@ -248,7 +259,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setNeedsReauth(true)
             setReauthError(lastSilentError)
             retry = window.setInterval(async () => {
-              const t = await silentSignIn(cid)
+              const hint = (await getKV<Session>(K.SESSION))?.user?.email
+              const t = await silentSignIn(cid, hint)
               if (!t) {
                 setReauthError(lastSilentError)
                 return
@@ -292,13 +304,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (cid: string) => {
-      const { token, expiresIn, user } = await signIn(cid)
+      const hint = (await getKV<Session>(K.SESSION))?.user?.email
+      const { token, expiresIn, user } = await signIn(cid, hint)
       setToken(token, expiresIn)
       setDriveToken(token)
       setUser(user)
       const session = (await getKV<Session>(K.SESSION)) || { theme: 'light', lastPulledAt: 0 }
       await setKV(K.SESSION, { ...session, clientId: cid, user })
       setClientId(cid)
+      log('info', `Login completed: ${user.email}`)
       showToast(`Signed in as ${user.email}`, 'ok')
       setNeedsReauth(false)
       setReauthError(null)

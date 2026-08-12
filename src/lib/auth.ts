@@ -1,4 +1,5 @@
 import type { SessionUser } from '../types'
+import { log } from './logs'
 
 const SCOPES = 'openid email profile https://www.googleapis.com/auth/drive.file'
 
@@ -11,6 +12,7 @@ declare global {
             client_id: string
             scope: string
             include_granted_scopes?: boolean
+            login_hint?: string
             callback: (res: {
               access_token?: string
               id_token?: string
@@ -19,7 +21,7 @@ declare global {
               error?: string
               error_description?: string
             }) => void
-          }) => { requestAccessToken: (opts?: { prompt?: string }) => void }
+          }) => { requestAccessToken: (opts?: { prompt?: string; login_hint?: string }) => void }
           revoke: (token: string, done?: () => void) => void
         }
       }
@@ -54,23 +56,53 @@ export interface TokenResult {
   expiresIn?: number
 }
 
-function requestToken(clientId: string, prompt?: string, timeoutMs = 30000): Promise<TokenResult> {
+/** Cached token clients keyed by clientId + login_hint. Reusing the same
+ *  client preserves GIS internal state (granted scopes, session cookies)
+ *  which is essential for silent sign-in to work across browser restarts
+ *  and with multiple Google accounts. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let cachedClient: any = null
+let cachedClientKey = ''
+
+function requestToken(
+  clientId: string,
+  prompt?: string,
+  loginHint?: string,
+  timeoutMs = 30000,
+): Promise<TokenResult> {
   return new Promise((resolve, reject) => {
     waitForGis(timeoutMs)
       .then((g) => {
-        const client = g.accounts.oauth2.initTokenClient({
-          client_id: clientId,
-          scope: SCOPES,
-          include_granted_scopes: true,
-          callback: (res) => {
-            if (res.access_token) {
-              resolve({ token: res.access_token, idToken: res.id_token, expiresIn: res.expires_in })
-            } else {
-              reject(new Error(res.error_description || res.error || 'Sign-in failed'))
-            }
-          },
-        })
-        client.requestAccessToken(prompt ? { prompt } : undefined)
+        const clientKey = `${clientId}|${loginHint || ''}`
+        const cb = (res: {
+          access_token?: string
+          id_token?: string
+          expires_in?: number
+          scope?: string
+          error?: string
+          error_description?: string
+        }) => {
+          if (res.access_token) {
+            resolve({ token: res.access_token, idToken: res.id_token, expiresIn: res.expires_in })
+          } else {
+            reject(new Error(res.error_description || res.error || 'Sign-in failed'))
+          }
+        }
+        if (!cachedClient || cachedClientKey !== clientKey) {
+          cachedClient = g.accounts.oauth2.initTokenClient({
+            client_id: clientId,
+            scope: SCOPES,
+            include_granted_scopes: true,
+            login_hint: loginHint,
+            callback: cb,
+          })
+          cachedClientKey = clientKey
+        } else {
+          cachedClient.callback = cb
+        }
+        cachedClient.requestAccessToken(
+          prompt ? { prompt, login_hint: loginHint } : loginHint ? { login_hint: loginHint } : undefined,
+        )
       })
       .catch(reject)
   })
@@ -95,9 +127,12 @@ function userFromIdToken(idToken?: string): SessionUser | null {
  *  users with valid consent get a token with no popup. */
 export async function signIn(
   clientId: string,
+  loginHint?: string,
 ): Promise<{ token: string; expiresIn?: number; user: SessionUser }> {
-  const { token, idToken, expiresIn } = await requestToken(clientId)
+  log('info', 'Starting interactive sign-in', loginHint ? `hint: ${loginHint}` : undefined)
+  const { token, idToken, expiresIn } = await requestToken(clientId, undefined, loginHint)
   const user = userFromIdToken(idToken) || (await fetchUserInfo(token))
+  log('info', `Signed in as ${user.email}`)
   return { token, expiresIn, user }
 }
 
@@ -107,16 +142,21 @@ export let lastSilentError: string | null = null
 
 /** Silent re-auth on app load / before sync. Uses prompt 'none': no popup,
  *  no account picker — returns the token when the grant is valid, errors
- *  otherwise (the default 'select_account' prompt pops the picker on every
- *  page load, which is why refreshes looked like forced re-logins). */
-export async function silentSignIn(clientId: string): Promise<TokenResult | null> {
+ *  otherwise. Uses login_hint to tell Google which account to use, which
+ *  is critical for multi-account browsers. */
+export async function silentSignIn(
+  clientId: string,
+  loginHint?: string,
+): Promise<TokenResult | null> {
   try {
-    const r = await requestToken(clientId, 'none', 10000)
+    log('info', 'Attempting silent sign-in', loginHint ? `hint: ${loginHint}` : undefined)
+    const r = await requestToken(clientId, 'none', loginHint, 10000)
     lastSilentError = null
+    log('info', 'Silent sign-in succeeded')
     return r
   } catch (e) {
     lastSilentError = e instanceof Error ? e.message : String(e)
-    console.warn('[auth] silent re-auth failed:', lastSilentError)
+    log('warn', `Silent sign-in failed: ${lastSilentError}`)
     return null
   }
 }

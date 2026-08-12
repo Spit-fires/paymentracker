@@ -41,6 +41,10 @@ export function Payment() {
   const [mode, setMode] = useState<PaymentMode>('Cash')
   const [receivedBy, setReceivedBy] = useState<Teacher | undefined>()
   const [selPeriod, setSelPeriod] = useState(period)
+  const [receivedDate, setReceivedDate] = useState(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  })
   const [busy, setBusy] = useState(false)
   const previewRef = useRef<HTMLDivElement>(null)
 
@@ -58,6 +62,8 @@ export function Payment() {
           setReceivedBy(t || { id: p.receivedBy.name, name: p.receivedBy.name, phone: p.receivedBy.phone })
         }
         setSelPeriod(p.period)
+        const d = new Date(p.date)
+        setReceivedDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
         return
       }
     }
@@ -78,6 +84,7 @@ export function Payment() {
 
   const draftPayment = useMemo(() => {
     if (!student) return null
+    const dateMs = new Date(receivedDate + 'T00:00:00').getTime() || Date.now()
     return {
       id: 'preview',
       receiptNo: existing ? existing.receiptNo : receiptSeq + 1,
@@ -87,10 +94,10 @@ export function Payment() {
       mode,
       receivedBy: receivedBy ? { name: receivedBy.name, phone: receivedBy.phone } : undefined,
       period: selPeriod,
-      date: existing ? existing.date : Date.now(),
+      date: existing ? existing.date : dateMs,
       updatedAt: Date.now(),
     }
-  }, [student, existing, amountNum, dueNum, mode, receivedBy, selPeriod, receiptSeq])
+  }, [student, existing, amountNum, dueNum, mode, receivedBy, selPeriod, receiptSeq, receivedDate])
 
   if (!student) {
     return (
@@ -130,7 +137,7 @@ export function Payment() {
           mode,
           receivedBy: receivedBy ? { name: receivedBy.name, phone: receivedBy.phone } : undefined,
           period: selPeriod,
-          date: Date.now(),
+          date: new Date(receivedDate + 'T00:00:00').getTime() || Date.now(),
           pngBlob: blob,
         })
         showToast(`Receipt #${String(payment.receiptNo).padStart(4, '0')} created`, 'ok')
@@ -310,6 +317,19 @@ export function Payment() {
               ›
             </button>
           </div>
+        </div>
+
+        {/* Date received */}
+        <div>
+          <div className="text-[13px] font-semibold text-body/80 dark:text-muted-dark mb-1.5">
+            Date received
+          </div>
+          <input
+            type="date"
+            value={receivedDate}
+            onChange={(e) => setReceivedDate(e.target.value)}
+            className="w-full rounded-xl border border-line dark:border-line-dark bg-white dark:bg-input-dark px-4 py-3 text-[14px] font-semibold text-ink dark:text-white focus:outline-none focus:ring-2 focus:ring-teal/30"
+          />
         </div>
 
         {/* Live preview note */}

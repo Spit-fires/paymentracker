@@ -6,15 +6,16 @@ import { receiptFileName, periodLabel } from '../lib/format'
 import { Button, PageHeader } from '../components/ui'
 import { ReceiptCard } from '../components/ReceiptCard'
 import { IconPrint, IconShare, IconDownload, IconWhatsApp } from '../components/Icons'
-import { defaultCenter, receiptViewLink } from '../lib/sync'
+import { defaultCenter, receiptViewLink, retryEnsurePublic } from '../lib/sync'
 import { waLink } from '../lib/phone'
+import { log } from '../lib/logs'
 
 export function ReceiptView() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
   const isNew = params.get('new') === '1'
-  const { payments, students, center } = useApp()
+  const { payments, students, center, showToast } = useApp()
 
   const payment = payments.find((p) => p.id === id)
   const student = payment ? students.find((s) => s.id === payment.studentId) : undefined
@@ -22,6 +23,7 @@ export function ReceiptView() {
   const cardRef = useRef<HTMLDivElement>(null)
   const [scale, setScale] = useState(1)
   const [holderH, setHolderH] = useState(600)
+  const [waBusy, setWaBusy] = useState(false)
 
   useEffect(() => {
     const el = cardRef.current
@@ -73,15 +75,31 @@ export function ReceiptView() {
   /** WhatsApp gets a direct viewable Drive link (wa.me can't attach images;
    *  sending the PNG file also doesn't auto-open for the parent). */
   const onWhatsApp = async () => {
+    if (!student?.phone) {
+      showToast('Add a phone number to share via WhatsApp', 'info')
+      return
+    }
+    setWaBusy(true)
     try {
-      const link = await receiptViewLink(payment.id)
+      // Try to get the public Drive link first
+      let link = await receiptViewLink(payment.id)
+      // If not available yet (receipt still uploading), retry once
+      if (!link && payment.pngFileId) {
+        log('info', `Retrying ensurePublic for receipt #${payment.receiptNo}`)
+        link = await retryEnsurePublic(payment.id)
+      }
       if (link) {
         const text = `Here is the receipt for ${student.name} (${periodLabel(payment.period)}): ${link}`
+        log('info', `WhatsApp link-based share for receipt #${payment.receiptNo}`)
         window.open(waLink(student.phone, text), '_blank')
         return
       }
-    } catch {
-      /* fall through to file sharing */
+      // Link not available — receipt may not be synced yet
+      log('warn', `Receipt #${payment.receiptNo} has no Drive link (pngFileId: ${payment.pngFileId || 'none'})`)
+      showToast('Receipt not yet on Drive — sharing image instead', 'info')
+    } catch (e) {
+      log('error', `Failed to get receipt link: ${e instanceof Error ? e.message : e}`)
+      showToast('Could not get receipt link — sharing image instead', 'info')
     }
     // PNG not uploaded yet (e.g. offline) — share the image file instead
     try {
@@ -101,6 +119,8 @@ export function ReceiptView() {
       }
     } catch {
       /* user closed the share sheet */
+    } finally {
+      setWaBusy(false)
     }
   }
 
@@ -195,8 +215,10 @@ export function ReceiptView() {
           size="lg"
           className="!text-teal dark:!text-teal-bright"
           onClick={() => void onWhatsApp()}
+          disabled={waBusy || !student.phone}
+          title={!student.phone ? 'Add a phone number to share via WhatsApp' : undefined}
         >
-          <IconWhatsApp className="w-5 h-5" /> WhatsApp
+          <IconWhatsApp className="w-5 h-5" /> {waBusy ? 'Sharing…' : 'WhatsApp'}
         </Button>
       </div>
 
