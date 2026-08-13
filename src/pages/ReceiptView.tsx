@@ -89,7 +89,7 @@ export function ReceiptView() {
         link = await retryEnsurePublic(payment.id)
       }
       if (link) {
-        const text = `Here is the receipt for ${student.name} (${periodLabel(payment.period)}): ${link}`
+        const text = `${student.name} এর ${periodLabel(payment.period)} বেতন পরিশোধের রশিদ দেখতে নিচের লিংকে ক্লিক করুন। ${link}`
         log('info', `WhatsApp link-based share for receipt #${payment.receiptNo}`)
         window.open(waLink(student.phone, text), '_blank')
         return
@@ -111,11 +111,11 @@ export function ReceiptView() {
       if (nav.canShare && nav.canShare({ files: [file] })) {
         await navigator.share({
           files: [file],
-          text: `Here is the receipt for ${student.name} (${periodLabel(payment.period)})`,
+          text: `${student.name} এর ${periodLabel(payment.period)} বেতন পরিশোধের রশিদ`,
           title: `Receipt #${payment.receiptNo}`,
         })
       } else {
-        window.open(waLink(student.phone, `Here is the receipt for ${student.name} (${periodLabel(payment.period)}).`), '_blank')
+        window.open(waLink(student.phone, `${student.name} এর ${periodLabel(payment.period)} বেতন পরিশোধের রশিদ দেখতে নিচের লিংকে ক্লিক করুন।`), '_blank')
       }
     } catch {
       /* user closed the share sheet */

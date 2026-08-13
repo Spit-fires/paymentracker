@@ -18,6 +18,7 @@ export function ReceiptCard({ center, student, payment }: Props) {
   const due = payment.due || 0
   const showDue = due > 0
   const receivedBy = payment.receivedBy
+  const showPaid = payment.amount > 0
 
   return (
     <div
@@ -32,6 +33,8 @@ export function ReceiptCard({ center, student, payment }: Props) {
         padding: 20,
         color: INK,
         fontFamily: "'Segoe UI', system-ui, sans-serif",
+        position: 'relative',
+        overflow: 'hidden',
       }}
     >
       {/* Header: logo + center identity */}
@@ -172,6 +175,38 @@ export function ReceiptCard({ center, student, payment }: Props) {
           <div style={{ marginTop: 2, fontSize: 9, color: GOLD, fontWeight: 600 }}>উৎসাহ এডুকেয়ার</div>
         </div>
       </div>
+
+      {/* PAID stamp */}
+      {showPaid && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%) rotate(-25deg)',
+            border: '4px solid #16a34a',
+            borderRadius: 8,
+            padding: '6px 28px',
+            opacity: 0.18,
+            pointerEvents: 'none',
+            userSelect: 'none',
+          }}
+        >
+          <div
+            style={{
+              fontSize: 52,
+              fontWeight: 900,
+              color: '#16a34a',
+              letterSpacing: '0.12em',
+              lineHeight: 1,
+              textTransform: 'uppercase',
+              fontFamily: "'Segoe UI', system-ui, sans-serif",
+            }}
+          >
+            PAID
+          </div>
+        </div>
+      )}
     </div>
   )
 }
