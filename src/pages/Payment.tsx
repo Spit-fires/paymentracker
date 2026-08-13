@@ -37,6 +37,9 @@ export function Payment() {
 
   const period = periodNow()
   const [amount, setAmount] = useState('')
+  const [realAmount, setRealAmount] = useState('')
+  const [commissionOn, setCommissionOn] = useState(false)
+  const [commission, setCommission] = useState('')
   const [due, setDue] = useState('0')
   const [mode, setMode] = useState<PaymentMode>('Cash')
   const [receivedBy, setReceivedBy] = useState<Teacher | undefined>()
@@ -55,6 +58,9 @@ export function Payment() {
       const p = payments.find((x) => x.id === prefill)
       if (p) {
         setAmount(String(p.amount))
+        setRealAmount(p.realAmount != null ? String(p.realAmount) : '')
+        setCommissionOn(p.commission != null)
+        setCommission(p.commission != null ? String(p.commission) : '')
         setDue(String(p.due || 0))
         setMode(p.mode)
         if (p.receivedBy) {
@@ -91,6 +97,8 @@ export function Payment() {
   )
   const amountNum = Number(amount) || 0
   const dueNum = Math.max(0, Number(due) || 0)
+  const realNum = Number(realAmount) || 0
+  const commissionNum = commissionOn ? Number(commission) || 0 : 0
 
   const draftPayment = useMemo(() => {
     if (!student) return null
@@ -122,6 +130,13 @@ export function Payment() {
 
   const submit = async () => {
     if (amountNum <= 0) return showToast('Enter a valid amount', 'err')
+    if (commissionNum > 0 && !receivedBy) {
+      showToast('Commission requires selecting the receiving teacher', 'err')
+      return
+    }
+    if (realAmount.trim() !== '' && commissionNum > realNum) {
+      showToast('Commission is more than the real payment', 'info')
+    }
     if (!previewRef.current) return showToast('Please wait, still loading', 'err')
     setBusy(true)
     try {
@@ -141,6 +156,8 @@ export function Payment() {
       if (existing) {
         await updatePayment(existing.id, {
           amount: amountNum,
+          realAmount: realAmount.trim() === '' ? undefined : realNum,
+          commission: commissionOn ? commissionNum : undefined,
           due: dueNum,
           mode,
           receivedBy: receivedBy ? { name: receivedBy.name, phone: receivedBy.phone } : undefined,
@@ -153,6 +170,8 @@ export function Payment() {
         const payment = await addPayment({
           studentId: student.id,
           amount: amountNum,
+          realAmount: realAmount.trim() === '' ? undefined : realNum,
+          commission: commissionOn ? commissionNum : undefined,
           due: dueNum,
           mode,
           receivedBy: receivedBy ? { name: receivedBy.name, phone: receivedBy.phone } : undefined,
@@ -201,7 +220,7 @@ export function Payment() {
         {/* Amount */}
         <Card className="!rounded-2xl p-4">
           <div className="text-[13px] font-semibold text-body/80 dark:text-muted-dark mb-1.5">
-            Amount paid (৳)
+            Slip Payment (৳)
           </div>
           <div className="relative">
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[20px] font-bold text-ink dark:text-white">
@@ -217,7 +236,7 @@ export function Payment() {
           </div>
           {amountNum > 0 && (
             <div className="text-[12.5px] italic text-muted dark:text-muted-dark mt-2">
-              Taka {takaToWords(amountNum)} Only
+              Taka {takaToWords(amountNum)} Only — this is the amount printed on the receipt.
             </div>
           )}
           {lastTotal > 0 && (
@@ -227,6 +246,73 @@ export function Payment() {
             >
               Use this month's total ({fmtTaka(lastTotal)})
             </button>
+          )}
+        </Card>
+
+        {/* Real payment + commission (accounting only — never on the receipt) */}
+        <Card className="!rounded-2xl p-4 space-y-4">
+          <div>
+            <div className="text-[13px] font-semibold text-body/80 dark:text-muted-dark mb-1.5">
+              Real Payment (৳) <span className="text-faint font-normal">· optional</span>
+            </div>
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[16px] font-bold text-ink dark:text-white">
+                ৳
+              </span>
+              <input
+                value={realAmount}
+                onChange={(e) => setRealAmount(e.target.value.replace(/[^\d.]/g, ''))}
+                inputMode="numeric"
+                placeholder={amountNum > 0 ? `Same as slip (${fmtTaka(amountNum)})` : '0'}
+                className="w-full rounded-xl border border-line dark:border-line-dark bg-white dark:bg-input-dark pl-10 pr-4 py-3 text-[16px] font-bold text-ink dark:text-white tabular-nums focus:outline-none focus:ring-2 focus:ring-teal/30"
+              />
+            </div>
+            <div className="text-[12px] text-muted dark:text-muted-dark mt-1">
+              What the center actually collects — leave blank to use the slip amount.
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="flex-1">
+              <div className="text-[13px] font-semibold text-body/80 dark:text-muted-dark">
+                Commission (৳)
+              </div>
+              <div className="text-[12px] text-muted dark:text-muted-dark">
+                The receiving teacher's share — shown only in Accounting, never on the receipt.
+              </div>
+            </div>
+            <button
+              onClick={() => setCommissionOn((v) => !v)}
+              className={`relative w-12 h-7 rounded-full transition shrink-0 ${
+                commissionOn ? 'bg-teal' : 'bg-line dark:bg-ink-soft'
+              }`}
+              aria-label="Toggle commission"
+            >
+              <span
+                className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow transition-all ${
+                  commissionOn ? 'left-[22px]' : 'left-0.5'
+                }`}
+              />
+            </button>
+          </div>
+          {commissionOn && (
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[16px] font-bold text-ink dark:text-white">
+                ৳
+              </span>
+              <input
+                value={commission}
+                onChange={(e) => setCommission(e.target.value.replace(/[^\d.]/g, ''))}
+                inputMode="numeric"
+                placeholder="0"
+                className="w-full rounded-xl border border-line dark:border-line-dark bg-white dark:bg-input-dark pl-10 pr-4 py-3 text-[16px] font-bold text-ink dark:text-white tabular-nums focus:outline-none focus:ring-2 focus:ring-teal/30"
+              />
+            </div>
+          )}
+          {commissionOn && commissionNum > 0 && !receivedBy && (
+            <div className="text-[12px] font-semibold text-danger">
+              Select a teacher under “Received by” — commission is added to that teacher.
+            </div>
           )}
         </Card>
 

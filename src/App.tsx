@@ -11,6 +11,7 @@ import { Payment } from './pages/Payment'
 import { ReceiptView } from './pages/ReceiptView'
 import { ReceiptLookup } from './pages/ReceiptLookup'
 import { Settings } from './pages/Settings'
+import { Accounting } from './pages/Accounting'
 import { Spinner } from './components/ui'
 
 function Splash() {
@@ -39,6 +40,7 @@ function Gate() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/students" element={<Students />} />
+          <Route path="/accounting" element={<Accounting />} />
           <Route path="/student/:id" element={<StudentDetail />} />
           <Route path="/payment/:id" element={<Payment />} />
           <Route path="/receipt/lookup" element={<ReceiptLookup />} />

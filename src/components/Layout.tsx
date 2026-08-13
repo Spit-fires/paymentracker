@@ -1,12 +1,13 @@
 import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useApp } from '../state/AppContext'
-import { IconHome, IconUsers, IconGear, IconSync, IconCheck, IconInfo } from './Icons'
+import { IconHome, IconUsers, IconGear, IconBook, IconSync, IconCheck, IconInfo } from './Icons'
 import { cx } from './ui'
 
 const tabs = [
   { to: '/dashboard', label: 'Home', Icon: IconHome },
   { to: '/students', label: 'Students', Icon: IconUsers },
+  { to: '/accounting', label: 'Accounting', Icon: IconBook },
   { to: '/settings', label: 'Settings', Icon: IconGear },
 ]
 
@@ -45,7 +46,7 @@ export function Layout({ children }: { children: ReactNode }) {
       <div className="flex-1 pb-24">{children}</div>
 
       <nav className="fixed bottom-0 inset-x-0 z-40">
-        <div className="app-shell-safe mx-auto max-w-[480px] bg-white/95 dark:bg-[#0e1823]/95 backdrop-blur border-t border-line dark:border-line-dark grid grid-cols-3 safe-b">
+        <div className="app-shell-safe mx-auto max-w-[480px] bg-white/95 dark:bg-[#0e1823]/95 backdrop-blur border-t border-line dark:border-line-dark grid grid-cols-4 safe-b">
           {tabs.map(({ to, label, Icon }) => (
             <NavLink
               key={to}

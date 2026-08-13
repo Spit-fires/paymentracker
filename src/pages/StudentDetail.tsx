@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useApp } from '../state/AppContext'
 import { studentPeriodPaid, studentPeriodPaidAny } from '../lib/ledger'
-import { fmtTaka, periodNow, periodLabel, fmtDate } from '../lib/format'
+import { fmtTaka, periodNow, periodLabel, fmtDate, fillMessage } from '../lib/format'
 import { getKV, K, db } from '../lib/db'
 import { getToken } from '../lib/token'
 import { Card, Button, Modal, EmptyState, SectionLabel, PageHeader, useBlobUrl } from '../components/ui'
@@ -123,7 +123,11 @@ export function StudentDetail() {
     }
   }
 
-  const reminderText = `Assalamu alaikum ${student.name},\n\nThis is a friendly reminder that your ${periodLabel(period)} fee is pending for ${centerName}. Please make the payment at your earliest convenience. Thank you!`
+  const reminderText = fillMessage(center.reminderMsg || defaultCenter().reminderMsg || '', {
+    student: student.name,
+    period: periodLabel(period),
+    center: centerName,
+  })
 
   const deleteAll = async () => {
     setBusy(true)

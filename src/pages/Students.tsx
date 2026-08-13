@@ -179,9 +179,9 @@ export function Students() {
           </button>
         </div>
 
-        {/* Batch filter chips */}
+        {/* Batch filter chips — wrap to a new row once the line fills */}
         {batches.length > 0 && (
-          <div className="flex gap-1.5 overflow-x-auto no-scrollbar mt-2.5 pb-1 -mx-4 px-4">
+          <div className="flex flex-wrap gap-1.5 mt-2.5 pb-1 -mx-4 px-4">
             <button
               onClick={() => setBatch('')}
               className={`shrink-0 rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold transition ${

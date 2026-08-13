@@ -89,6 +89,11 @@ export function defaultCenter(): Center {
     tagline: 'Learn · Grow · Succeed',
     address: '',
     phone: '',
+    // keep the pre-editor messages as the defaults — an empty/missing saved
+    // message falls back to these, so existing setups keep working untouched
+    reminderMsg:
+      'Assalamu alaikum {student},\n\nThis is a friendly reminder that your {period} fee is pending for {center}. Please make the payment at your earliest convenience. Thank you!',
+    receiptMsg: '{student} এর {period} বেতন পরিশোধের রশিদ দেখতে নিচের লিংকে ক্লিক করুন। {link}',
   }
 }
 

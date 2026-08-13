@@ -7,6 +7,7 @@ import { periodNow, periodLabel, fmtDate } from '../lib/format'
 import { defaultCenter, exportToSheet } from '../lib/sync'
 import { getLogs, clearLogs, onLogsChange, type LogEntry } from '../lib/logs'
 import { Card, Button, Field, Input, PageHeader, Modal, Avatar, SectionLabel, Textarea } from '../components/ui'
+import { RichEditor } from '../components/RichEditor'
 import { ReauthBanner } from '../components/ReauthBanner'
 import {
   IconSun,
@@ -319,12 +320,11 @@ export function Settings() {
               <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} inputMode="tel" />
             </Field>
           </div>
-          <Field label="Payment rules (Bengali)" hint="Shown at the bottom of every receipt">
-            <Textarea
-              value={form.rules || ''}
-              onChange={(e) => setForm({ ...form, rules: e.target.value })}
+          <Field label="বিশেষ নিয়মাবলী" hint="Shown at the bottom of every receipt — use the toolbar for bold, colors, sizes and alignment">
+            <RichEditor
+              value={form.rulesHtml || ''}
+              onChange={(html, text) => setForm((p) => ({ ...p, rulesHtml: html || undefined, rules: text || undefined }))}
               placeholder="যেমন: প্রতি মাসে ফি নির্ধারিত সময়ে পরিশোধ করতে হবে। দেরি করলে জরিমানা প্রযোজ্য হবে।"
-              rows={3}
             />
           </Field>
           {/* PAID stamp image */}
@@ -367,6 +367,42 @@ export function Settings() {
           </div>
           <Button onClick={() => void saveCenter()} disabled={saved}>
             {saved ? <IconCheck className="w-4 h-4" /> : null} {saved ? 'Saved' : 'Save profile'}
+          </Button>
+        </Card>
+      </div>
+
+      {/* WhatsApp messages */}
+      <SectionLabel>Messages (WhatsApp)</SectionLabel>
+      <div className="px-4 space-y-3">
+        <Card className="!rounded-2xl p-4 space-y-3">
+          <Field
+            label="Fee reminder message"
+            hint="Sent when you press Remind from a student page."
+          >
+            <Textarea
+              value={form.reminderMsg ?? defaultCenter().reminderMsg ?? ''}
+              onChange={(e) => setForm({ ...form, reminderMsg: e.target.value })}
+              rows={4}
+              placeholder={defaultCenter().reminderMsg}
+            />
+          </Field>
+          <Field
+            label="Receipt message"
+            hint="Sent when sharing a receipt on WhatsApp. {link} becomes the Drive link."
+          >
+            <Textarea
+              value={form.receiptMsg ?? defaultCenter().receiptMsg ?? ''}
+              onChange={(e) => setForm({ ...form, receiptMsg: e.target.value })}
+              rows={3}
+              placeholder={defaultCenter().receiptMsg}
+            />
+          </Field>
+          <p className="text-[11.5px] text-faint">
+            Available tokens: <span className="font-mono">{"{student} {period} {center} {link}"}</span> — leave
+            a field empty to keep the default message.
+          </p>
+          <Button variant="soft" full onClick={() => void saveCenter()} disabled={saved}>
+            {saved ? <IconCheck className="w-4 h-4" /> : null} {saved ? 'Saved' : 'Save messages'}
           </Button>
         </Card>
       </div>

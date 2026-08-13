@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toPng } from 'html-to-image'
 import { useApp } from '../state/AppContext'
-import { receiptFileName, periodLabel } from '../lib/format'
+import { receiptFileName, periodLabel, fillMessage } from '../lib/format'
 import { Button, PageHeader } from '../components/ui'
 import { ReceiptCard } from '../components/ReceiptCard'
 import { IconPrint, IconShare, IconDownload, IconWhatsApp } from '../components/Icons'
@@ -64,6 +64,14 @@ export function ReceiptView() {
 
   const fileName = receiptFileName(payment.receiptNo, payment.date)
 
+  const messageTemplate = (center.receiptMsg || defaultCenter().receiptMsg || '').trim()
+  const msgVars = {
+    student: student.name,
+    period: periodLabel(payment.period),
+    center: center.name || defaultCenter().name,
+  }
+  const fillLink = (link: string) => fillMessage(messageTemplate, { ...msgVars, link }).trim()
+
   const pngBlob = async (): Promise<Blob> => {
     if (payment.pngBlob) return payment.pngBlob
     const el = cardRef.current
@@ -89,7 +97,7 @@ export function ReceiptView() {
         link = await retryEnsurePublic(payment.id)
       }
       if (link) {
-        const text = `${student.name} এর ${periodLabel(payment.period)} বেতন পরিশোধের রশিদ দেখতে নিচের লিংকে ক্লিক করুন। ${link}`
+        const text = fillLink(link)
         log('info', `WhatsApp link-based share for receipt #${payment.receiptNo}`)
         window.open(waLink(student.phone, text), '_blank')
         return
@@ -111,11 +119,11 @@ export function ReceiptView() {
       if (nav.canShare && nav.canShare({ files: [file] })) {
         await navigator.share({
           files: [file],
-          text: `${student.name} এর ${periodLabel(payment.period)} বেতন পরিশোধের রশিদ`,
+          text: fillLink(''),
           title: `Receipt #${payment.receiptNo}`,
         })
       } else {
-        window.open(waLink(student.phone, `${student.name} এর ${periodLabel(payment.period)} বেতন পরিশোধের রশিদ দেখতে নিচের লিংকে ক্লিক করুন।`), '_blank')
+        window.open(waLink(student.phone, fillLink('')), '_blank')
       }
     } catch {
       /* user closed the share sheet */

@@ -31,7 +31,13 @@ export interface Payment {
   id: string
   receiptNo: number
   studentId: string
+  /** slip amount — what is written on the printed receipt */
   amount: number
+  /** what the center actually collected; blank/undefined = same as slip */
+  realAmount?: number
+  /** receiving teacher's share; requires a "received by" teacher, never
+   *  shown on the receipt — appears only in Accounting */
+  commission?: number
   /** remaining amount owed on this payment (partial payments), 0 = settled */
   due?: number
   mode: PaymentMode
@@ -52,8 +58,15 @@ export interface Center {
   phone: string
   /** receipt logo as a dataURL (small PNG/JPG), uploaded in Settings */
   logo?: string
-  /** payment rules paragraph, shown in Bengali at the bottom of the receipt */
+  /** plain-text payment rules (legacy, pre-rich-editor), shown at the bottom
+   *  of the receipt; kept in sync with rulesHtml for older devices */
   rules?: string
+  /** rich-text payment rules as HTML — renders as বিশেষ নিয়মাবলী on receipts */
+  rulesHtml?: string
+  /** WhatsApp fee-reminder template; tokens: {student} {period} {center} */
+  reminderMsg?: string
+  /** WhatsApp receipt-share template; tokens: {student} {period} {center} {link} */
+  receiptMsg?: string
   /** custom PAID stamp image as a dataURL, uploaded in Settings */
   paidImage?: string
 }

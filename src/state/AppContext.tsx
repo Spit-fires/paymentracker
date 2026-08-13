@@ -51,6 +51,8 @@ export interface NewStudentInput {
 export interface NewPaymentInput {
   studentId: string
   amount: number
+  realAmount?: number
+  commission?: number
   due?: number
   mode: PaymentMode
   receivedBy?: ReceivedBy
@@ -516,6 +518,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         receiptNo: next,
         studentId: input.studentId,
         amount: input.amount,
+        realAmount: input.realAmount,
+        commission: input.commission,
         due: input.due || 0,
         mode: input.mode,
         receivedBy: input.receivedBy,

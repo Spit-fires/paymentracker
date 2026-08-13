@@ -1,5 +1,6 @@
 import type { Payment, Student, Center } from '../types'
 import { fmtTaka, takaToWords, fmtDate, periodLabel } from '../lib/format'
+import { sanitizeHtml } from './RichEditor'
 
 interface Props {
   center: Center
@@ -140,14 +141,21 @@ export function ReceiptCard({ center, student, payment }: Props) {
       </div>
 
       {/* Rules */}
-      {center.rules?.trim() && (
+      {(center.rulesHtml?.trim() || center.rules?.trim()) && (
         <div style={{ marginTop: 14, border: `1px solid ${LINE}`, borderRadius: 0, padding: '10px 12px', background: '#fff' }}>
           <div style={{ fontSize: 9.5, letterSpacing: '0.18em', textTransform: 'uppercase', color: GOLD, fontWeight: 700, marginBottom: 4 }}>
-            নিয়মাবলী
+            বিশেষ নিয়মাবলী
           </div>
-          <div style={{ fontSize: 11, color: INK, whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>
-            {center.rules}
-          </div>
+          {center.rulesHtml?.trim() ? (
+            <div
+              style={{ fontSize: 11, color: INK, lineHeight: 1.55 }}
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(center.rulesHtml) }}
+            />
+          ) : (
+            <div style={{ fontSize: 11, color: INK, whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>
+              {center.rules}
+            </div>
+          )}
         </div>
       )}
 
