@@ -326,6 +326,28 @@ export function Settings() {
               rows={3}
             />
           </Field>
+          <div className="flex items-center gap-3">
+            <div className="flex-1">
+              <div className="text-[14px] font-bold text-ink dark:text-white">PAID stamp on receipts</div>
+              <div className="text-[12px] text-muted dark:text-muted-dark">
+                Big PAID seal printed on every receipt
+              </div>
+            </div>
+            <button
+              onClick={async () => {
+                const next = { ...form, paidStamp: form.paidStamp !== false }
+                await updateCenter(next)
+              }}
+              className="relative w-12 h-7 rounded-full transition bg-line dark:bg-ink-soft shrink-0"
+              aria-label="Toggle PAID stamp"
+            >
+              <span
+                className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow transition-all ${
+                  form.paidStamp !== false ? 'left-[22px]' : 'left-0.5'
+                }`}
+              />
+            </button>
+          </div>
           <Button onClick={() => void saveCenter()} disabled={saved}>
             {saved ? <IconCheck className="w-4 h-4" /> : null} {saved ? 'Saved' : 'Save profile'}
           </Button>

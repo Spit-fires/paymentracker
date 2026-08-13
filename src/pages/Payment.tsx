@@ -71,6 +71,16 @@ export function Payment() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [student?.id, prefill])
 
+  // upgrade a refilled teacher snapshot (synthetic id = name) to the real
+  // Settings teacher once the list is available — without clobbering a
+  // teacher the user picked from the chips themselves
+  useEffect(() => {
+    if (!receivedBy || receivedBy.id !== receivedBy.name) return
+    const t = teachers.find((x) => x.name === receivedBy.name)
+    if (t) setReceivedBy(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teachers])
+
   const lastTotal = useMemo(
     () => (student ? studentPeriodPaid(payments, student.id, selPeriod) : 0),
     [student, payments, selPeriod],
@@ -278,7 +288,7 @@ export function Payment() {
                   key={t.id}
                   onClick={() => setReceivedBy(t)}
                   className={`rounded-xl px-4 py-2.5 text-[13.5px] font-bold transition active:scale-[0.97] ${
-                    receivedBy?.id === t.id
+                    receivedBy?.id === t.id || receivedBy?.name === t.name
                       ? 'bg-ink text-white shadow-[0_2px_8px_rgba(18,49,79,0.25)] dark:bg-ink-soft'
                       : 'bg-white dark:bg-card-dark border border-line dark:border-line-dark text-body/70 dark:text-muted-dark'
                   }`}

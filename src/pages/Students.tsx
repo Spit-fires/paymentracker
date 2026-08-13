@@ -37,12 +37,13 @@ export function Students() {
   const q = params.get('q') || ''
   const mode = params.get('mode')
   const wantNew = params.get('new') === '1'
+  const batchParam = params.get('batch') || ''
 
   const [addOpen, setAddOpen] = useState(wantNew)
   const [adding, setAdding] = useState(false)
   const [sort, setSort] = useState<SortKey>('name')
   const [sortOpen, setSortOpen] = useState(false)
-  const [batchFilter, setBatchFilter] = useState('')
+  const [batchFilter, setBatchFilter] = useState(batchParam)
   const [showArchived, setShowArchived] = useState(false)
 
   useEffect(() => {
@@ -53,6 +54,14 @@ export function Students() {
   }, [wantNew])
 
   const period = periodNow()
+  const setBatch = (b: string) => {
+    setBatchFilter(b)
+    const p = new URLSearchParams(params)
+    if (b) p.set('batch', b)
+    else p.delete('batch')
+    setParams(p, { replace: true })
+  }
+
   const batches = useMemo(
     () => Array.from(new Set(students.map((s) => s.batch))).filter(Boolean).sort(),
     [students],
@@ -153,7 +162,7 @@ export function Students() {
         {batches.length > 0 && (
           <div className="flex gap-1.5 overflow-x-auto no-scrollbar mt-2.5 pb-1 -mx-4 px-4">
             <button
-              onClick={() => setBatchFilter('')}
+              onClick={() => setBatch('')}
               className={`shrink-0 rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold transition ${
                 !batchFilter
                   ? 'bg-ink text-white'
@@ -165,7 +174,7 @@ export function Students() {
             {batches.map((b) => (
               <button
                 key={b}
-                onClick={() => setBatchFilter(batchFilter === b ? '' : b)}
+                onClick={() => setBatch(batchFilter === b ? '' : b)}
                 className={`shrink-0 rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold transition ${
                   batchFilter === b
                     ? 'bg-ink text-white'

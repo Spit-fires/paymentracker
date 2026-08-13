@@ -50,6 +50,8 @@ export interface Center {
   logo?: string
   /** payment rules paragraph, shown in Bengali at the bottom of the receipt */
   rules?: string
+  /** show the PAID stamp on receipts (default true) */
+  paidStamp?: boolean
 }
 
 /** Teacher/collector who can be picked as "received by" when recording a payment. */

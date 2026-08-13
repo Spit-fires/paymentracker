@@ -14,11 +14,15 @@ const MUTED = '#7c7668'
 const CREAM = '#fbfaf5'
 const LINE = '#e2dccd'
 
+const BASE = import.meta.env.BASE_URL
+const DEFAULT_LOGO = `${BASE}logo.png`
+const PAID_STAMP = `${BASE}paid.png`
+
 export function ReceiptCard({ center, student, payment }: Props) {
   const due = payment.due || 0
   const showDue = due > 0
   const receivedBy = payment.receivedBy
-  const showPaid = payment.amount > 0
+  const showPaid = payment.amount > 0 && center.paidStamp !== false
 
   return (
     <div
@@ -46,21 +50,11 @@ export function ReceiptCard({ center, student, payment }: Props) {
             style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 0, background: CREAM, border: `1px solid ${LINE}`, padding: 4 }}
           />
         ) : (
-          <div
-            style={{
-              width: 64,
-              height: 64,
-              borderRadius: 0,
-              background: NAVY,
-              color: '#fff',
-              display: 'grid',
-              placeItems: 'center',
-              fontSize: 26,
-              fontWeight: 700,
-            }}
-          >
-            {(center.name || 'UTSAHO EDUCARE').slice(0, 2).toUpperCase()}
-          </div>
+          <img
+            src={DEFAULT_LOGO}
+            alt=""
+            style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 0, background: CREAM, border: `1px solid ${LINE}`, padding: 4 }}
+          />
         )}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: '0.04em', color: NAVY }}>
@@ -178,34 +172,22 @@ export function ReceiptCard({ center, student, payment }: Props) {
 
       {/* PAID stamp */}
       {showPaid && (
-        <div
+        <img
+          src={PAID_STAMP}
+          alt="PAID"
           style={{
             position: 'absolute',
             top: '50%',
             left: '50%',
-            transform: 'translate(-50%, -50%) rotate(-25deg)',
-            border: '4px solid #16a34a',
-            borderRadius: 8,
-            padding: '6px 28px',
-            opacity: 0.18,
+            transform: 'translate(-50%, -50%) rotate(-18deg)',
+            width: 230,
+            height: 'auto',
+            opacity: 0.85,
             pointerEvents: 'none',
             userSelect: 'none',
+            zIndex: 2,
           }}
-        >
-          <div
-            style={{
-              fontSize: 52,
-              fontWeight: 900,
-              color: '#16a34a',
-              letterSpacing: '0.12em',
-              lineHeight: 1,
-              textTransform: 'uppercase',
-              fontFamily: "'Segoe UI', system-ui, sans-serif",
-            }}
-          >
-            PAID
-          </div>
-        </div>
+        />
       )}
     </div>
   )

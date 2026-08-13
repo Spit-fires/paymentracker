@@ -10,7 +10,7 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'icons/pwa-192.png', 'icons/pwa-512.png', 'icons/maskable-512.png'],
+      includeAssets: ['favicon.svg', 'logo.png', 'paid.png', 'icons/pwa-192.png', 'icons/pwa-512.png', 'icons/maskable-512.png'],
       manifest: {
         name: 'Utshaho Educare – Payment Tracker',
         short_name: 'PaymentTracker',
