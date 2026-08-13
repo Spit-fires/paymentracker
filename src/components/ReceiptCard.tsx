@@ -172,7 +172,7 @@ export function ReceiptCard({ center, student, payment }: Props) {
         </div>
       </div>
 
-      {/* PAID seal — faint, right of the amount paid */}
+      {/* PAID seal — faint watermark, right of the amount paid */}
       {showPaid && (
         <img
           src={PAID_STAMP}
@@ -184,10 +184,11 @@ export function ReceiptCard({ center, student, payment }: Props) {
             transform: 'translateY(-50%) rotate(-15deg)',
             width: 145,
             height: 'auto',
-            opacity: 0.3,
+            opacity: 0.5,
+            mixBlendMode: 'multiply',
             pointerEvents: 'none',
             userSelect: 'none',
-            zIndex: -1,
+            zIndex: 1,
           }}
         />
       )}
