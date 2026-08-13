@@ -131,6 +131,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<Toast | null>(null)
 
   const syncTimer = useRef<number | undefined>(undefined)
+  const retryTimer = useRef<number | undefined>(undefined)
 
   const showToast = useCallback((msg: string, kind: Toast['kind'] = 'info') => {
     const id = ++toastId
@@ -139,10 +140,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const refreshData = useCallback(async () => {
-    setStudents(await db.students.toArray())
-    setPayments(await db.payments.toArray())
+    setStudents((await db.students.toArray()).filter((s) => !s.deletedAt))
+    setPayments((await db.payments.toArray()).filter((p) => !p.deletedAt))
     setCenter((await getKV<Center>(K.CENTER)) || defaultCenter())
-    setTeachers((await getKV<Teacher[]>(K.TEACHERS)) || [])
+    setTeachers(((await getKV<Teacher[]>(K.TEACHERS)) || []).filter((t) => !t.deletedAt))
     setReceiptSeq((await getKV<number>(K.RECEIPT_SEQ)) || 0)
   }, [])
 
@@ -171,17 +172,56 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         await ensureDriveStructure()
         // merge remote changes first (local-newer records win), then push local,
-        // then pull again to re-apply everything we just pushed plus new remote state
-        await pull()
-        await flushOutbox()
-        await pull()
+        // then pull again to re-apply everything we just pushed plus new remote state.
+        // Re-push diverged records (newer locally than on Drive) so multi-device
+        // edits on the same account converge instead of drifting.
+        const { needPush } = await pull()
+        if (needPush.length) {
+          for (const f of needPush) await queueOp({ kind: 'pushJSON', file: f })
+        }
+        // claim a fresh receipt-number window when the current one is exhausted —
+        // one meta write per window instead of one per receipt; the max-merge on
+        // pull keeps concurrent claims from ever regressing the shared sequence
+        const res = (await getKV<{ high: number; used: number }>(K.SEQ_RESERVED)) || { high: 0, used: 0 }
+        const seqNow = (await getKV<number>(K.RECEIPT_SEQ)) || 0
+        if (res.used >= res.high) {
+          const high = Math.max(seqNow, res.high) + 20
+          // keep the window's used where the fleet's merged counter stands —
+          // starting it from the stale value would renumber receipts from #1 —
+          // and do NOT inflate RECEIPT_SEQ here: it tracks issued numbers so
+          // the draft preview stays truthful; the window carries its own
+          // high-water mark in the meta file
+          await setKV(K.SEQ_RESERVED, { high, used: Math.max(res.used, seqNow) })
+          await queueOp({ kind: 'pushJSON', file: 'meta' })
+        }
+        // count AFTER pull — it may have queued orphan-media cleanups or
+        // re-pushes — so the flush never skips work it just created
+        const queued = await db.outbox.count()
+        // an idle sync (nothing to push) skips the upload pass and the second
+        // download entirely — only metadata checks, which keeps sync fast
+        if (queued > 0) {
+          await flushOutbox()
+          await pull()
+        }
         await refreshData()
         setLastSyncAt(Date.now())
+        if (retryTimer.current) {
+          window.clearTimeout(retryTimer.current)
+          retryTimer.current = undefined
+        }
         log('sync', 'Sync completed')
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Sync failed'
         log('error', `Sync failed: ${msg}`)
         showToast(msg, 'err')
+        // a transient failure must not stall the outbox until the next user
+        // action — back off and retry once shortly
+        if (getToken() && navigator.onLine && !retryTimer.current) {
+          retryTimer.current = window.setTimeout(() => {
+            retryTimer.current = undefined
+            void syncNow()
+          }, 30000)
+        }
       } finally {
         setSyncing(false)
       }
@@ -191,17 +231,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const scheduleSync = useCallback(() => {
     window.clearTimeout(syncTimer.current)
+    // jitter the debounce so devices on the same account don't sync in lockstep
     syncTimer.current = window.setTimeout(() => {
       void syncNow()
-    }, 2500)
+    }, 2500 + Math.random() * 2500)
   }, [syncNow])
 
-  const saveTeachers = useCallback(async (t: Teacher[]) => {
-    await setKV(K.TEACHERS, t)
-    setTeachers(t)
-    await queueOp({ kind: 'pushJSON', file: 'meta' })
-    scheduleSync()
-  }, [scheduleSync])
+  const saveTeachers = useCallback(
+    async (t: Teacher[]) => {
+      const prevById = new Map(teachers.map((x) => [x.id, x]))
+      const now = Date.now()
+      const next: Teacher[] = t.map((x) => {
+        const prev = prevById.get(x.id)
+        if (prev && prev.name === x.name && prev.phone === x.phone) {
+          return { ...x, updatedAt: prev.updatedAt || now }
+        }
+        return { ...x, updatedAt: now }
+      })
+      // removals become tombstones so other devices drop the teacher too
+      const incoming = new Set(t.map((x) => x.id))
+      for (const [id, prev] of prevById) {
+        if (incoming.has(id)) continue
+        if (prev.deletedAt) next.push(prev)
+        else next.push({ ...prev, deletedAt: now, updatedAt: now })
+      }
+      await setKV(K.TEACHERS, next)
+      setTeachers(next)
+      await queueOp({ kind: 'pushJSON', file: 'meta' })
+      scheduleSync()
+    },
+    [teachers, scheduleSync],
+  )
 
   // init
   useEffect(() => {
@@ -413,6 +473,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteStudent = useCallback(
     async (id: string) => {
       const s = await db.students.get(id)
+      if (!s) return
       const theirPayments = await db.payments.where('studentId').equals(id).toArray()
       if (s?.photoFileId) await queueOp({ kind: 'deleteMedia', fileId: s.photoFileId })
       if (s?.folderId) await queueOp({ kind: 'deleteMedia', fileId: s.folderId })
@@ -420,8 +481,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (p.pngFileId) await queueOp({ kind: 'deleteMedia', fileId: p.pngFileId })
       }
       await db.transaction('rw', db.students, db.payments, async () => {
-        await db.students.delete(id)
-        await db.payments.where('studentId').equals(id).delete()
+        const now = Date.now()
+        // tombstone instead of hard delete — other devices apply the delete
+        // via sync; a newer edit elsewhere resurrects the record instead of
+        // it silently vanishing from the shared file
+        await db.students.put({ ...s, deletedAt: now, updatedAt: now })
+        for (const p of theirPayments) {
+          await db.payments.put({ ...p, deletedAt: now, updatedAt: now })
+        }
       })
       await queueOp({ kind: 'pushJSON', file: 'students' })
       await queueOp({ kind: 'pushJSON', file: 'payments' })
@@ -433,8 +500,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addPayment = useCallback(
     async (input: NewPaymentInput): Promise<Payment> => {
-      const seq = (await getKV<number>(K.RECEIPT_SEQ)) || 0
-      const next = seq + 1
+      // issue from the reserved window (claimed during sync, shared across
+      // devices via the meta file) — RECEIPT_SEQ and the window's used mark
+      // advance in lockstep so the draft preview always shows the true next
+      // number, and the monotonic max below keeps multi-device allocation
+      // continuous across offline fallback drift
+      const res = (await getKV<{ high: number; used: number }>(K.SEQ_RESERVED)) || { high: 0, used: 0 }
+      const seqNow = (await getKV<number>(K.RECEIPT_SEQ)) || 0
+      const next = Math.max(res.used, seqNow) + 1
+      await setKV(K.SEQ_RESERVED, { high: res.high, used: next })
       await setKV(K.RECEIPT_SEQ, next)
       setReceiptSeq(next)
       const p: Payment = {
@@ -460,7 +534,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         blob: input.pngBlob,
       })
       await queueOp({ kind: 'pushJSON', file: 'payments' })
-      await queueOp({ kind: 'pushJSON', file: 'meta' })
+      // no per-receipt meta push — the shared sequence propagates when any
+      // device claims its next reservation window during sync
       await refreshData()
       scheduleSync()
       return p
@@ -474,7 +549,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!cur) return
       const updated = { ...cur, ...patch, updatedAt: Date.now() }
       await db.payments.put(updated)
-      if (patch.pngBlob && patch.pngBlob !== cur.pngBlob) {
+      // html-to-image re-captures on every edit; when the raster didn't
+      // actually change (identical byte size), skip the upload + delete
+      // round-trip and keep the existing Drive file
+      const blobSameSize = !!(patch.pngBlob && cur.pngBlob && patch.pngBlob.size === cur.pngBlob.size)
+      if (patch.pngBlob && !blobSameSize) {
         // upload the new PNG first, then delete the old one — a crash in
         // between leaves the old file intact and the id still referenced
         await queueOp({
@@ -501,7 +580,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const cur = await db.payments.get(id)
       if (!cur) return
       if (cur.pngFileId) await queueOp({ kind: 'deleteMedia', fileId: cur.pngFileId })
-      await db.payments.delete(id)
+      await db.payments.put({ ...cur, deletedAt: Date.now(), updatedAt: Date.now() })
       await queueOp({ kind: 'pushJSON', file: 'payments' })
       await refreshData()
       scheduleSync()

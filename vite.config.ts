@@ -11,6 +11,12 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'logo.png', 'paid.png', 'icons/pwa-192.png', 'icons/pwa-512.png', 'icons/maskable-512.png'],
+      workbox: {
+        // html-to-image fetches receipt images with cache-busting query params;
+        // serve precached logo/paid assets for ANY query string so captures
+        // work offline instead of falling through to a failed network fetch
+        ignoreURLParametersMatching: [/.*/],
+      },
       manifest: {
         name: 'Utshaho Educare – Payment Tracker',
         short_name: 'PaymentTracker',

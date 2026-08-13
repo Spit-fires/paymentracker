@@ -125,12 +125,17 @@ export function Payment() {
     if (!previewRef.current) return showToast('Please wait, still loading', 'err')
     setBusy(true)
     try {
-      // Wait for all images (logo) to load before PNG capture
+      // Wait for all images (logo, paid seal) to actually load before PNG
+      // capture — a broken img would embed as empty in the saved receipt
       const imgs = previewRef.current.querySelectorAll('img')
-      await Promise.all(Array.from(imgs).map((img) =>
-        img.complete ? Promise.resolve() : new Promise<void>((r) => { img.onload = () => r(); img.onerror = () => r() }),
-      ))
-      const blob = await toPng(previewRef.current, { pixelRatio: 2, cacheBust: true }).then((dataUrl) =>
+      await Promise.all(Array.from(imgs).map((img) => {
+        if (img.complete && img.naturalWidth > 0) return Promise.resolve()
+        return new Promise<void>((r) => {
+          img.onload = () => r()
+          img.onerror = () => r()
+        })
+      }))
+      const blob = await toPng(previewRef.current, { pixelRatio: 2 }).then((dataUrl) =>
         fetch(dataUrl).then((r) => r.blob()),
       )
       if (existing) {

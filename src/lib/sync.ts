@@ -2,7 +2,16 @@ import { DriveClient } from './drive'
 import { db, getKV, setKV, queueOp, getStudents, getPayments, K } from './db'
 import { fmtDate } from './format'
 import { log } from './logs'
-import type { DriveRefs, OutboxOp, Student, Payment, Center, Session, Teacher } from '../types'
+import type {
+  DriveRefs,
+  OutboxOp,
+  OutboxEntry,
+  Student,
+  Payment,
+  Center,
+  Session,
+  Teacher,
+} from '../types'
 
 let _client: DriveClient | null = null
 
@@ -70,7 +79,8 @@ async function buildJSON(file: 'students' | 'payments' | 'meta'): Promise<string
   const center = (await getKV<Center>(K.CENTER)) || defaultCenter()
   const receiptSeq = (await getKV<number>(K.RECEIPT_SEQ)) || 0
   const teachers = (await getKV<Teacher[]>(K.TEACHERS)) || []
-  return JSON.stringify({ version: 1, updatedAt: Date.now(), center, receiptSeq, teachers })
+  const seqReserved = (await getKV<{ high: number; used: number }>(K.SEQ_RESERVED)) || { high: 0, used: 0 }
+  return JSON.stringify({ version: 1, updatedAt: Date.now(), center, receiptSeq, teachers, seqReserved })
 }
 
 export function defaultCenter(): Center {
@@ -203,9 +213,29 @@ export async function flushOutbox(): Promise<void> {
   for (;;) {
     const entries = await db.outbox.toArray()
     if (!entries.length) return
-    for (const e of entries) {
+    // receipt PNGs are the slowest ops (large bodies, network-bound) — run
+    // them in small parallel batches; everything else stays strictly ordered
+    let i = 0
+    while (i < entries.length) {
+      const batch: OutboxEntry[] = []
+      while (i < entries.length && batch.length < 3 && entries[i].op.kind === 'uploadMedia') {
+        batch.push(entries[i])
+        i++
+      }
+      if (batch.length) {
+        // a failed upload just stays queued — the next pass retries it and
+        // this pass continues with the remaining ops
+        await Promise.all(
+          batch.map(async (e) => {
+            await applyOp(e.op)
+            await db.outbox.delete(e.id!)
+          }),
+        )
+        continue
+      }
+      const e = entries[i]
+      i++
       try {
-        // any failure aborts this pass and keeps the op queued for retry
         await applyOp(e.op)
         await db.outbox.delete(e.id!)
       } catch (err) {
@@ -216,100 +246,298 @@ export async function flushOutbox(): Promise<void> {
   }
 }
 
-/** Replace local data from Drive when remote is newer. Returns true if anything changed. */
-export async function pull(): Promise<boolean> {
+/** signature of the user-editable fields — used to break same-timestamp ties */
+function studentSig(s: Student): string {
+  return JSON.stringify([s.name, s.phone || '', s.phone2 || '', s.batch, s.defaultFee, s.notes || '', s.archived, s.deletedAt ?? null])
+}
+function paymentSig(p: Payment): string {
+  return JSON.stringify([
+    p.receiptNo,
+    p.studentId,
+    p.amount,
+    p.due || 0,
+    p.mode,
+    p.receivedBy ? [p.receivedBy.name, p.receivedBy.phone || ''] : null,
+    p.period,
+    p.date,
+    p.deletedAt ?? null,
+  ])
+}
+
+/**
+ * Union-merge two teacher lists (last-writer-wins per member, tombstones for
+ * removals). Ties (equal or unknown timestamps) deterministically resolve to
+ * the remote copy so merge storms are impossible.
+ */
+function mergeTeachers(local: Teacher[], remote: Teacher[]): Teacher[] {
+  const byId = new Map(local.map((t) => [t.id, t]))
+  for (const rt of remote) {
+    const lt = byId.get(rt.id)
+    if (!lt) {
+      byId.set(rt.id, rt)
+      continue
+    }
+    const rtAt = rt.updatedAt || 0
+    const ltAt = lt.updatedAt || 0
+    if (rtAt > ltAt) {
+      byId.set(rt.id, rt)
+    } else if (rtAt === ltAt) {
+      // equal stamps — prefer remote (deterministic, no re-push loop)
+      if (JSON.stringify(lt) !== JSON.stringify(rt)) byId.set(rt.id, rt)
+    }
+    // rtAt < ltAt → keep local (newer) — the caller re-pushes via diff
+  }
+  return [...byId.values()]
+}
+
+/**
+ * Replace local data from Drive when remote is newer. Returns what changed and
+ * which JSON files hold records that are newer locally than on Drive (those
+ * must be re-pushed so every device converges instead of drifting).
+ */
+export async function pull(): Promise<{
+  changed: boolean
+  needPush: Array<'students' | 'payments' | 'meta'>
+}> {
   const drive = await getKV<DriveRefs>(K.DRIVE)
-  if (!drive?.rootFolderId) return false
+  if (!drive?.rootFolderId) return { changed: false, needPush: [] }
+  const c = client()
   const session = (await getKV<Session>(K.SESSION)) || { theme: 'light', lastPulledAt: 0 }
   let changed = false
   let latest = session.lastPulledAt
+  const needPush: Array<'students' | 'payments' | 'meta'> = []
+  const stamps = { ...(drive.stamps || {}) }
+  let stampDirty = false
 
   const files: Array<['students' | 'payments' | 'meta', string | undefined]> = [
     ['students', drive.fileIds.students],
     ['payments', drive.fileIds.payments],
     ['meta', drive.fileIds.meta],
   ]
+  // run two passes: the second is nearly free (in-memory stamps skip
+  // unchanged files) and catches files that another device rewrote while
+  // we were downloading pass 1 — closes the torn-snapshot window
+  for (let pass = 0; pass < 2; pass++) {
   for (const [file, fileId] of files) {
     if (!fileId) continue
     try {
-      const text = await client().downloadText(fileId)
+      // cheap metadata call first — skip the (possibly large) download when
+      // this file has not changed since we last saw it
+      const meta = await c.get(fileId, 'id,modifiedTime')
+      if (meta.modifiedTime && meta.modifiedTime === stamps[file]) continue
+      const text = await c.downloadText(fileId)
       const j = JSON.parse(text)
       if (!j || typeof j !== 'object') continue
       latest = Math.max(latest, j.updatedAt || 0)
-      if ((j.updatedAt || 0) > session.lastPulledAt) {
+      const fileAt = j.updatedAt || 0
+      // a device with a fast/slow clock wins/loses every merge silently —
+      // surface it so the fleets' clocks can be fixed
+      if (fileAt && Math.abs(Date.now() - fileAt) > 60 * 60 * 1000) {
+        log('warn', `Clock skew: ${file}.json built ${Math.round((Date.now() - fileAt) / 60000)} min from device time`)
+      }
+      if (fileAt > session.lastPulledAt) {
         if (file === 'students' && Array.isArray(j.students)) {
           await db.transaction('rw', db.students, async () => {
             const local = new Map((await db.students.toArray()).map((s) => [s.id, s]))
-            const merged = j.students.map((s: Student) => {
-              const cur = local.get(s.id)
-              if (!cur) return s
-              // keep local when it's fresher than our last pull (likely unsynced)
-              // or newer than the remote record; otherwise take remote
-              const keepLocal =
-                (cur.updatedAt || 0) > session.lastPulledAt || (cur.updatedAt || 0) >= (s.updatedAt || 0)
-              const base = keepLocal ? cur : s
-              return {
-                ...base,
-                photoBlob: cur.photoBlob,
-                photoFileId: s.photoFileId || cur.photoFileId,
-                folderId: s.folderId || cur.folderId,
-                folderShared: s.folderShared || cur.folderShared,
-              }
-            })
-            await db.students.bulkPut(merged)
-            // propagate deletes, but never drop records newer than the last pull
             const remoteIds = new Set(j.students.map((s: Student) => s.id))
-            for (const loc of local.values()) {
-              if (!remoteIds.has(loc.id) && (loc.updatedAt || 0) <= session.lastPulledAt) {
-                await db.students.delete(loc.id)
+            // 1) tombstones: purge locally unless we edited the record after
+            // the remote delete — a newer local edit resurrects it via re-push
+            for (const s of j.students) {
+              if (!s.deletedAt) continue
+              const cur = local.get(s.id)
+              if (!cur) continue
+              if ((cur.updatedAt || 0) > (s.deletedAt || 0)) {
+                if (!needPush.includes('students')) needPush.push('students')
+                continue
               }
+              await db.students.delete(s.id)
+              local.delete(s.id)
             }
+            // 2) records missing from the file: absence is NEVER a delete —
+            //    deletes are explicit tombstones above. Missing = the author's
+            //    snapshot predates it (created/edited elsewhere) → re-push so
+            //    every device converges
+            for (const loc of local.values()) {
+              if (remoteIds.has(loc.id)) continue
+              if (!needPush.includes('students')) needPush.push('students')
+            }
+            // 3) plain records: keep local when fresher than our last pull or
+            //    newer than the remote record; otherwise take remote
+            const merged = j.students
+              .filter((s: Student) => !s.deletedAt)
+              .map((s: Student) => {
+                const cur = local.get(s.id)
+                if (!cur) return s
+                const keepLocal =
+                  (cur.updatedAt || 0) > session.lastPulledAt || (cur.updatedAt || 0) >= (s.updatedAt || 0)
+                // strictly newer locally → divergent, must re-push; equal
+                // timestamps with different content also diverge (break the
+                // tie deterministically: local copy wins, then re-push once)
+                const div =
+                  (cur.updatedAt || 0) > (s.updatedAt || 0) ||
+                  ((cur.updatedAt || 0) === (s.updatedAt || 0) && studentSig(cur) !== studentSig(s))
+                if (keepLocal && div) {
+                  if (!needPush.includes('students')) needPush.push('students')
+                }
+                const base = keepLocal ? cur : s
+                return {
+                  ...base,
+                  photoBlob: cur.photoBlob,
+                  photoFileId: s.photoFileId || cur.photoFileId,
+                  folderId: s.folderId || cur.folderId,
+                  folderShared: s.folderShared || cur.folderShared,
+                }
+              })
+            await db.students.bulkPut(merged)
           })
           changed = true
         } else if (file === 'payments' && Array.isArray(j.payments)) {
+          // Drive files whose references get replaced by the remote copy —
+          // queued for deletion after the transaction (outbox writes can't
+          // nest inside the running one)
+          const orphans: string[] = []
           await db.transaction('rw', db.payments, async () => {
             const local = new Map((await db.payments.toArray()).map((p) => [p.id, p]))
-            const merged = j.payments.map((p: Payment) => {
-              const cur = local.get(p.id)
-              if (!cur) return p
-              const keepLocal =
-                (cur.updatedAt || 0) > session.lastPulledAt || (cur.updatedAt || 0) >= (p.updatedAt || 0)
-              const base = keepLocal ? cur : p
-              return {
-                ...base,
-                pngBlob: cur.pngBlob || p.pngBlob,
-                pngFileId: p.pngFileId || cur.pngFileId,
-              }
-            })
-            await db.payments.bulkPut(merged)
             const remoteIds = new Set(j.payments.map((p: Payment) => p.id))
-            for (const loc of local.values()) {
-              if (!remoteIds.has(loc.id) && (loc.updatedAt || 0) <= session.lastPulledAt) {
-                await db.payments.delete(loc.id)
+            // 1) tombstones
+            for (const p of j.payments) {
+              if (!p.deletedAt) continue
+              const cur = local.get(p.id)
+              if (!cur) continue
+              if ((cur.updatedAt || 0) > (p.deletedAt || 0)) {
+                if (!needPush.includes('payments')) needPush.push('payments')
+                continue
               }
+              await db.payments.delete(p.id)
+              local.delete(p.id)
+            }
+            // 2) records missing from the file: absence is NEVER a delete —
+            //    deletes are explicit tombstones above. Missing = the author's
+            //    snapshot predates it (created/edited elsewhere) → re-push so
+            //    every device converges
+            for (const loc of local.values()) {
+              if (remoteIds.has(loc.id)) continue
+              if (!needPush.includes('payments')) needPush.push('payments')
+            }
+            // 3) plain records
+            const merged = j.payments
+              .filter((p: Payment) => !p.deletedAt)
+              .map((p: Payment) => {
+                const cur = local.get(p.id)
+                if (!cur) return p
+                const keepLocal =
+                  (cur.updatedAt || 0) > session.lastPulledAt || (cur.updatedAt || 0) >= (p.updatedAt || 0)
+                // strictly newer locally → divergent, must re-push; equal
+                // timestamps with different content also diverge (local wins,
+                // then a single re-push lets every device settle)
+                const div =
+                  (cur.updatedAt || 0) > (p.updatedAt || 0) ||
+                  ((cur.updatedAt || 0) === (p.updatedAt || 0) && paymentSig(cur) !== paymentSig(p))
+                if (keepLocal && div) {
+                  if (!needPush.includes('payments')) needPush.push('payments')
+                }
+                const base = keepLocal ? cur : p
+                // remote file won → our old file is orphaned on Drive
+                if (!keepLocal && cur.pngFileId && cur.pngFileId !== p.pngFileId) {
+                  orphans.push(cur.pngFileId)
+                }
+                return {
+                  ...base,
+                  pngBlob: cur.pngBlob || p.pngBlob,
+                  pngFileId: p.pngFileId || cur.pngFileId,
+                }
+              })
+            await db.payments.bulkPut(merged)
+            // two devices can allocate the same receipt number while both
+            // offline — keep the earliest record, renumber the rest so the
+            // shared stream never produces duplicate receipt numbers again.
+            // Scans every active record (including local-only receipts that
+            // were never in this file) so offline-created numbers are caught too.
+            const active = (await db.payments.toArray())
+              .filter((p) => !p.deletedAt)
+              .sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0))
+            const used = new Set<number>()
+            for (const p of active) {
+              if (!used.has(p.receiptNo)) {
+                used.add(p.receiptNo)
+                continue
+              }
+              const oldNo = p.receiptNo
+              let n = Math.max(0, ...used) + 1
+              while (used.has(n)) n++
+              used.add(n)
+              await db.payments.update(p.id, { receiptNo: n })
+              if (!needPush.includes('payments')) needPush.push('payments')
+              log('sync', `Renumbered receipt #${oldNo} → #${n} (duplicate from concurrent device)`)
+            }
+            // a renumbered record must never collide with numbers the
+            // reservation window will hand to new receipts — advance the
+            // shared counters to the highest active number so future
+            // allocations (and the preview) sit above it
+            if (used.size) {
+              const maxNo = Math.max(...used)
+              const curRes = (await getKV<{ high: number; used: number }>(K.SEQ_RESERVED)) || { high: 0, used: 0 }
+              if (maxNo > curRes.used) {
+                await setKV(K.SEQ_RESERVED, { high: curRes.high, used: maxNo })
+              }
+              const curSeq = (await getKV<number>(K.RECEIPT_SEQ)) || 0
+              if (maxNo > curSeq) await setKV(K.RECEIPT_SEQ, maxNo)
             }
           })
+          if (orphans.length) {
+            log('sync', `Cleaning ${orphans.length} orphaned receipt file(s)`)
+            for (const fid of orphans) await queueOp({ kind: 'deleteMedia', fileId: fid })
+          }
           changed = true
         } else if (file === 'meta' && j.center) {
           await setKV(K.CENTER, { ...((await getKV<Center>(K.CENTER)) || {}), ...j.center })
           const seq = Math.max(j.receiptSeq || 0, (await getKV<number>(K.RECEIPT_SEQ)) || 0)
           await setKV(K.RECEIPT_SEQ, seq)
-          if (Array.isArray(j.teachers)) {
-            await setKV(K.TEACHERS, j.teachers)
+          // the reservation window travels with the meta file too — without
+          // it a second device only sees the window high-water mark and
+          // re-allocates numbers the claiming device already burned locally
+          const curRes = (await getKV<{ high: number; used: number }>(K.SEQ_RESERVED)) || { high: 0, used: 0 }
+          const remRes = (j.seqReserved as { high?: number; used?: number }) || {}
+          await setKV(K.SEQ_RESERVED, {
+            high: Math.max(curRes.high, remRes.high || 0),
+            used: Math.max(curRes.used, remRes.used || 0),
+          })
+          // teachers merge per member (LWW + tombstones) instead of
+          // whole-array overwrite, so two admins adding teachers in parallel
+          // never clobber each other's new entry
+          const curT = (await getKV<Teacher[]>(K.TEACHERS)) || []
+          const remoteT = Array.isArray(j.teachers) ? j.teachers : []
+          const mergedT = mergeTeachers(curT, remoteT)
+          await setKV(K.TEACHERS, mergedT)
+          // compare as canonical sets — order must not trigger re-pushes
+          const canon = (arr: Teacher[]) =>
+            JSON.stringify([...arr].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)))
+          if (canon(mergedT) !== canon(remoteT)) {
+            if (!needPush.includes('meta')) needPush.push('meta')
           }
           changed = true
         }
+      }
+      // commit the stamp only after a successful download+parse — a failed
+      // pull must not mark the file as seen (next sync retries it)
+      if (meta.modifiedTime && meta.modifiedTime !== stamps[file]) {
+        stamps[file] = meta.modifiedTime
+        stampDirty = true
       }
     } catch (e) {
       // file missing or parse error — skip but log
       log('warn', `Pull ${file} failed: ${e instanceof Error ? e.message : e}`)
     }
   }
+  }
+  if (stampDirty) {
+    await setKV(K.DRIVE, { ...drive, stamps })
+  }
   if (changed) {
     await setKV(K.SESSION, { ...session, lastPulledAt: latest })
     log('sync', 'Pulled latest data from Drive')
   }
-  return changed
+  return { changed, needPush }
 }
 
 function isNotFound(e: unknown): boolean {

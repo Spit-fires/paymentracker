@@ -8,6 +8,8 @@ export const K = {
   SESSION: 'session',
   TEACHERS: 'teachers',
   BATCH_FILTER: 'batchFilter',
+  /** per-device receipt-number reservation: { high, used } — issued while used < high */
+  SEQ_RESERVED: 'seqReserved',
 } as const
 
 /**

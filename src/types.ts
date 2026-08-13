@@ -18,6 +18,8 @@ export interface Student {
   archived: boolean
   createdAt: number
   updatedAt: number
+  /** tombstone — set (instead of removing) when deleted; syncs deletes across devices */
+  deletedAt?: number
 }
 
 export interface ReceivedBy {
@@ -39,6 +41,8 @@ export interface Payment {
   pngFileId?: string
   pngBlob?: Blob
   updatedAt: number
+  /** tombstone — set (instead of removing) when deleted; syncs deletes across devices */
+  deletedAt?: number
 }
 
 export interface Center {
@@ -59,6 +63,10 @@ export interface Teacher {
   id: string
   name: string
   phone?: string
+  /** last-modified clock for last-writer-wins merging across devices */
+  updatedAt?: number
+  /** tombstone — syncs teacher removal to other devices */
+  deletedAt?: number
 }
 
 export interface DriveRefs {
@@ -67,6 +75,8 @@ export interface DriveRefs {
   /** Google account that owns this folder — refs are only trusted for that account. */
   ownerEmail?: string
   fileIds: { students?: string; payments?: string; meta?: string }
+  /** modifiedTime of each JSON file at last sync — lets pull() skip downloads */
+  stamps?: Record<string, string>
 }
 
 export interface SessionUser {
