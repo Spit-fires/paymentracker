@@ -67,6 +67,7 @@ export function Settings() {
   const [logsOpen, setLogsOpen] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const logoRef = useRef<HTMLInputElement>(null)
+  const paidRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     getKV<DriveRefs>(K.DRIVE)
@@ -326,28 +327,43 @@ export function Settings() {
               rows={3}
             />
           </Field>
-          <div className="flex items-center gap-3">
-            <div className="flex-1">
-              <div className="text-[14px] font-bold text-ink dark:text-white">PAID stamp on receipts</div>
-              <div className="text-[12px] text-muted dark:text-muted-dark">
-                Big PAID seal printed on every receipt
-              </div>
-            </div>
+          {/* PAID stamp image */}
+          <div className="flex items-center gap-4">
             <button
-              onClick={async () => {
-                const next = { ...form, paidStamp: form.paidStamp !== false }
-                setForm(next)
-                await updateCenter(next)
-              }}
-              className="relative w-12 h-7 rounded-full transition bg-line dark:bg-ink-soft shrink-0"
-              aria-label="Toggle PAID stamp"
+              type="button"
+              onClick={() => paidRef.current?.click()}
+              className="w-20 h-20 rounded-2xl overflow-hidden bg-[#e8f0f7] dark:bg-hover-dark grid place-items-center text-ink dark:text-accent-dark border-2 border-dashed border-[#c9d6e0] dark:border-line-dark shrink-0"
             >
-              <span
-                className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow transition-all ${
-                  form.paidStamp !== false ? 'left-[22px]' : 'left-0.5'
-                }`}
-              />
+              {form.paidImage ? (
+                <img src={form.paidImage} alt="PAID stamp" className="w-full h-full object-contain p-1.5" />
+              ) : (
+                <span className="text-[11px] font-semibold px-1 text-center">Add PAID image</span>
+              )}
             </button>
+            <input
+              ref={paidRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                if (!f) return
+                const r = new FileReader()
+                r.onload = () => setForm((p) => ({ ...p, paidImage: String(r.result || '') }))
+                r.readAsDataURL(f)
+              }}
+            />
+            <div className="text-[12px] text-muted dark:text-muted-dark leading-relaxed">
+              PAID seal image (PNG with transparency works best). Always printed on receipts at the right of the amount.
+              {form.paidImage && (
+                <button
+                  onClick={() => setForm((p) => ({ ...p, paidImage: undefined }))}
+                  className="block text-[12px] font-semibold text-danger mt-1"
+                >
+                  Reset to default PAID image
+                </button>
+              )}
+            </div>
           </div>
           <Button onClick={() => void saveCenter()} disabled={saved}>
             {saved ? <IconCheck className="w-4 h-4" /> : null} {saved ? 'Saved' : 'Save profile'}

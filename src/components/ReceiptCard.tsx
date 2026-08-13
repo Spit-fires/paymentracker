@@ -22,7 +22,8 @@ export function ReceiptCard({ center, student, payment }: Props) {
   const due = payment.due || 0
   const showDue = due > 0
   const receivedBy = payment.receivedBy
-  const showPaid = payment.amount > 0 && center.paidStamp !== false
+  const showPaid = payment.amount > 0 && (center.paidImage || PAID_STAMP)
+  const paidSrc = center.paidImage || PAID_STAMP
 
   return (
     <div
@@ -47,13 +48,13 @@ export function ReceiptCard({ center, student, payment }: Props) {
           <img
             src={center.logo}
             alt=""
-            style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 0, background: CREAM, border: `1px solid ${LINE}`, padding: 4 }}
+            style={{ width: 64, height: 64, objectFit: 'contain' }}
           />
         ) : (
           <img
             src={DEFAULT_LOGO}
             alt=""
-            style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 0, background: CREAM, border: `1px solid ${LINE}`, padding: 4 }}
+            style={{ width: 64, height: 64, objectFit: 'contain' }}
           />
         )}
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -175,7 +176,7 @@ export function ReceiptCard({ center, student, payment }: Props) {
       {/* PAID seal — faint watermark, right of the amount paid */}
       {showPaid && (
         <img
-          src={PAID_STAMP}
+          src={paidSrc}
           alt="PAID"
           style={{
             position: 'absolute',
