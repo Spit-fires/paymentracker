@@ -7,6 +7,7 @@ export const K = {
   DRIVE: 'driveRefs',
   SESSION: 'session',
   TEACHERS: 'teachers',
+  BATCH_FILTER: 'batchFilter',
 } as const
 
 /**

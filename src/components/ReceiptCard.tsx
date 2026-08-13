@@ -110,6 +110,7 @@ export function ReceiptCard({ center, student, payment }: Props) {
           background: CREAM,
           overflow: 'hidden',
           position: 'relative',
+          zIndex: 0,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px' }}>

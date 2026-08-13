@@ -336,6 +336,7 @@ export function Settings() {
             <button
               onClick={async () => {
                 const next = { ...form, paidStamp: form.paidStamp !== false }
+                setForm(next)
                 await updateCenter(next)
               }}
               className="relative w-12 h-7 rounded-full transition bg-line dark:bg-ink-soft shrink-0"

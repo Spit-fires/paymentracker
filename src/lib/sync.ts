@@ -291,7 +291,7 @@ export async function pull(): Promise<boolean> {
           })
           changed = true
         } else if (file === 'meta' && j.center) {
-          await setKV(K.CENTER, j.center)
+          await setKV(K.CENTER, { ...((await getKV<Center>(K.CENTER)) || {}), ...j.center })
           const seq = Math.max(j.receiptSeq || 0, (await getKV<number>(K.RECEIPT_SEQ)) || 0)
           await setKV(K.RECEIPT_SEQ, seq)
           if (Array.isArray(j.teachers)) {

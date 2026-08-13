@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useApp } from '../state/AppContext'
 import { studentPeriodPaidAny } from '../lib/ledger'
 import { periodNow } from '../lib/format'
+import { K, getKV, setKV } from '../lib/db'
 import { Card, EmptyState, Modal, Button, useBlobUrl } from '../components/ui'
 import { StudentForm, type FormValue } from '../components/StudentForm'
 import {
@@ -44,6 +45,25 @@ export function Students() {
   const [sort, setSort] = useState<SortKey>('name')
   const [sortOpen, setSortOpen] = useState(false)
   const [batchFilter, setBatchFilter] = useState(batchParam)
+
+  // restore the last-used batch filter when arriving here without a ?batch=
+  // param (e.g. returning after recording a payment), and remember it for next time
+  useEffect(() => {
+    void (async () => {
+      if (batchParam) {
+        await setKV(K.BATCH_FILTER, batchParam)
+        return
+      }
+      const saved = await getKV<string>(K.BATCH_FILTER)
+      if (saved && saved !== batchFilter) {
+        setBatchFilter(saved)
+        const p = new URLSearchParams(params)
+        p.set('batch', saved)
+        setParams(p, { replace: true })
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [showArchived, setShowArchived] = useState(false)
 
   useEffect(() => {
@@ -56,6 +76,7 @@ export function Students() {
   const period = periodNow()
   const setBatch = (b: string) => {
     setBatchFilter(b)
+    void setKV(K.BATCH_FILTER, b)
     const p = new URLSearchParams(params)
     if (b) p.set('batch', b)
     else p.delete('batch')
