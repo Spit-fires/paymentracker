@@ -109,6 +109,7 @@ export function ReceiptCard({ center, student, payment }: Props) {
           borderRadius: 0,
           background: CREAM,
           overflow: 'hidden',
+          position: 'relative',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px' }}>
@@ -170,22 +171,22 @@ export function ReceiptCard({ center, student, payment }: Props) {
         </div>
       </div>
 
-      {/* PAID stamp */}
+      {/* PAID seal — faint, right of the amount paid */}
       {showPaid && (
         <img
           src={PAID_STAMP}
           alt="PAID"
           style={{
             position: 'absolute',
+            right: 8,
             top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%) rotate(-18deg)',
-            width: 230,
+            transform: 'translateY(-50%) rotate(-15deg)',
+            width: 145,
             height: 'auto',
-            opacity: 0.85,
+            opacity: 0.3,
             pointerEvents: 'none',
             userSelect: 'none',
-            zIndex: 2,
+            zIndex: -1,
           }}
         />
       )}
