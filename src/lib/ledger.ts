@@ -6,6 +6,15 @@ export function studentPeriodPaid(payments: Payment[], studentId: string, period
     .reduce((sum, p) => sum + p.amount, 0)
 }
 
+/** What the student actually paid toward the fee — real amount when recorded,
+ *  slip amount otherwise. Commission is NOT subtracted: the teacher's cut
+ *  doesn't reduce what the student paid. */
+export function studentPeriodPaidReal(payments: Payment[], studentId: string, period: string): number {
+  return payments
+    .filter((p) => p.studentId === studentId && p.period === period)
+    .reduce((sum, p) => sum + (p.realAmount ?? p.amount), 0)
+}
+
 export function studentPeriodPaidAny(payments: Payment[], studentId: string, period: string): boolean {
   return payments.some((p) => p.studentId === studentId && p.period === period)
 }
@@ -20,7 +29,7 @@ export interface DuesRow {
 export function duesForPeriod(students: Student[], payments: Payment[], period: string): DuesRow[] {
   const active = students.filter((s) => !s.archived)
   return active.map((student) => {
-    const paid = studentPeriodPaid(payments, student.id, period)
+    const paid = studentPeriodPaidReal(payments, student.id, period)
     return {
       student,
       paid,

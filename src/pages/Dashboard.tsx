@@ -67,6 +67,8 @@ export function Dashboard() {
     .filter((r) => !r.paidAny && r.student.defaultFee > 0)
     .sort((a, b) => a.student.name.localeCompare(b.student.name))
 
+  const totalDue = rows.reduce((s, r) => s + r.due, 0)
+
   const firstName = user?.name?.split(' ')[0] || 'Teacher'
 
   const onSearch = (e: React.FormEvent) => {
@@ -170,8 +172,15 @@ export function Dashboard() {
       {/* Batch summary */}
       {batches.length > 0 && (
         <div className="mt-6 px-4">
-          <div className="text-[11.5px] font-bold uppercase tracking-[0.14em] text-muted dark:text-muted-dark mb-2">
-            Batches
+          <div className="flex items-baseline justify-between mb-2">
+            <div className="text-[11.5px] font-bold uppercase tracking-[0.14em] text-muted dark:text-muted-dark">
+              Batches
+            </div>
+            {totalDue > 0 && (
+              <div className="text-[12.5px] font-bold text-danger tabular-nums">
+                Total due {fmtTaka(totalDue)}
+              </div>
+            )}
           </div>
           <div className="space-y-2">
             {batches.map((b) => (

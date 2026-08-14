@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useApp } from '../state/AppContext'
-import { studentPeriodPaid, studentPeriodPaidAny } from '../lib/ledger'
+import { studentPeriodPaidReal, studentPeriodPaidAny } from '../lib/ledger'
 import { fmtTaka, periodNow, periodLabel, fmtDate, fillMessage } from '../lib/format'
 import { getKV, K, db } from '../lib/db'
 import { getToken } from '../lib/token'
@@ -97,7 +97,7 @@ export function StudentDetail() {
     )
   }
 
-  const paid = studentPeriodPaid(payments, student.id, period)
+  const paid = studentPeriodPaidReal(payments, student.id, period)
   const paidAny = studentPeriodPaidAny(payments, student.id, period)
   const due = Math.max(0, student.defaultFee - paid)
   const centerName = center.name || defaultCenter().name
