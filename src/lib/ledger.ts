@@ -30,10 +30,11 @@ export function duesForPeriod(students: Student[], payments: Payment[], period: 
   const active = students.filter((s) => !s.archived)
   return active.map((student) => {
     const paid = studentPeriodPaidReal(payments, student.id, period)
+    const fee = student.realPayment ?? student.defaultFee
     return {
       student,
       paid,
-      due: Math.max(0, student.defaultFee - paid),
+      due: Math.max(0, fee - paid),
       paidAny: paid > 0,
     }
   })
@@ -63,6 +64,19 @@ export function autofillAmount(
   const last = studentPeriodPaid(payments, studentId, lastMonthPeriod(period))
   if (last > 0) return last
   return s?.defaultFee || 0
+}
+
+/** Autofill for the REAL payment field: the student's recorded real monthly
+ *  payment, else last month's real total, else 0 (leave blank = same as slip). */
+export function realAutofillAmount(
+  students: Student[],
+  payments: Payment[],
+  studentId: string,
+  period: string,
+): number {
+  const s = students.find((x) => x.id === studentId)
+  if (s?.realPayment) return s.realPayment
+  return studentPeriodPaidReal(payments, studentId, lastMonthPeriod(period))
 }
 
 /** Net money for the center: real payment received minus teacher commission. */

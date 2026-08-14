@@ -253,7 +253,7 @@ export async function flushOutbox(): Promise<void> {
 
 /** signature of the user-editable fields — used to break same-timestamp ties */
 function studentSig(s: Student): string {
-  return JSON.stringify([s.name, s.phone || '', s.phone2 || '', s.batch, s.defaultFee, s.notes || '', s.archived, s.deletedAt ?? null])
+  return JSON.stringify([s.name, s.phone || '', s.phone2 || '', s.batch, s.defaultFee, s.realPayment ?? null, s.notes || '', s.archived, s.deletedAt ?? null])
 }
 function paymentSig(p: Payment): string {
   return JSON.stringify([

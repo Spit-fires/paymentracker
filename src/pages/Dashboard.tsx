@@ -24,13 +24,24 @@ export function Dashboard() {
   const rows = useMemo(() => duesForPeriod(students, payments, period), [students, payments, period])
   const total = useMemo(() => monthTotals(payments, period), [payments, period])
   const totalStr = fmtTaka(total)
-  const totalSize =
-    totalStr.length > 16
-      ? 'text-[11.5px]'
-      : totalStr.length > 11
-        ? 'text-[13.5px]'
-        : 'text-[17px]'
-  const billed = rows.filter((r) => r.student.defaultFee > 0)
+  const sizeFor = (s: string) =>
+    s.length > 16 ? 'text-[11.5px]' : s.length > 11 ? 'text-[13.5px]' : 'text-[17px]'
+
+  // collected this month = every receipt RECORDED inside the selected month,
+  // regardless of which period it pays for (e.g. a September payment recorded
+  // in August counts here in August)
+  const recordedTotal = useMemo(() => {
+    const [y, m] = period.split('-').map(Number)
+    const start = new Date(y, m - 1, 1).getTime()
+    const end = new Date(y, m, 1).getTime()
+    let s = 0
+    for (const p of payments) {
+      if (p.date >= start && p.date < end) s += balanceOf(p)
+    }
+    return s
+  }, [payments, period])
+  const recordedStr = fmtTaka(recordedTotal)
+  const billed = rows.filter((r) => r.student.defaultFee > 0 || (r.student.realPayment ?? 0) > 0)
   const paidCount = billed.filter((r) => r.paidAny).length
   const dueCount = billed.length - paidCount
 
@@ -64,7 +75,7 @@ export function Dashboard() {
   }, [rows, balanceByStudent])
 
   const unpaid = rows
-    .filter((r) => !r.paidAny && r.student.defaultFee > 0)
+    .filter((r) => !r.paidAny && (r.student.defaultFee > 0 || (r.student.realPayment ?? 0) > 0))
     .sort((a, b) => a.student.name.localeCompare(b.student.name))
 
   const totalDue = rows.reduce((s, r) => s + r.due, 0)
@@ -128,10 +139,16 @@ export function Dashboard() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-2.5 px-4 mt-4">
+      <div className="grid grid-cols-2 gap-2.5 px-4 mt-4">
         <Card className="!rounded-2xl p-3.5">
-          <div className="text-[11px] font-semibold text-muted dark:text-muted-dark">Collected</div>
-          <div className={`font-bold text-teal tabular-nums mt-1 leading-tight ${totalSize}`}>
+          <div className="text-[11px] font-semibold text-muted dark:text-muted-dark">Collected this month</div>
+          <div className={`font-bold text-teal tabular-nums mt-1 leading-tight ${sizeFor(recordedStr)}`}>
+            {recordedStr}
+          </div>
+        </Card>
+        <Card className="!rounded-2xl p-3.5">
+          <div className="text-[11px] font-semibold text-muted dark:text-muted-dark">Collected for this month</div>
+          <div className={`font-bold text-teal tabular-nums mt-1 leading-tight ${sizeFor(totalStr)}`}>
             {totalStr}
           </div>
         </Card>

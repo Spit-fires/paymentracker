@@ -99,7 +99,8 @@ export function StudentDetail() {
 
   const paid = studentPeriodPaidReal(payments, student.id, period)
   const paidAny = studentPeriodPaidAny(payments, student.id, period)
-  const due = Math.max(0, student.defaultFee - paid)
+  const realFee = student.realPayment ?? student.defaultFee
+  const due = Math.max(0, realFee - paid)
   const centerName = center.name || defaultCenter().name
 
   const onEdit = async (v: FormValue) => {
@@ -111,6 +112,7 @@ export function StudentDetail() {
         phone2: v.phone2,
         batch: v.batch,
         defaultFee: v.defaultFee ? Number(v.defaultFee) : 0,
+        realPayment: v.realPayment.trim() ? Number(v.realPayment) : undefined,
         notes: v.notes,
         ...(v.photo ? { photoBlob: v.photo } : {}),
       })
@@ -210,8 +212,8 @@ export function StudentDetail() {
           </div>
           <div className="text-[20px] font-bold text-ink dark:text-white mt-1 tabular-nums">
             {fmtTaka(paid)}
-            {student.defaultFee > 0 && (
-              <span className="text-[14px] font-semibold text-faint"> / {fmtTaka(student.defaultFee)}</span>
+            {realFee > 0 && (
+              <span className="text-[14px] font-semibold text-faint"> / {fmtTaka(realFee)}</span>
             )}
           </div>
         </div>

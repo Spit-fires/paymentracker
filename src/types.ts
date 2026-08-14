@@ -10,6 +10,9 @@ export interface Student {
   phone2?: string
   batch: string
   defaultFee: number
+  /** the student's true monthly fee — teacher-only bookkeeping, never printed
+   *  on the receipt; blank = same as defaultFee */
+  realPayment?: number
   notes?: string
   photoFileId?: string
   photoBlob?: Blob

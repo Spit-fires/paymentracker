@@ -6,6 +6,7 @@ import {
   studentPeriodPaid,
   lastPaymentForStudent,
   autofillAmount,
+  realAutofillAmount,
 } from '../lib/ledger'
 import { fmtTaka, takaToWords, periodNow, periodLabel, receiptFileName } from '../lib/format'
 import type { PaymentMode, Teacher } from '../types'
@@ -74,6 +75,10 @@ export function Payment() {
       }
     }
     setAmount(String(autofillAmount(students, payments, student.id, period)))
+    // real payment prefills from the student's recorded real fee, else last
+    // month's real total — blank keeps it "same as slip"
+    const real = realAutofillAmount(students, payments, student.id, period)
+    if (real > 0) setRealAmount(String(real))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [student?.id, prefill])
 

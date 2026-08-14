@@ -8,6 +8,7 @@ export interface FormValue {
   phone2: string
   batch: string
   defaultFee: string
+  realPayment: string
   notes: string
   photo: Blob | null
 }
@@ -19,6 +20,7 @@ export function initialForm(s?: Student): FormValue {
     phone2: s?.phone2 || '',
     batch: s?.batch || '',
     defaultFee: s?.defaultFee ? String(s.defaultFee) : '',
+    realPayment: s?.realPayment ? String(s.realPayment) : '',
     notes: s?.notes || '',
     photo: null,
   }
@@ -68,6 +70,9 @@ export function StudentForm({
     if (!f.name.trim()) return setErr('Student name is required')
     const fee = f.defaultFee.trim() ? Number(f.defaultFee) : 0
     if (Number.isNaN(fee) || fee < 0) return setErr('Fee must be a number')
+    if (f.realPayment.trim() && (Number.isNaN(Number(f.realPayment)) || Number(f.realPayment) < 0)) {
+      return setErr('Real payment must be a number')
+    }
     setErr('')
     onSubmit(f)
   }
@@ -183,6 +188,20 @@ export function StudentForm({
             inputMode="numeric"
             placeholder="e.g. 1500"
           />
+        </Field>
+      </div>
+
+      <div className="w-1/2">
+        <Field label="Real Payment (৳)">
+          <Input
+            value={f.realPayment}
+            onChange={(e) => set('realPayment', e.target.value)}
+            inputMode="numeric"
+            placeholder="Same as fee"
+          />
+          <div className="text-[11.5px] text-muted dark:text-muted-dark mt-1">
+            Optional · teacher only · never printed on the receipt.
+          </div>
         </Field>
       </div>
 

@@ -1,12 +1,20 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useApp } from '../state/AppContext'
 import { fmtTaka, fmtDate } from '../lib/format'
+import { getKV, setKV, K } from '../lib/db'
 import { Card, PageHeader, EmptyState, cx } from '../components/ui'
 import { IconBook, IconSearch, IconUsers } from '../components/Icons'
 import type { Payment } from '../types'
 
 type Tab = 'ledger' | 'commissions'
+
+interface AcctFilters {
+  batch: string
+  from: string
+  to: string
+  teacher: string
+}
 
 const num = (v?: number) => (typeof v === 'number' && isFinite(v) ? v : 0)
 
@@ -20,6 +28,29 @@ export function Accounting() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [teacher, setTeacher] = useState('')
+
+  // restore the last-used filters (batch/from/to/teacher) from pt_kv — same
+  // pattern as the Students page batch filter; writes stay disabled until the
+  // restore finishes so the first render never clobbers the saved values
+  const filtersReady = useRef(false)
+  useEffect(() => {
+    void (async () => {
+      const saved = await getKV<AcctFilters>(K.ACCT_FILTERS)
+      if (saved) {
+        if (saved.batch) setBatch(saved.batch)
+        if (saved.from) setFrom(saved.from)
+        if (saved.to) setTo(saved.to)
+        if (saved.teacher) setTeacher(saved.teacher)
+      }
+      filtersReady.current = true
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    if (!filtersReady.current) return
+    void setKV(K.ACCT_FILTERS, { batch, from, to, teacher })
+  }, [batch, from, to, teacher])
 
   const studentMap = useMemo(() => new Map(students.map((s) => [s.id, s])), [students])
   const batches = useMemo(
