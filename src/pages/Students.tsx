@@ -115,6 +115,7 @@ export function Students() {
         batch: v.batch,
         defaultFee: v.defaultFee ? Number(v.defaultFee) : 0,
         realPayment: v.realPayment.trim() ? Number(v.realPayment) : undefined,
+        commission: v.commission.trim() ? Number(v.commission) : undefined,
         notes: v.notes,
         photo: v.photo,
       })

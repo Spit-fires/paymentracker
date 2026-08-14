@@ -13,6 +13,9 @@ export interface Student {
   /** the student's true monthly fee — teacher-only bookkeeping, never printed
    *  on the receipt; blank = same as defaultFee */
   realPayment?: number
+  /** teacher's monthly share from this student — teacher-only, never printed;
+   *  blank = 0. The center's balance fee = realPayment − commission. */
+  commission?: number
   notes?: string
   photoFileId?: string
   photoBlob?: Blob

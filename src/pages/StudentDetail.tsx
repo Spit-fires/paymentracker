@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useApp } from '../state/AppContext'
-import { studentPeriodPaidReal, studentPeriodPaidAny } from '../lib/ledger'
+import { studentPeriodBalance, studentBalanceFee, studentPeriodPaidAny } from '../lib/ledger'
 import { fmtTaka, periodNow, periodLabel, fmtDate, fillMessage } from '../lib/format'
 import { getKV, K, db } from '../lib/db'
 import { getToken } from '../lib/token'
@@ -97,10 +97,10 @@ export function StudentDetail() {
     )
   }
 
-  const paid = studentPeriodPaidReal(payments, student.id, period)
+  const paid = studentPeriodBalance(payments, student.id, period)
   const paidAny = studentPeriodPaidAny(payments, student.id, period)
-  const realFee = student.realPayment ?? student.defaultFee
-  const due = Math.max(0, realFee - paid)
+  const fee = studentBalanceFee(student)
+  const due = Math.max(0, fee - paid)
   const centerName = center.name || defaultCenter().name
 
   const onEdit = async (v: FormValue) => {
@@ -113,6 +113,7 @@ export function StudentDetail() {
         batch: v.batch,
         defaultFee: v.defaultFee ? Number(v.defaultFee) : 0,
         realPayment: v.realPayment.trim() ? Number(v.realPayment) : undefined,
+        commission: v.commission.trim() ? Number(v.commission) : undefined,
         notes: v.notes,
         ...(v.photo ? { photoBlob: v.photo } : {}),
       })
@@ -148,7 +149,7 @@ export function StudentDetail() {
     showToast('Receipt deleted', 'ok')
   }
 
-  const allPaid = due === 0 && (student.defaultFee > 0 || paidAny)
+  const allPaid = due === 0 && (fee > 0 || paidAny)
 
   return (
     <div>
@@ -212,8 +213,8 @@ export function StudentDetail() {
           </div>
           <div className="text-[20px] font-bold text-ink dark:text-white mt-1 tabular-nums">
             {fmtTaka(paid)}
-            {realFee > 0 && (
-              <span className="text-[14px] font-semibold text-faint"> / {fmtTaka(realFee)}</span>
+            {fee > 0 && (
+              <span className="text-[14px] font-semibold text-faint"> / {fmtTaka(fee)}</span>
             )}
           </div>
         </div>

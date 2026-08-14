@@ -41,7 +41,7 @@ export function Dashboard() {
     return s
   }, [payments, period])
   const recordedStr = fmtTaka(recordedTotal)
-  const billed = rows.filter((r) => r.student.defaultFee > 0 || (r.student.realPayment ?? 0) > 0)
+  const billed = rows.filter((r) => r.fee > 0)
   const paidCount = billed.filter((r) => r.paidAny).length
   const dueCount = billed.length - paidCount
 
@@ -75,7 +75,7 @@ export function Dashboard() {
   }, [rows, balanceByStudent])
 
   const unpaid = rows
-    .filter((r) => !r.paidAny && (r.student.defaultFee > 0 || (r.student.realPayment ?? 0) > 0))
+    .filter((r) => !r.paidAny && r.fee > 0)
     .sort((a, b) => a.student.name.localeCompare(b.student.name))
 
   const totalDue = rows.reduce((s, r) => s + r.due, 0)

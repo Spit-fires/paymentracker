@@ -9,6 +9,7 @@ export interface FormValue {
   batch: string
   defaultFee: string
   realPayment: string
+  commission: string
   notes: string
   photo: Blob | null
 }
@@ -21,6 +22,7 @@ export function initialForm(s?: Student): FormValue {
     batch: s?.batch || '',
     defaultFee: s?.defaultFee ? String(s.defaultFee) : '',
     realPayment: s?.realPayment ? String(s.realPayment) : '',
+    commission: s?.commission ? String(s.commission) : '',
     notes: s?.notes || '',
     photo: null,
   }
@@ -72,6 +74,9 @@ export function StudentForm({
     if (Number.isNaN(fee) || fee < 0) return setErr('Fee must be a number')
     if (f.realPayment.trim() && (Number.isNaN(Number(f.realPayment)) || Number(f.realPayment) < 0)) {
       return setErr('Real payment must be a number')
+    }
+    if (f.commission.trim() && (Number.isNaN(Number(f.commission)) || Number(f.commission) < 0)) {
+      return setErr('Commission must be a number')
     }
     setErr('')
     onSubmit(f)
@@ -201,6 +206,20 @@ export function StudentForm({
           />
           <div className="text-[11.5px] text-muted dark:text-muted-dark mt-1">
             Optional · teacher only · never printed on the receipt.
+          </div>
+        </Field>
+      </div>
+
+      <div className="w-1/2">
+        <Field label="Commission (৳)">
+          <Input
+            value={f.commission}
+            onChange={(e) => set('commission', e.target.value)}
+            inputMode="numeric"
+            placeholder="0"
+          />
+          <div className="text-[11.5px] text-muted dark:text-muted-dark mt-1">
+            Optional · teacher's share · the center's balance = real payment − commission.
           </div>
         </Field>
       </div>

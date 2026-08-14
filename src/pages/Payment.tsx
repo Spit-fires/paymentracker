@@ -79,6 +79,12 @@ export function Payment() {
     // month's real total — blank keeps it "same as slip"
     const real = realAutofillAmount(students, payments, student.id, period)
     if (real > 0) setRealAmount(String(real))
+    // commission prefills from the student's monthly commission when there are
+    // teachers to receive it — receipt edits keep their own values
+    if (student.commission && teachers.length > 0) {
+      setCommissionOn(true)
+      setCommission(String(student.commission))
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [student?.id, prefill])
 

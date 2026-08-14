@@ -15,13 +15,32 @@ export function studentPeriodPaidReal(payments: Payment[], studentId: string, pe
     .reduce((sum, p) => sum + (p.realAmount ?? p.amount), 0)
 }
 
+/** Net money the CENTER kept from this student in the period — per-receipt
+ *  balance (real − commission). Used by the balance-based due: the due shows
+ *  what the center still expects, matching home "Collected". */
+export function studentPeriodBalance(payments: Payment[], studentId: string, period: string): number {
+  return payments
+    .filter((p) => p.studentId === studentId && p.period === period)
+    .reduce((sum, p) => sum + balanceOf(p), 0)
+}
+
+/** The center's expected monthly income from a student: real payment (or slip
+ *  when unset) minus the student's commission. */
+export function studentBalanceFee(student: Student): number {
+  return Math.max(0, (student.realPayment ?? student.defaultFee) - (student.commission ?? 0))
+}
+
 export function studentPeriodPaidAny(payments: Payment[], studentId: string, period: string): boolean {
   return payments.some((p) => p.studentId === studentId && p.period === period)
 }
 
 export interface DuesRow {
   student: Student
+  /** balance fee — the center's expected monthly income from this student */
+  fee: number
+  /** net money the center kept from this student so far this period */
   paid: number
+  /** balance fee minus what the center kept — what the center still expects */
   due: number
   paidAny: boolean
 }
@@ -29,13 +48,14 @@ export interface DuesRow {
 export function duesForPeriod(students: Student[], payments: Payment[], period: string): DuesRow[] {
   const active = students.filter((s) => !s.archived)
   return active.map((student) => {
-    const paid = studentPeriodPaidReal(payments, student.id, period)
-    const fee = student.realPayment ?? student.defaultFee
+    const fee = studentBalanceFee(student)
+    const paid = studentPeriodBalance(payments, student.id, period)
     return {
       student,
+      fee,
       paid,
       due: Math.max(0, fee - paid),
-      paidAny: paid > 0,
+      paidAny: studentPeriodPaidAny(payments, student.id, period),
     }
   })
 }

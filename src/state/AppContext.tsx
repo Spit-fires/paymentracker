@@ -45,6 +45,7 @@ export interface NewStudentInput {
   batch: string
   defaultFee: number
   realPayment?: number
+  commission?: number
   notes?: string
   photo?: Blob | null
 }
@@ -410,6 +411,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         batch: input.batch.trim() || 'General',
         defaultFee: input.defaultFee,
         realPayment: input.realPayment,
+        commission: input.commission,
         notes: input.notes?.trim(),
         photoBlob: input.photo || undefined,
         archived: false,
