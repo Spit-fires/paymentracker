@@ -23,6 +23,13 @@ export function Dashboard() {
 
   const rows = useMemo(() => duesForPeriod(students, payments, period), [students, payments, period])
   const total = useMemo(() => monthTotals(payments, period), [payments, period])
+  const totalStr = fmtTaka(total)
+  const totalSize =
+    totalStr.length > 16
+      ? 'text-[11.5px]'
+      : totalStr.length > 11
+        ? 'text-[13.5px]'
+        : 'text-[17px]'
   const billed = rows.filter((r) => r.student.defaultFee > 0)
   const paidCount = billed.filter((r) => r.paidAny).length
   const dueCount = billed.length - paidCount
@@ -122,8 +129,8 @@ export function Dashboard() {
       <div className="grid grid-cols-3 gap-2.5 px-4 mt-4">
         <Card className="!rounded-2xl p-3.5">
           <div className="text-[11px] font-semibold text-muted dark:text-muted-dark">Collected</div>
-          <div className="text-[17px] font-bold text-teal tabular-nums mt-1 truncate">
-            {fmtTaka(total)}
+          <div className={`font-bold text-teal tabular-nums mt-1 leading-tight ${totalSize}`}>
+            {totalStr}
           </div>
         </Card>
         <Card className="!rounded-2xl p-3.5">
