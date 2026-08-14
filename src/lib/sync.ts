@@ -260,6 +260,8 @@ function paymentSig(p: Payment): string {
     p.receiptNo,
     p.studentId,
     p.amount,
+    p.realAmount ?? null,
+    p.commission ?? null,
     p.due || 0,
     p.mode,
     p.receivedBy ? [p.receivedBy.name, p.receivedBy.phone || ''] : null,
