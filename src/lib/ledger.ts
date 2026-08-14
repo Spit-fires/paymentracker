@@ -56,16 +56,21 @@ export function autofillAmount(
   return s?.defaultFee || 0
 }
 
+/** Net money for the center: real payment received minus teacher commission. */
+export function balanceOf(p: Payment): number {
+  return (p.realAmount ?? p.amount) - (p.commission ?? 0)
+}
+
 export function monthTotals(payments: Payment[], period: string): number {
-  return payments.filter((p) => p.period === period).reduce((s, p) => s + p.amount, 0)
+  return payments.filter((p) => p.period === period).reduce((s, p) => s + balanceOf(p), 0)
 }
 
 export function totalAllTime(payments: Payment[]): number {
-  return payments.reduce((s, p) => s + p.amount, 0)
+  return payments.reduce((s, p) => s + balanceOf(p), 0)
 }
 
 export function paymentModes(payments: Payment[]): Record<string, number> {
   const out: Record<string, number> = {}
-  for (const p of payments) out[p.mode] = (out[p.mode] || 0) + p.amount
+  for (const p of payments) out[p.mode] = (out[p.mode] || 0) + balanceOf(p)
   return out
 }

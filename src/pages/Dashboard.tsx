@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../state/AppContext'
-import { duesForPeriod, monthTotals, type DuesRow } from '../lib/ledger'
+import { balanceOf, duesForPeriod, monthTotals, type DuesRow } from '../lib/ledger'
 import { fmtTaka, periodNow, periodLabel } from '../lib/format'
 import { Card, EmptyState, Button } from '../components/ui'
 import { SyncIndicator } from '../components/Layout'
@@ -27,6 +27,17 @@ export function Dashboard() {
   const paidCount = billed.filter((r) => r.paidAny).length
   const dueCount = billed.length - paidCount
 
+  // net per-student collection (balance = real payment − commission) — used
+  // for the batch collected figures, matching the home "Collected" total
+  const balanceByStudent = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const p of payments) {
+      if (p.period !== period) continue
+      map.set(p.studentId, (map.get(p.studentId) || 0) + balanceOf(p))
+    }
+    return map
+  }, [payments, period])
+
   const batches = useMemo(() => {
     const map = new Map<string, DuesRow[]>()
     for (const r of rows) {
@@ -39,11 +50,11 @@ export function Dashboard() {
         batch,
         count: list.length,
         paid: list.filter((r) => r.paidAny).length,
-        collected: list.reduce((s, r) => s + r.paid, 0),
+        collected: list.reduce((s, r) => s + (balanceByStudent.get(r.student.id) || 0), 0),
         due: list.reduce((s, r) => s + r.due, 0),
       }))
       .sort((a, b) => a.batch.localeCompare(b.batch))
-  }, [rows])
+  }, [rows, balanceByStudent])
 
   const unpaid = rows
     .filter((r) => !r.paidAny && r.student.defaultFee > 0)

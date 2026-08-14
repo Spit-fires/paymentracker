@@ -104,6 +104,8 @@ export interface Session {
   pinHash?: string
   theme: 'light' | 'dark'
   lastPulledAt: number
+  /** per-file: timestamp of the last snapshot each JSON file was fully processed from */
+  pulledAt?: Partial<Record<'students' | 'payments' | 'meta', number>>
 }
 
 export type OutboxOp =

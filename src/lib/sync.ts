@@ -308,7 +308,17 @@ export async function pull(): Promise<{
   if (!drive?.rootFolderId) return { changed: false, needPush: [] }
   const c = client()
   const session = (await getKV<Session>(K.SESSION)) || { theme: 'light', lastPulledAt: 0 }
+  // per-file pull tracking: each JSON file is processed only when IT changed
+  // since we last processed it. The old shared global gate let the meta file
+  // (rewritten with a fresh Date.now() on every single sync) jump the cutoff
+  // past slower-updated students/payments snapshots — those snapshots were
+  // then silently skipped forever, which is how a delete on one device never
+  // reached another. `lastPulledAt` stays as the baseline for pre-upgrade
+  // sessions and as a safety net for files never processed since then.
+  const pulledAt = { ...(session.pulledAt || {}) }
+  const baseAt = (f: 'students' | 'payments' | 'meta') => (pulledAt[f] ?? session.lastPulledAt) || 0
   let changed = false
+  let pullDirty = false
   let latest = session.lastPulledAt
   const needPush: Array<'students' | 'payments' | 'meta'> = []
   const stamps = { ...(drive.stamps || {}) }
@@ -340,7 +350,7 @@ export async function pull(): Promise<{
       if (fileAt && Math.abs(Date.now() - fileAt) > 60 * 60 * 1000) {
         log('warn', `Clock skew: ${file}.json built ${Math.round((Date.now() - fileAt) / 60000)} min from device time`)
       }
-      if (fileAt > session.lastPulledAt) {
+      if (fileAt > baseAt(file)) {
         if (file === 'students' && Array.isArray(j.students)) {
           await db.transaction('rw', db.students, async () => {
             const local = new Map((await db.students.toArray()).map((s) => [s.id, s]))
@@ -373,8 +383,21 @@ export async function pull(): Promise<{
               .map((s: Student) => {
                 const cur = local.get(s.id)
                 if (!cur) return s
+                // a local tombstone always beats a stale remote copy — the
+                // remote record is only a snapshot taken before the delete;
+                // re-push so every device converges on the tombstone
+                if (cur.deletedAt && !s.deletedAt) {
+                  if (!needPush.includes('students')) needPush.push('students')
+                  return {
+                    ...cur,
+                    photoBlob: cur.photoBlob,
+                    photoFileId: s.photoFileId || cur.photoFileId,
+                    folderId: s.folderId || cur.folderId,
+                    folderShared: s.folderShared || cur.folderShared,
+                  }
+                }
                 const keepLocal =
-                  (cur.updatedAt || 0) > session.lastPulledAt || (cur.updatedAt || 0) >= (s.updatedAt || 0)
+                  (cur.updatedAt || 0) > baseAt('students') || (cur.updatedAt || 0) >= (s.updatedAt || 0)
                 // strictly newer locally → divergent, must re-push; equal
                 // timestamps with different content also diverge (break the
                 // tie deterministically: local copy wins, then re-push once)
@@ -430,8 +453,19 @@ export async function pull(): Promise<{
               .map((p: Payment) => {
                 const cur = local.get(p.id)
                 if (!cur) return p
+                // a local tombstone always beats a stale remote copy — the
+                // remote record is only a snapshot taken before the delete;
+                // re-push so every device converges on the tombstone
+                if (cur.deletedAt && !p.deletedAt) {
+                  if (!needPush.includes('payments')) needPush.push('payments')
+                  return {
+                    ...cur,
+                    pngBlob: cur.pngBlob || p.pngBlob,
+                    pngFileId: p.pngFileId || cur.pngFileId,
+                  }
+                }
                 const keepLocal =
-                  (cur.updatedAt || 0) > session.lastPulledAt || (cur.updatedAt || 0) >= (p.updatedAt || 0)
+                  (cur.updatedAt || 0) > baseAt('payments') || (cur.updatedAt || 0) >= (p.updatedAt || 0)
                 // strictly newer locally → divergent, must re-push; equal
                 // timestamps with different content also diverge (local wins,
                 // then a single re-push lets every device settle)
@@ -522,6 +556,11 @@ export async function pull(): Promise<{
           }
           changed = true
         }
+        // this exact snapshot is now fully merged — never reprocess it.
+        // Advancing only here (after a successful merge) means a failed
+        // transaction leaves pulledAt untouched and the file is retried
+        pulledAt[file] = Math.max(pulledAt[file] || 0, fileAt)
+        pullDirty = true
       }
       // commit the stamp only after a successful download+parse — a failed
       // pull must not mark the file as seen (next sync retries it)
@@ -538,8 +577,8 @@ export async function pull(): Promise<{
   if (stampDirty) {
     await setKV(K.DRIVE, { ...drive, stamps })
   }
-  if (changed) {
-    await setKV(K.SESSION, { ...session, lastPulledAt: latest })
+  if (pullDirty) {
+    await setKV(K.SESSION, { ...session, pulledAt, lastPulledAt: latest })
     log('sync', 'Pulled latest data from Drive')
   }
   return { changed, needPush }
