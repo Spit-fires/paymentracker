@@ -12,6 +12,10 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'logo.png', 'paid.png', 'icons/pwa-192.png', 'icons/pwa-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png'],
       workbox: {
+        // take over existing tabs immediately so the new precache (icons,
+        // favicon) replaces the stale one without waiting for a reload
+        skipWaiting: true,
+        clientsClaim: true,
         // html-to-image fetches receipt images with cache-busting query params;
         // serve precached logo/paid assets for ANY query string so captures
         // work offline instead of falling through to a failed network fetch
