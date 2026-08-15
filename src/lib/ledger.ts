@@ -6,7 +6,7 @@ export function studentPeriodPaid(payments: Payment[], studentId: string, period
     .reduce((sum, p) => sum + p.amount, 0)
 }
 
-/** What the student actually paid toward the fee — real amount when recorded,
+/** What the student actually paid toward the fee - real amount when recorded,
  *  slip amount otherwise. Commission is NOT subtracted: the teacher's cut
  *  doesn't reduce what the student paid. */
 export function studentPeriodPaidReal(payments: Payment[], studentId: string, period: string): number {
@@ -15,7 +15,7 @@ export function studentPeriodPaidReal(payments: Payment[], studentId: string, pe
     .reduce((sum, p) => sum + (p.realAmount ?? p.amount), 0)
 }
 
-/** Net money the CENTER kept from this student in the period — per-receipt
+/** Net money the CENTER kept from this student in the period - per-receipt
  *  balance (real − commission). Used by the balance-based due: the due shows
  *  what the center still expects, matching home "Collected". */
 export function studentPeriodBalance(payments: Payment[], studentId: string, period: string): number {
@@ -36,11 +36,11 @@ export function studentPeriodPaidAny(payments: Payment[], studentId: string, per
 
 export interface DuesRow {
   student: Student
-  /** balance fee — the center's expected monthly income from this student */
+  /** balance fee - the center's expected monthly income from this student */
   fee: number
   /** net money the center kept from this student so far this period */
   paid: number
-  /** balance fee minus what the center kept — what the center still expects */
+  /** balance fee minus what the center kept - what the center still expects */
   due: number
   paidAny: boolean
 }
@@ -112,7 +112,7 @@ export function totalAllTime(payments: Payment[]): number {
   return payments.reduce((s, p) => s + balanceOf(p), 0)
 }
 
-/** Cash handed over ("posted") so far — sum of all ACTIVE postings
+/** Cash handed over ("posted") so far - sum of all ACTIVE postings
  *  (the caller must pass postings already filtered for tombstones). */
 export function postingTotal(postings: Posting[]): number {
   return postings.reduce((s, p) => s + p.amount, 0)
@@ -126,19 +126,19 @@ export function readyToPost(payments: Payment[], postings: Posting[]): number {
 
 export interface PostingRow {
   posting: Posting
-  /** running Ladger — collected minus postings up to and including this row */
-  balanceAfter: number
+  /** running Ledger - collected minus postings up to and including this row */
+  ledger: number
 }
 
 /** Ledger rows oldest → newest, each carrying the running balance after it.
- *  The last row's balanceAfter equals readyToPost. */
+ *  The last row's ledger equals readyToPost. */
 export function postingLedger(payments: Payment[], postings: Posting[]): PostingRow[] {
   const collected = totalAllTime(payments)
   const sorted = [...postings].sort((a, b) => a.date - b.date || a.id.localeCompare(b.id))
   let running = collected
   return sorted.map((posting) => {
     running -= posting.amount
-    return { posting, balanceAfter: running }
+    return { posting, ledger: running }
   })
 }
 

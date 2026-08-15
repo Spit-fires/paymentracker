@@ -108,14 +108,14 @@ export function ReceiptView() {
         openExternal(waLink(student.phone, text))
         return
       }
-      // Link not available — receipt may not be synced yet
+      // Link not available - receipt may not be synced yet
       log('warn', `Receipt #${payment.receiptNo} has no Drive link (pngFileId: ${payment.pngFileId || 'none'})`)
-      showToast('Receipt not yet on Drive — sharing image instead', 'info')
+      showToast('Receipt not yet on Drive - sharing image instead', 'info')
     } catch (e) {
       log('error', `Failed to get receipt link: ${e instanceof Error ? e.message : e}`)
-      showToast('Could not get receipt link — sharing image instead', 'info')
+      showToast('Could not get receipt link - sharing image instead', 'info')
     }
-    // PNG not uploaded yet (e.g. offline) — share the image file instead
+    // PNG not uploaded yet (e.g. offline) - share the image file instead
     try {
       const blob = await pngBlob()
       const file = new File([blob], fileName, { type: 'image/png' })

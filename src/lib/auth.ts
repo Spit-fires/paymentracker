@@ -141,7 +141,7 @@ export async function signIn(
 export let lastSilentError: string | null = null
 
 /** Silent re-auth on app load / before sync. Uses prompt 'none': no popup,
- *  no account picker — returns the token when the grant is valid, errors
+ *  no account picker - returns the token when the grant is valid, errors
  *  otherwise. Uses login_hint to tell Google which account to use, which
  *  is critical for multi-account browsers. */
 export async function silentSignIn(

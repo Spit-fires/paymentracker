@@ -72,7 +72,7 @@ interface Ctx {
   syncing: boolean
   lastSyncAt: number
   locked: boolean
-  /** saved session exists but silent re-auth failed — app stays usable, sync paused */
+  /** saved session exists but silent re-auth failed - app stays usable, sync paused */
   needsReauth: boolean
   /** Google's error string for the last failed silent re-auth (diagnosis). */
   reauthError: string | null
@@ -162,7 +162,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const syncNow = useCallback(
     async (manual = false) => {
       if (!online) {
-        if (manual) showToast('Offline — changes saved locally', 'info')
+        if (manual) showToast('Offline - changes saved locally', 'info')
         return
       }
       // Google access tokens live ~1h; silently renew before hitting the API
@@ -191,26 +191,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (needPush.length) {
           for (const f of needPush) await queueOp({ kind: 'pushJSON', file: f })
         }
-        // claim a fresh receipt-number window when the current one is exhausted —
+        // claim a fresh receipt-number window when the current one is exhausted -
         // one meta write per window instead of one per receipt; the max-merge on
         // pull keeps concurrent claims from ever regressing the shared sequence
         const res = (await getKV<{ high: number; used: number }>(K.SEQ_RESERVED)) || { high: 0, used: 0 }
         const seqNow = (await getKV<number>(K.RECEIPT_SEQ)) || 0
         if (res.used >= res.high) {
           const high = Math.max(seqNow, res.high) + 20
-          // keep the window's used where the fleet's merged counter stands —
-          // starting it from the stale value would renumber receipts from #1 —
+          // keep the window's used where the fleet's merged counter stands -
+          // starting it from the stale value would renumber receipts from #1 -
           // and do NOT inflate RECEIPT_SEQ here: it tracks issued numbers so
           // the draft preview stays truthful; the window carries its own
           // high-water mark in the meta file
           await setKV(K.SEQ_RESERVED, { high, used: Math.max(res.used, seqNow) })
           await queueOp({ kind: 'pushJSON', file: 'meta' })
         }
-        // count AFTER pull — it may have queued orphan-media cleanups or
-        // re-pushes — so the flush never skips work it just created
+        // count AFTER pull - it may have queued orphan-media cleanups or
+        // re-pushes - so the flush never skips work it just created
         const queued = await db.outbox.count()
         // an idle sync (nothing to push) skips the upload pass and the second
-        // download entirely — only metadata checks, which keeps sync fast
+        // download entirely - only metadata checks, which keeps sync fast
         if (queued > 0) {
           await flushOutbox()
           await pull()
@@ -227,7 +227,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         log('error', `Sync failed: ${msg}`)
         showToast(msg, 'err')
         // a transient failure must not stall the outbox until the next user
-        // action — back off and retry once shortly
+        // action - back off and retry once shortly
         if (getToken() && navigator.onLine && !retryTimer.current) {
           retryTimer.current = window.setTimeout(() => {
             retryTimer.current = undefined
@@ -285,7 +285,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const session = await getKV<Session>(K.SESSION)
       if (!alive) return
       // the deployed CLIENT_ID always wins over any ID pasted into an
-      // earlier build — a stale stored ID is a silent origin_mismatch trap
+      // earlier build - a stale stored ID is a silent origin_mismatch trap
       const cid = CLIENT_ID || session?.clientId
       setClientId(cid)
       if (session?.user) setUser(session.user)
@@ -299,7 +299,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return
         }
         // Token-first: a stored token that is still valid needs no OAuth at
-        // all — skip GIS entirely so a plain refresh never touches the login
+        // all - skip GIS entirely so a plain refresh never touches the login
         // flow (the popup the user saw was Google's picker, which prompt:'none'
         // avoids but which is still better to not reach at all).
         const stored = getToken()
@@ -309,7 +309,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const hint = session?.user?.email
           log('info', 'Stored token expired, attempting silent sign-in')
           tok = await silentSignIn(cid, hint)
-          // GIS can hiccup on cold start — retry once before giving up
+          // GIS can hiccup on cold start - retry once before giving up
           if (!tok && alive) {
             await new Promise((r) => setTimeout(r, 900))
             tok = await silentSignIn(cid, hint)
@@ -324,7 +324,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             void syncNow()
           }
         } else {
-          // saved session but silent re-auth failed — keep the user signed
+          // saved session but silent re-auth failed - keep the user signed
           // in locally (data is on-device anyway) and retry in the background;
           // a small banner offers one-tap re-auth. No forced login screen.
           if (alive) {
@@ -496,7 +496,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       await db.transaction('rw', db.students, db.payments, async () => {
         const now = Date.now()
-        // tombstone instead of hard delete — other devices apply the delete
+        // tombstone instead of hard delete - other devices apply the delete
         // via sync; a newer edit elsewhere resurrects the record instead of
         // it silently vanishing from the shared file
         await db.students.put({ ...s, deletedAt: now, updatedAt: now })
@@ -515,7 +515,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addPayment = useCallback(
     async (input: NewPaymentInput): Promise<Payment> => {
       // issue from the reserved window (claimed during sync, shared across
-      // devices via the meta file) — RECEIPT_SEQ and the window's used mark
+      // devices via the meta file) - RECEIPT_SEQ and the window's used mark
       // advance in lockstep so the draft preview always shows the true next
       // number, and the monotonic max below keeps multi-device allocation
       // continuous across offline fallback drift
@@ -550,7 +550,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         blob: input.pngBlob,
       })
       await queueOp({ kind: 'pushJSON', file: 'payments' })
-      // no per-receipt meta push — the shared sequence propagates when any
+      // no per-receipt meta push - the shared sequence propagates when any
       // device claims its next reservation window during sync
       await refreshData()
       scheduleSync()
@@ -570,7 +570,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // round-trip and keep the existing Drive file
       const blobSameSize = !!(patch.pngBlob && cur.pngBlob && patch.pngBlob.size === cur.pngBlob.size)
       if (patch.pngBlob && !blobSameSize) {
-        // upload the new PNG first, then delete the old one — a crash in
+        // upload the new PNG first, then delete the old one - a crash in
         // between leaves the old file intact and the id still referenced
         await queueOp({
           kind: 'uploadMedia',

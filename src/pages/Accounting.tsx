@@ -35,7 +35,7 @@ export function Accounting() {
   const [to, setTo] = useState('')
   const [teacher, setTeacher] = useState('')
 
-  // restore the last-used filters (batch/from/to/teacher) from pt_kv — same
+  // restore the last-used filters (batch/from/to/teacher) from pt_kv - same
   // pattern as the Students page batch filter; writes stay disabled until the
   // restore finishes so the first render never clobbers the saved values
   const filtersReady = useRef(false)
@@ -157,7 +157,7 @@ export function Accounting() {
           ))}
         </div>
 
-        {/* Filters — ledger/commissions only; the posting ledger has its own view */}
+        {/* Filters - ledger/commissions only; the posting ledger has its own view */}
         {tab !== 'postings' && (
         <div className="mt-3 space-y-2.5">
           <div className="relative">
@@ -271,7 +271,7 @@ export function Accounting() {
           ) : (
             <Card className="!rounded-xl overflow-hidden">
               <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-2 px-3 py-2.5 text-[11px] font-bold uppercase tracking-wider text-faint border-b border-line dark:border-line-dark">
-                <div>Student — Batch</div>
+                <div>Student - Batch</div>
                 <div className="text-right w-[68px]">Slip</div>
                 <div className="text-right w-[68px]">Real</div>
                 <div className="text-right w-[72px]">Balance</div>
@@ -288,7 +288,7 @@ export function Accounting() {
                     >
                       <div className="min-w-0">
                         <div className="text-[13.5px] font-semibold text-ink dark:text-white truncate">
-                          {s?.name || '—'}
+                          {s?.name || '-'}
                         </div>
                         <div className="text-[11px] text-faint truncate">
                           {s?.batch || 'No batch'} · {fmtDate(p.date)}
@@ -365,7 +365,7 @@ export function Accounting() {
           ) : (
             <Card className="!rounded-xl overflow-hidden">
               <div className="grid grid-cols-[1fr_auto] gap-x-2 px-3 py-2.5 text-[11px] font-bold uppercase tracking-wider text-faint border-b border-line dark:border-line-dark">
-                <div>Student — Batch</div>
+                <div>Student - Batch</div>
                 <div className="text-right w-[88px]">Commission</div>
               </div>
               <div className="max-h-[46dvh] overflow-y-auto">
@@ -378,7 +378,7 @@ export function Accounting() {
                     >
                       <div className="min-w-0">
                         <div className="text-[13.5px] font-semibold text-ink dark:text-white truncate">
-                          {s?.name || '—'}
+                          {s?.name || '-'}
                         </div>
                         <div className="text-[11px] text-faint truncate">
                           {s?.batch || 'No batch'} · {fmtDate(p.date)}

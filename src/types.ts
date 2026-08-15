@@ -3,17 +3,17 @@ export type PaymentMode = 'Cash' | 'Bkash' | 'Nagad' | 'Other'
 export interface Student {
   id: string
   name: string
-  /** kept for legacy data only — no longer collected in the form */
+  /** kept for legacy data only - no longer collected in the form */
   email?: string
   phone?: string
   /** extra number, used for calls (primary phone defaults to WhatsApp) */
   phone2?: string
   batch: string
   defaultFee: number
-  /** the student's true monthly fee — teacher-only bookkeeping, never printed
+  /** the student's true monthly fee - teacher-only bookkeeping, never printed
    *  on the receipt; blank = same as defaultFee */
   realPayment?: number
-  /** teacher's monthly share from this student — teacher-only, never printed;
+  /** teacher's monthly share from this student - teacher-only, never printed;
    *  blank = 0. The center's balance fee = realPayment − commission. */
   commission?: number
   notes?: string
@@ -24,7 +24,7 @@ export interface Student {
   archived: boolean
   createdAt: number
   updatedAt: number
-  /** tombstone — set (instead of removing) when deleted; syncs deletes across devices */
+  /** tombstone - set (instead of removing) when deleted; syncs deletes across devices */
   deletedAt?: number
 }
 
@@ -37,12 +37,12 @@ export interface Payment {
   id: string
   receiptNo: number
   studentId: string
-  /** slip amount — what is written on the printed receipt */
+  /** slip amount - what is written on the printed receipt */
   amount: number
   /** what the center actually collected; blank/undefined = same as slip */
   realAmount?: number
   /** receiving teacher's share; requires a "received by" teacher, never
-   *  shown on the receipt — appears only in Accounting */
+   *  shown on the receipt - appears only in Accounting */
   commission?: number
   /** remaining amount owed on this payment (partial payments), 0 = settled */
   due?: number
@@ -53,23 +53,23 @@ export interface Payment {
   pngFileId?: string
   pngBlob?: Blob
   updatedAt: number
-  /** tombstone — set (instead of removing) when deleted; syncs deletes across devices */
+  /** tombstone - set (instead of removing) when deleted; syncs deletes across devices */
   deletedAt?: number
 }
 
 /** Cash handover ("posting"): accumulated cash given to an authorized person
- *  (e.g. Hasan sir). The posting ledger is ALL-TIME — collected minus posted
+ *  (e.g. Hasan sir). The posting ledger is ALL-TIME - collected minus posted
  *  never resets. */
 export interface Posting {
   id: string
   /** cash handed over (৳) */
   amount: number
-  /** who took the cash — teachers dropdown, optional ("None"), editable later */
+  /** who took the cash - teachers dropdown, optional ("None"), editable later */
   receivedBy?: ReceivedBy
   /** handover date, epoch ms */
   date: number
   updatedAt: number
-  /** tombstone — set (instead of removing) when deleted; syncs deletes across devices */
+  /** tombstone - set (instead of removing) when deleted; syncs deletes across devices */
   deletedAt?: number
 }
 
@@ -83,7 +83,7 @@ export interface Center {
   /** plain-text payment rules (legacy, pre-rich-editor), shown at the bottom
    *  of the receipt; kept in sync with rulesHtml for older devices */
   rules?: string
-  /** rich-text payment rules as HTML — renders as বিশেষ নিয়মাবলী on receipts */
+  /** rich-text payment rules as HTML - renders as বিশেষ নিয়মাবলী on receipts */
   rulesHtml?: string
   /** WhatsApp fee-reminder template; tokens: {student} {period} {center} */
   reminderMsg?: string
@@ -100,17 +100,17 @@ export interface Teacher {
   phone?: string
   /** last-modified clock for last-writer-wins merging across devices */
   updatedAt?: number
-  /** tombstone — syncs teacher removal to other devices */
+  /** tombstone - syncs teacher removal to other devices */
   deletedAt?: number
 }
 
 export interface DriveRefs {
   rootFolderId?: string
   studentsFolderId?: string
-  /** Google account that owns this folder — refs are only trusted for that account. */
+  /** Google account that owns this folder - refs are only trusted for that account. */
   ownerEmail?: string
   fileIds: { students?: string; payments?: string; meta?: string; postings?: string }
-  /** modifiedTime of each JSON file at last sync — lets pull() skip downloads */
+  /** modifiedTime of each JSON file at last sync - lets pull() skip downloads */
   stamps?: Record<string, string>
 }
 

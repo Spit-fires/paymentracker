@@ -88,11 +88,11 @@ export function Payment() {
     }
     setAmount(String(autofillAmount(students, payments, student.id, period)))
     // real payment prefills from the student's recorded real fee, else last
-    // month's real total — blank keeps it "same as slip"
+    // month's real total - blank keeps it "same as slip"
     const real = realAutofillAmount(students, payments, student.id, period)
     if (real > 0) setRealAmount(String(real))
     // commission prefills from the student's monthly commission when there are
-    // teachers to receive it — receipt edits keep their own values
+    // teachers to receive it - receipt edits keep their own values
     if (student.commission && teachers.length > 0) {
       setCommissionOn(true)
       setCommission(String(student.commission))
@@ -101,7 +101,7 @@ export function Payment() {
   }, [student?.id, prefill])
 
   // upgrade a refilled teacher snapshot (synthetic id = name) to the real
-  // Settings teacher once the list is available — without clobbering a
+  // Settings teacher once the list is available - without clobbering a
   // teacher the user picked from the chips themselves
   useEffect(() => {
     if (!receivedBy || receivedBy.id !== receivedBy.name) return
@@ -164,7 +164,7 @@ export function Payment() {
     setBusy(true)
     try {
       // Wait for all images (logo, paid seal) to actually load before PNG
-      // capture — a broken img would embed as empty in the saved receipt
+      // capture - a broken img would embed as empty in the saved receipt
       const imgs = previewRef.current.querySelectorAll('img')
       await Promise.all(Array.from(imgs).map((img) => {
         if (img.complete && img.naturalWidth > 0) return Promise.resolve()
@@ -258,7 +258,7 @@ export function Payment() {
           </div>
           {amountNum > 0 && (
             <div className="text-[12.5px] italic text-muted dark:text-muted-dark mt-2">
-              Taka {takaToWords(amountNum)} Only — this is the amount printed on the receipt.
+              Taka {takaToWords(amountNum)} Only - this is the amount printed on the receipt.
             </div>
           )}
           {lastTotal > 0 && (
@@ -271,7 +271,7 @@ export function Payment() {
           )}
         </Card>
 
-        {/* Real payment + commission (accounting only — never on the receipt) */}
+        {/* Real payment + commission (accounting only - never on the receipt) */}
         <Card className="!rounded-2xl p-4 space-y-4">
           <div>
             <div className="text-[13px] font-semibold text-body/80 dark:text-muted-dark mb-1.5">
@@ -290,7 +290,7 @@ export function Payment() {
               />
             </div>
             <div className="text-[12px] text-muted dark:text-muted-dark mt-1">
-              What the center actually collects — leave blank to use the slip amount.
+              What the center actually collects - leave blank to use the slip amount.
             </div>
           </div>
 
@@ -300,7 +300,7 @@ export function Payment() {
                 Commission (৳)
               </div>
               <div className="text-[12px] text-muted dark:text-muted-dark">
-                The receiving teacher's share — shown only in Accounting, never on the receipt.
+                The receiving teacher's share - shown only in Accounting, never on the receipt.
               </div>
             </div>
             <button
@@ -333,7 +333,7 @@ export function Payment() {
           )}
           {commissionOn && commissionNum > 0 && !receivedBy && (
             <div className="text-[12px] font-semibold text-danger">
-              Select a teacher under “Received by” — commission is added to that teacher.
+              Select a teacher under “Received by” - commission is added to that teacher.
             </div>
           )}
         </Card>

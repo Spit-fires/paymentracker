@@ -20,7 +20,7 @@ const ALLOWED_TAGS = new Set([
 ])
 const ALLOWED_STYLES = ['color', 'background-color', 'font-size', 'text-align', 'font-weight', 'font-style']
 
-/** Strip anything not produced by the editor toolbar — keeps html-to-image
+/** Strip anything not produced by the editor toolbar - keeps html-to-image
  *  capture safe and prevents stray page CSS from leaking into the receipt. */
 export function sanitizeHtml(html: string): string {
   if (!html.trim()) return ''

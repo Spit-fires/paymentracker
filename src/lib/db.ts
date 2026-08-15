@@ -10,13 +10,13 @@ export const K = {
   BATCH_FILTER: 'batchFilter',
   /** last-used Accounting filters: { batch, from, to, teacher } */
   ACCT_FILTERS: 'acctFilters',
-  /** per-device receipt-number reservation: { high, used } — issued while used < high */
+  /** per-device receipt-number reservation: { high, used } - issued while used < high */
   SEQ_RESERVED: 'seqReserved',
 } as const
 
 /**
  * Small KV state (session, drive refs, center, receipt seq, teachers) lives in
- * localStorage — a single synchronous JSON blob. Keeping it out of IndexedDB
+ * localStorage - a single synchronous JSON blob. Keeping it out of IndexedDB
  * avoids the mobile-browser IndexedDB staleness/corruption that caused the
  * "refresh → login loop" (clearing IndexedDB was the only fix).
  */
@@ -37,7 +37,7 @@ function writeAll(m: Record<string, unknown>): void {
   try {
     localStorage.setItem(LS_KEY, JSON.stringify(m))
   } catch {
-    /* quota exceeded — non-critical small values only */
+    /* quota exceeded - non-critical small values only */
   }
 }
 
@@ -66,7 +66,7 @@ class PTDatabase extends Dexie {
       outbox: '++id, at',
     })
     // v2 adds the postings table (cash handover ledger). The v1 schema is
-    // kept verbatim above — Dexie upgrades existing installs to v2 in place.
+    // kept verbatim above - Dexie upgrades existing installs to v2 in place.
     this.version(2).stores({
       students: 'id, batch, archived',
       payments: 'id, studentId, receiptNo, period',

@@ -91,7 +91,7 @@ export function ReceiptCard({ center, student, payment }: Props) {
       <div style={{ display: 'grid', gridTemplateColumns: '96px 1fr', rowGap: 7, fontSize: 12.5 }}>
         {[
           ['Student', student.name],
-          ['Batch / Class', student.batch || '—'],
+          ['Batch / Class', student.batch || '-'],
           ['Payment mode', payment.mode],
           ['For the month', periodLabel(payment.period)],
           ['Date received', fmtDate(payment.date)],
@@ -181,7 +181,7 @@ export function ReceiptCard({ center, student, payment }: Props) {
         </div>
       </div>
 
-      {/* PAID seal — faint watermark, right of the amount paid */}
+      {/* PAID seal - faint watermark, right of the amount paid */}
       {showPaid && (
         <img
           src={paidSrc}

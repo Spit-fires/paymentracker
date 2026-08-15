@@ -68,7 +68,7 @@ export function PostingPanel() {
       const t = teachers.find((x) => x.id === draft.receivedBy)
       receivedBy = t ? { name: t.name, phone: t.phone } : undefined
     } else if (editingId) {
-      // no teacher picked — keep the original attribution when that teacher
+      // no teacher picked - keep the original attribution when that teacher
       // was later removed from the list, so the record never loses its name
       const orig = postings.find((x) => x.id === editingId)
       if (orig?.receivedBy) receivedBy = orig.receivedBy
@@ -81,7 +81,7 @@ export function PostingPanel() {
         showToast('Posting updated', 'ok')
       } else {
         if (amount > ready) {
-          showToast('More than the current in-hand balance — check the amount', 'info')
+          showToast('More than the current in-hand balance - check the amount', 'info')
         }
         await addPosting({ amount, receivedBy, date })
         showToast('Posting recorded', 'ok')
@@ -103,7 +103,7 @@ export function PostingPanel() {
 
   return (
     <div className="px-4 mt-3 space-y-3">
-      {/* Collected — left side, big; posted total on the right */}
+      {/* Collected - left side, big; posted total on the right */}
       <Card className="!rounded-xl p-4">
         <div className="flex items-end justify-between gap-3">
           <div className="min-w-0">
@@ -130,53 +130,47 @@ export function PostingPanel() {
           <EmptyState
             icon={<IconBook className="w-7 h-7" />}
             title="No postings yet"
-            subtitle="Record cash handovers here — each posting subtracts from the collected amount."
+            subtitle="Record cash handovers here - each posting subtracts from the collected amount."
           />
         </Card>
       ) : (
         <Card className="!rounded-xl overflow-hidden">
-          <div className="grid grid-cols-[1fr_auto_auto] gap-x-2 px-3 py-2.5 text-[11px] font-bold uppercase tracking-wider text-faint border-b border-line dark:border-line-dark">
-            <div>Date — Received by</div>
-            <div className="text-right w-[72px]">Amount</div>
-            <div className="text-right w-[78px]">Ladger</div>
+          <div className="grid grid-cols-[1fr_auto_auto_1fr] gap-x-2 px-3 py-2.5 text-[11px] font-bold uppercase tracking-wider text-faint border-b border-line dark:border-line-dark">
+            <div>Date</div>
+            <div className="text-right w-[72px]">Ledger</div>
+            <div className="text-right w-[80px]">Received</div>
+            <div className="text-right">Received By</div>
           </div>
           <div className="max-h-[46dvh] overflow-y-auto">
-            {rows.map(({ posting, balanceAfter }) => (
+            {rows.map(({ posting, ledger }) => (
               <button
                 key={posting.id}
                 onClick={() => openEdit(posting)}
-                className="w-full text-left grid grid-cols-[1fr_auto_auto] gap-x-2 px-3 py-2.5 border-b border-line/60 dark:border-line-dark/60 last:border-0 hover:bg-cream dark:hover:bg-input-dark transition"
+                className="w-full text-left grid grid-cols-[1fr_auto_auto_1fr] gap-x-2 px-3 py-2.5 border-b border-line/60 dark:border-line-dark/60 last:border-0 hover:bg-cream dark:hover:bg-input-dark transition"
               >
                 <div className="min-w-0">
-                  <div className="text-[13.5px] font-semibold text-ink dark:text-white truncate">
-                    {posting.receivedBy?.name || 'None'}
+                  <div className="text-[13px] font-semibold text-ink dark:text-white truncate">
+                    {fmtDate(posting.date)}
                   </div>
-                  <div className="text-[11px] text-faint truncate">{fmtDate(posting.date)}</div>
-                </div>
-                <div className="text-right w-[72px] text-[12.5px] font-bold text-ink dark:text-white tabular-nums pt-0.5">
-                  {fmtTaka(posting.amount)}
                 </div>
                 <div
                   className={cx(
-                    'text-right w-[78px] text-[12.5px] font-bold tabular-nums pt-0.5',
-                    balanceAfter < 0 ? 'text-danger' : 'text-teal dark:text-teal-bright',
+                    'text-right w-[72px] text-[12.5px] font-bold tabular-nums pt-0.5',
+                    ledger < 0 ? 'text-danger' : 'text-teal dark:text-teal-bright',
                   )}
                 >
-                  {fmtTaka(balanceAfter)}
+                  {fmtTaka(ledger)}
+                </div>
+                <div className="text-right w-[80px] text-[12.5px] font-bold text-ink dark:text-white tabular-nums pt-0.5">
+                  {fmtTaka(posting.amount)}
+                </div>
+                <div className="text-right min-w-0">
+                  <span className="block text-[12.5px] font-semibold text-ink dark:text-white truncate">
+                    {posting.receivedBy?.name || 'None'}
+                  </span>
                 </div>
               </button>
             ))}
-          </div>
-          <div className="grid grid-cols-[1fr_auto] gap-x-2 px-3 py-2.5 bg-cream dark:bg-input-dark border-t border-line dark:border-line-dark">
-            <div className="text-[12.5px] font-bold text-ink dark:text-white pt-0.5">Ready to post</div>
-            <div
-              className={cx(
-                'text-right text-[15px] font-bold tabular-nums',
-                ready < 0 ? 'text-danger' : 'text-teal dark:text-teal-bright',
-              )}
-            >
-              {fmtTaka(ready)}
-            </div>
           </div>
         </Card>
       )}
@@ -187,7 +181,7 @@ export function PostingPanel() {
         title={editingId ? 'Edit posting' : 'New posting'}
       >
         <div className="space-y-4">
-          <Field label="Amount (৳)" hint="Cash handed over — the Ladger subtracts this automatically.">
+          <Field label="Amount (৳)" hint="Cash handed over - the Ledger subtracts this automatically.">
             <Input
               type="number"
               inputMode="numeric"
@@ -205,7 +199,7 @@ export function PostingPanel() {
               onChange={(e) => setDraft((d) => ({ ...d, date: e.target.value }))}
             />
           </Field>
-          <Field label="Received by" hint="Who took the cash — can be changed later.">
+          <Field label="Received by" hint="Who took the cash - can be changed later.">
             <Select
               value={draft.receivedBy}
               onChange={(e) => setDraft((d) => ({ ...d, receivedBy: e.target.value }))}

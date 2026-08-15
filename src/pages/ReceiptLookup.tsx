@@ -60,7 +60,7 @@ export function ReceiptLookup() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[14px] font-bold text-ink dark:text-white truncate">
-                    {s?.name || '—'} <span className="font-semibold text-muted">· {fmtTaka(p.amount)}</span>
+                    {s?.name || '-'} <span className="font-semibold text-muted">· {fmtTaka(p.amount)}</span>
                   </div>
                   <div className="text-[12px] text-muted dark:text-muted-dark">
                     {periodLabel(p.period)} · {fmtDate(p.date)} · {p.mode}

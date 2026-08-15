@@ -39,7 +39,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
       {!online && (
         <div className="no-print sticky top-0 z-40 bg-amber-500 text-white text-center text-[12.5px] font-semibold py-1.5 px-3">
-          Offline — changes will sync when you're back online
+          Offline - changes will sync when you're back online
         </div>
       )}
 

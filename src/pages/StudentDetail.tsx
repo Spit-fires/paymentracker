@@ -58,7 +58,7 @@ export function StudentDetail() {
         )
         if (res.ok && alive) {
           const blob = await res.blob()
-          // write straight to IndexedDB — no outbox ops, no re-upload
+          // write straight to IndexedDB - no outbox ops, no re-upload
           await db.students.update(student.id, { photoBlob: blob })
           await refreshData()
         }

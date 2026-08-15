@@ -45,7 +45,7 @@ export function Dashboard() {
   const paidCount = billed.filter((r) => r.paidAny).length
   const dueCount = billed.length - paidCount
 
-  // net per-student collection (balance = real payment − commission) — used
+  // net per-student collection (balance = real payment − commission) - used
   // for the batch collected figures, matching the home "Collected" total
   const balanceByStudent = useMemo(() => {
     const map = new Map<string, number>()

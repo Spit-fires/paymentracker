@@ -141,7 +141,7 @@ export function Settings() {
         await db.students.bulkPut(j.students)
         await db.payments.bulkPut(j.payments)
       })
-      // postings only when the backup carries them — restoring a pre-posting
+      // postings only when the backup carries them - restoring a pre-posting
       // backup must never wipe the live cash-handover ledger
       if (Array.isArray(j.postings)) {
         await db.transaction('rw', db.postings, async () => {
@@ -332,7 +332,7 @@ export function Settings() {
               <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} inputMode="tel" />
             </Field>
           </div>
-          <Field label="বিশেষ নিয়মাবলী" hint="Shown at the bottom of every receipt — use the toolbar for bold, colors, sizes and alignment">
+          <Field label="বিশেষ নিয়মাবলী" hint="Shown at the bottom of every receipt - use the toolbar for bold, colors, sizes and alignment">
             <RichEditor
               value={form.rulesHtml || ''}
               onChange={(html, text) => setForm((p) => ({ ...p, rulesHtml: html || undefined, rules: text || undefined }))}
@@ -410,7 +410,7 @@ export function Settings() {
             />
           </Field>
           <p className="text-[11.5px] text-faint">
-            Available tokens: <span className="font-mono">{"{student} {period} {center} {link}"}</span> — leave
+            Available tokens: <span className="font-mono">{"{student} {period} {center} {link}"}</span> - leave
             a field empty to keep the default message.
           </p>
           <Button variant="soft" full onClick={() => void saveCenter()} disabled={saved}>
@@ -420,7 +420,7 @@ export function Settings() {
       </div>
 
       {/* Teachers (received by) */}
-      <SectionLabel>Teachers — received by</SectionLabel>
+      <SectionLabel>Teachers - received by</SectionLabel>
       <div className="px-4 space-y-2">
         {teachers.map((t) => (
           <Card key={t.id} className="!rounded-xl p-3.5 flex items-center gap-3">
@@ -469,7 +469,7 @@ export function Settings() {
             <IconPlus className="w-4 h-4" /> Add teacher
           </Button>
           <p className="text-[11.5px] text-faint">
-            Pick a teacher when recording a payment — their name goes on the receipt.
+            Pick a teacher when recording a payment - their name goes on the receipt.
           </p>
         </Card>
       </div>
@@ -567,7 +567,7 @@ export function Settings() {
             <div className="flex-1">
               <div className="text-[14px] font-bold text-ink dark:text-white">Activity logs</div>
               <div className="text-[12px] text-muted dark:text-muted-dark">
-                {logsOpen ? 'Tap to collapse' : `${logs.length} entries — tap to expand`}
+                {logsOpen ? 'Tap to collapse' : `${logs.length} entries - tap to expand`}
               </div>
             </div>
           </Card>

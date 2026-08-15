@@ -79,7 +79,7 @@ async function buildJSON(file: 'students' | 'payments' | 'meta' | 'postings'): P
     return JSON.stringify({ version: 1, updatedAt: Date.now(), payments })
   }
   if (file === 'postings') {
-    // Posting has no Blob fields — the raw records serialize as-is
+    // Posting has no Blob fields - the raw records serialize as-is
     const postings = await getPostings()
     return JSON.stringify({ version: 1, updatedAt: Date.now(), postings })
   }
@@ -96,7 +96,7 @@ export function defaultCenter(): Center {
     tagline: 'Learn · Grow · Succeed',
     address: '',
     phone: '',
-    // keep the pre-editor messages as the defaults — an empty/missing saved
+    // keep the pre-editor messages as the defaults - an empty/missing saved
     // message falls back to these, so existing setups keep working untouched
     reminderMsg:
       'Assalamu alaikum {student},\n\nThis is a friendly reminder that your {period} fee is pending for {center}. Please make the payment at your earliest convenience. Thank you!',
@@ -114,7 +114,7 @@ export async function exportToSheet(
   center: Center,
 ): Promise<string> {
   const drive = await getKV<DriveRefs>(K.DRIVE)
-  if (!drive?.rootFolderId) throw new Error('Drive not ready — sign in first')
+  if (!drive?.rootFolderId) throw new Error('Drive not ready - sign in first')
   const { id, webViewLink } = await client().createSpreadsheet(
     `${center.name || 'Utsaho Educare'} Data - ${fmtDate(Date.now())}`,
     drive.rootFolderId,
@@ -150,12 +150,12 @@ export async function exportToSheet(
       p.receivedBy?.name || '',
     ]),
   ])
-  // Posting ledger — running Ladger like the in-app ledger
+  // Posting ledger - running Ledger like the in-app ledger
   await client().sheetValues(id, 'Posting!A1', [
-    ['Date', 'Ladger', 'Received', 'Received By'],
+    ['Date', 'Ledger', 'Received', 'Received By'],
     ...postingLedger(payments, postings).map((r) => [
       fmtDate(r.posting.date),
-      r.balanceAfter,
+      r.ledger,
       r.posting.amount,
       r.posting.receivedBy?.name || '',
     ]),
@@ -237,7 +237,7 @@ export async function flushOutbox(): Promise<void> {
   for (;;) {
     const entries = await db.outbox.toArray()
     if (!entries.length) return
-    // receipt PNGs are the slowest ops (large bodies, network-bound) — run
+    // receipt PNGs are the slowest ops (large bodies, network-bound) - run
     // them in small parallel batches; everything else stays strictly ordered
     let i = 0
     while (i < entries.length) {
@@ -247,7 +247,7 @@ export async function flushOutbox(): Promise<void> {
         i++
       }
       if (batch.length) {
-        // a failed upload just stays queued — the next pass retries it and
+        // a failed upload just stays queued - the next pass retries it and
         // this pass continues with the remaining ops
         await Promise.all(
           batch.map(async (e) => {
@@ -264,13 +264,13 @@ export async function flushOutbox(): Promise<void> {
         await db.outbox.delete(e.id!)
       } catch (err) {
         log('error', `Outbox op failed (${e.op.kind}): ${err instanceof Error ? err.message : err}`)
-        throw err // abort this pass — op stays queued
+        throw err // abort this pass - op stays queued
       }
     }
   }
 }
 
-/** signature of the user-editable fields — used to break same-timestamp ties */
+/** signature of the user-editable fields - used to break same-timestamp ties */
 function studentSig(s: Student): string {
   return JSON.stringify([s.name, s.phone || '', s.phone2 || '', s.batch, s.defaultFee, s.realPayment ?? null, s.commission ?? null, s.notes || '', s.archived, s.deletedAt ?? null])
 }
@@ -316,10 +316,10 @@ function mergeTeachers(local: Teacher[], remote: Teacher[]): Teacher[] {
     if (rtAt > ltAt) {
       byId.set(rt.id, rt)
     } else if (rtAt === ltAt) {
-      // equal stamps — prefer remote (deterministic, no re-push loop)
+      // equal stamps - prefer remote (deterministic, no re-push loop)
       if (JSON.stringify(lt) !== JSON.stringify(rt)) byId.set(rt.id, rt)
     }
-    // rtAt < ltAt → keep local (newer) — the caller re-pushes via diff
+    // rtAt < ltAt → keep local (newer) - the caller re-pushes via diff
   }
   return [...byId.values()]
 }
@@ -340,12 +340,12 @@ export async function pull(): Promise<{
   // per-file pull tracking: each JSON file is processed only when IT changed
   // since we last processed it. The old shared global gate let the meta file
   // (rewritten with a fresh Date.now() on every single sync) jump the cutoff
-  // past slower-updated students/payments snapshots — those snapshots were
+  // past slower-updated students/payments snapshots - those snapshots were
   // then silently skipped forever, which is how a delete on one device never
   // reached another. `lastPulledAt` stays as the baseline for pre-upgrade
   // sessions and as a safety net for files never processed since then.
   const pulledAt = { ...(session.pulledAt || {}) }
-  // CRITICAL: postings is a NEW file type — NO device ever processed it, so
+  // CRITICAL: postings is a NEW file type - NO device ever processed it, so
   // its baseline must be 0, never lastPulledAt. With the legacy fallback a
   // postings snapshot older than the fleet's latest meta write would be
   // silently skipped forever (the exact bug class that hid tombstones).
@@ -366,12 +366,12 @@ export async function pull(): Promise<{
   ]
   // run two passes: the second is nearly free (in-memory stamps skip
   // unchanged files) and catches files that another device rewrote while
-  // we were downloading pass 1 — closes the torn-snapshot window
+  // we were downloading pass 1 - closes the torn-snapshot window
   for (let pass = 0; pass < 2; pass++) {
   for (const [file, fileId] of files) {
     if (!fileId) continue
     try {
-      // cheap metadata call first — skip the (possibly large) download when
+      // cheap metadata call first - skip the (possibly large) download when
       // this file has not changed since we last saw it
       const meta = await c.get(fileId, 'id,modifiedTime')
       if (meta.modifiedTime && meta.modifiedTime === stamps[file]) continue
@@ -380,7 +380,7 @@ export async function pull(): Promise<{
       if (!j || typeof j !== 'object') continue
       latest = Math.max(latest, j.updatedAt || 0)
       const fileAt = j.updatedAt || 0
-      // a device with a fast/slow clock wins/loses every merge silently —
+      // a device with a fast/slow clock wins/loses every merge silently -
       // surface it so the fleets' clocks can be fixed
       if (fileAt && Math.abs(Date.now() - fileAt) > 60 * 60 * 1000) {
         log('warn', `Clock skew: ${file}.json built ${Math.round((Date.now() - fileAt) / 60000)} min from device time`)
@@ -391,7 +391,7 @@ export async function pull(): Promise<{
             const local = new Map((await db.students.toArray()).map((s) => [s.id, s]))
             const remoteIds = new Set(j.students.map((s: Student) => s.id))
             // 1) tombstones: purge locally unless we edited the record after
-            // the remote delete — a newer local edit resurrects it via re-push
+            // the remote delete - a newer local edit resurrects it via re-push
             for (const s of j.students) {
               if (!s.deletedAt) continue
               const cur = local.get(s.id)
@@ -403,7 +403,7 @@ export async function pull(): Promise<{
               await db.students.delete(s.id)
               local.delete(s.id)
             }
-            // 2) records missing from the file: absence is NEVER a delete —
+            // 2) records missing from the file: absence is NEVER a delete -
             //    deletes are explicit tombstones above. Missing = the author's
             //    snapshot predates it (created/edited elsewhere) → re-push so
             //    every device converges
@@ -418,7 +418,7 @@ export async function pull(): Promise<{
               .map((s: Student) => {
                 const cur = local.get(s.id)
                 if (!cur) return s
-                // a local tombstone always beats a stale remote copy — the
+                // a local tombstone always beats a stale remote copy - the
                 // remote record is only a snapshot taken before the delete;
                 // re-push so every device converges on the tombstone
                 if (cur.deletedAt && !s.deletedAt) {
@@ -455,7 +455,7 @@ export async function pull(): Promise<{
           })
           changed = true
         } else if (file === 'payments' && Array.isArray(j.payments)) {
-          // Drive files whose references get replaced by the remote copy —
+          // Drive files whose references get replaced by the remote copy -
           // queued for deletion after the transaction (outbox writes can't
           // nest inside the running one)
           const orphans: string[] = []
@@ -474,7 +474,7 @@ export async function pull(): Promise<{
               await db.payments.delete(p.id)
               local.delete(p.id)
             }
-            // 2) records missing from the file: absence is NEVER a delete —
+            // 2) records missing from the file: absence is NEVER a delete -
             //    deletes are explicit tombstones above. Missing = the author's
             //    snapshot predates it (created/edited elsewhere) → re-push so
             //    every device converges
@@ -488,7 +488,7 @@ export async function pull(): Promise<{
               .map((p: Payment) => {
                 const cur = local.get(p.id)
                 if (!cur) return p
-                // a local tombstone always beats a stale remote copy — the
+                // a local tombstone always beats a stale remote copy - the
                 // remote record is only a snapshot taken before the delete;
                 // re-push so every device converges on the tombstone
                 if (cur.deletedAt && !p.deletedAt) {
@@ -523,7 +523,7 @@ export async function pull(): Promise<{
               })
             await db.payments.bulkPut(merged)
             // two devices can allocate the same receipt number while both
-            // offline — keep the earliest record, renumber the rest so the
+            // offline - keep the earliest record, renumber the rest so the
             // shared stream never produces duplicate receipt numbers again.
             // Scans every active record (including local-only receipts that
             // were never in this file) so offline-created numbers are caught too.
@@ -545,7 +545,7 @@ export async function pull(): Promise<{
               log('sync', `Renumbered receipt #${oldNo} → #${n} (duplicate from concurrent device)`)
             }
             // a renumbered record must never collide with numbers the
-            // reservation window will hand to new receipts — advance the
+            // reservation window will hand to new receipts - advance the
             // shared counters to the highest active number so future
             // allocations (and the preview) sit above it
             if (used.size) {
@@ -564,13 +564,13 @@ export async function pull(): Promise<{
           }
           changed = true
         } else if (file === 'postings' && Array.isArray(j.postings)) {
-          // mirrors the payments merge (no media involved) — tombstones,
+          // mirrors the payments merge (no media involved) - tombstones,
           // then missing records (absence is NEVER a delete), then LWW
           await db.transaction('rw', db.postings, async () => {
             const local = new Map((await db.postings.toArray()).map((p) => [p.id, p]))
             const remoteIds = new Set(j.postings.map((p: Posting) => p.id))
             // 1) tombstones: purge locally unless we edited the record after
-            //    the remote delete — a newer local edit resurrects it via re-push
+            //    the remote delete - a newer local edit resurrects it via re-push
             for (const p of j.postings) {
               if (!p.deletedAt) continue
               const cur = local.get(p.id)
@@ -582,7 +582,7 @@ export async function pull(): Promise<{
               await db.postings.delete(p.id)
               local.delete(p.id)
             }
-            // 2) records missing from the file: absence is NEVER a delete —
+            // 2) records missing from the file: absence is NEVER a delete -
             //    deletes are explicit tombstones above. Missing = the
             //    author's snapshot predates it → re-push to converge
             for (const loc of local.values()) {
@@ -596,7 +596,7 @@ export async function pull(): Promise<{
               .map((p: Posting) => {
                 const cur = local.get(p.id)
                 if (!cur) return p
-                // a local tombstone always beats a stale remote copy — re-push
+                // a local tombstone always beats a stale remote copy - re-push
                 // so every device converges on the tombstone
                 if (cur.deletedAt && !p.deletedAt) {
                   if (!needPush.includes('postings')) needPush.push('postings')
@@ -619,7 +619,7 @@ export async function pull(): Promise<{
           await setKV(K.CENTER, { ...((await getKV<Center>(K.CENTER)) || {}), ...j.center })
           const seq = Math.max(j.receiptSeq || 0, (await getKV<number>(K.RECEIPT_SEQ)) || 0)
           await setKV(K.RECEIPT_SEQ, seq)
-          // the reservation window travels with the meta file too — without
+          // the reservation window travels with the meta file too - without
           // it a second device only sees the window high-water mark and
           // re-allocates numbers the claiming device already burned locally
           const curRes = (await getKV<{ high: number; used: number }>(K.SEQ_RESERVED)) || { high: 0, used: 0 }
@@ -635,7 +635,7 @@ export async function pull(): Promise<{
           const remoteT = Array.isArray(j.teachers) ? j.teachers : []
           const mergedT = mergeTeachers(curT, remoteT)
           await setKV(K.TEACHERS, mergedT)
-          // compare as canonical sets — order must not trigger re-pushes
+          // compare as canonical sets - order must not trigger re-pushes
           const canon = (arr: Teacher[]) =>
             JSON.stringify([...arr].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)))
           if (canon(mergedT) !== canon(remoteT)) {
@@ -643,20 +643,20 @@ export async function pull(): Promise<{
           }
           changed = true
         }
-        // this exact snapshot is now fully merged — never reprocess it.
+        // this exact snapshot is now fully merged - never reprocess it.
         // Advancing only here (after a successful merge) means a failed
         // transaction leaves pulledAt untouched and the file is retried
         pulledAt[file] = Math.max(pulledAt[file] || 0, fileAt)
         pullDirty = true
       }
-      // commit the stamp only after a successful download+parse — a failed
+      // commit the stamp only after a successful download+parse - a failed
       // pull must not mark the file as seen (next sync retries it)
       if (meta.modifiedTime && meta.modifiedTime !== stamps[file]) {
         stamps[file] = meta.modifiedTime
         stampDirty = true
       }
     } catch (e) {
-      // file missing or parse error — skip but log
+      // file missing or parse error - skip but log
       log('warn', `Pull ${file} failed: ${e instanceof Error ? e.message : e}`)
     }
   }
@@ -684,12 +684,12 @@ export async function ensureDriveStructure(): Promise<DriveRefs> {
 
   const existing = await getKV<DriveRefs>(K.DRIVE)
   // only trust refs recorded for the signed-in account, and only if the
-  // folder still exists — it may have been deleted inside Drive
+  // folder still exists - it may have been deleted inside Drive
   if (existing?.rootFolderId && existing.ownerEmail === email) {
     try {
       await c.get(existing.rootFolderId)
       // schema upgrade: installs that predate the postings ledger have no
-      // _postings.json ref — create it now (or reuse a manually made one)
+      // _postings.json ref - create it now (or reuse a manually made one)
       // so the cash-handover ledger syncs across the fleet
       if (!existing.fileIds.postings) {
         const files = await c.list(`'${existing.rootFolderId}' in parents and trashed=false`)

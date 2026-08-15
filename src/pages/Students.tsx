@@ -202,7 +202,7 @@ export function Students() {
           </button>
         </div>
 
-        {/* Batch filter chips — wrap to a new row once the line fills */}
+        {/* Batch filter chips - wrap to a new row once the line fills */}
         {batches.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-2.5 pb-1 -mx-4 px-4">
             <button
