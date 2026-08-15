@@ -5,6 +5,7 @@ import { db, setKV, queueOp, K, getKV } from '../lib/db'
 import { hashPin } from '../lib/pin'
 import { periodNow, periodLabel, fmtDate } from '../lib/format'
 import { defaultCenter, exportToSheet } from '../lib/sync'
+import { openExternal } from '../lib/phone'
 import { getLogs, clearLogs, onLogsChange, type LogEntry } from '../lib/logs'
 import { Card, Button, Field, Input, PageHeader, Modal, Avatar, SectionLabel, Textarea } from '../components/ui'
 import { RichEditor } from '../components/RichEditor'
@@ -156,7 +157,7 @@ export function Settings() {
     try {
       const link = await exportToSheet(students, payments, center)
       showToast('Google Sheet created', 'ok')
-      window.open(link, '_blank', 'noopener')
+      openExternal(link)
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Sheet export failed', 'err')
     }

@@ -17,7 +17,7 @@ import {
   IconPhone,
 } from '../components/Icons'
 import { defaultCenter } from '../lib/sync'
-import { waLink, waPhone } from '../lib/phone'
+import { waLink, waPhone, openExternal } from '../lib/phone'
 
 export function StudentDetail() {
   const { id } = useParams<{ id: string }>()
@@ -234,7 +234,7 @@ export function StudentDetail() {
             variant="secondary"
             size="lg"
             className="!text-teal dark:!text-teal-bright"
-            onClick={() => window.open(waLink(student.phone, reminderText), '_blank')}
+            onClick={() => openExternal(waLink(student.phone, reminderText))}
             disabled={!student.phone}
             title={student.phone ? undefined : 'Add a phone number to send WhatsApp reminders'}
           >

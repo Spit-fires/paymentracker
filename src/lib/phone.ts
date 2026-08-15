@@ -11,3 +11,19 @@ export function waLink(phone: string | undefined, text: string): string {
   const base = phone ? `https://wa.me/${waPhone(phone)}` : 'https://wa.me'
   return `${base}?text=${encodeURIComponent(text)}`
 }
+
+/**
+ * Open an external URL in a new tab. Uses a real <a> click instead of
+ * window.open — iOS Safari / standalone PWAs block window.open or show
+ * "Safari cannot open the page" errors, while anchor navigation works.
+ */
+export function openExternal(url: string): void {
+  const a = document.createElement('a')
+  a.href = url
+  a.target = '_blank'
+  a.rel = 'noopener noreferrer'
+  a.style.display = 'none'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+}

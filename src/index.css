@@ -53,7 +53,9 @@ body {
 .app-shell {
   max-width: 480px;
   margin: 0 auto;
+  min-height: 100vh;
   min-height: 100dvh;
+  padding-top: env(safe-area-inset-top);
   background: var(--color-cream);
   box-shadow: 0 0 40px rgba(18, 49, 79, 0.08);
 }

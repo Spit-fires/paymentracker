@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { toPng } from 'html-to-image'
+import { toPng as htmlToImageToPng } from 'html-to-image'
+import { domToPng } from 'modern-screenshot'
 import { useApp } from '../state/AppContext'
 import { receiptFileName, periodLabel, fillMessage } from '../lib/format'
 import { Button, PageHeader } from '../components/ui'
 import { ReceiptCard } from '../components/ReceiptCard'
 import { IconPrint, IconShare, IconDownload, IconWhatsApp } from '../components/Icons'
 import { defaultCenter, receiptViewLink, retryEnsurePublic } from '../lib/sync'
-import { waLink } from '../lib/phone'
+import { waLink, openExternal } from '../lib/phone'
 import { log } from '../lib/logs'
 
 export function ReceiptView() {
@@ -76,7 +77,12 @@ export function ReceiptView() {
     if (payment.pngBlob) return payment.pngBlob
     const el = cardRef.current
     if (!el) throw new Error('not ready')
-    const dataUrl = await toPng(el, { pixelRatio: 2, cacheBust: true })
+    let dataUrl: string
+    try {
+      dataUrl = await domToPng(el, { scale: 2 })
+    } catch {
+      dataUrl = await htmlToImageToPng(el, { pixelRatio: 2, cacheBust: true })
+    }
     return fetch(dataUrl).then((r) => r.blob())
   }
 
@@ -99,7 +105,7 @@ export function ReceiptView() {
       if (link) {
         const text = fillLink(link)
         log('info', `WhatsApp link-based share for receipt #${payment.receiptNo}`)
-        window.open(waLink(student.phone, text), '_blank')
+        openExternal(waLink(student.phone, text))
         return
       }
       // Link not available — receipt may not be synced yet
@@ -123,7 +129,7 @@ export function ReceiptView() {
           title: `Receipt #${payment.receiptNo}`,
         })
       } else {
-        window.open(waLink(student.phone, fillLink('')), '_blank')
+        openExternal(waLink(student.phone, fillLink('')))
       }
     } catch {
       /* user closed the share sheet */
@@ -175,12 +181,14 @@ export function ReceiptView() {
         </div>
       )}
 
-      <PageHeader
-        title={`Receipt #${String(payment.receiptNo).padStart(4, '0')}`}
-        subtitle={`${student.name} · ${payment.mode}`}
-        back
-        onBack={() => (isNew ? navigate(`/student/${student.id}`) : navigate(-1))}
-      />
+      <div className="no-print">
+        <PageHeader
+          title={`Receipt #${String(payment.receiptNo).padStart(4, '0')}`}
+          subtitle={`${student.name} · ${payment.mode}`}
+          back
+          onBack={() => (isNew ? navigate(`/student/${student.id}`) : navigate(-1))}
+        />
+      </div>
 
       {/* Receipt (scaled to fit) */}
       <div className="flex justify-center px-2.5 no-print">

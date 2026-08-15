@@ -19,7 +19,7 @@ export function Layout({ children }: { children: ReactNode }) {
       {toast && (
         <div
           className={cx(
-            'toast-in fixed top-3 left-1/2 z-[60] max-w-[92%] w-max rounded-full px-4 py-2.5 text-[13.5px] font-semibold shadow-lg text-white flex items-center gap-2',
+            'toast-in no-print fixed top-3 left-1/2 z-[60] max-w-[92%] w-max rounded-full px-4 py-2.5 text-[13.5px] font-semibold shadow-lg text-white flex items-center gap-2',
             toast.kind === 'ok' && 'bg-emerald-600',
             toast.kind === 'err' && 'bg-red-600',
             toast.kind === 'info' && 'bg-ink',
@@ -38,14 +38,14 @@ export function Layout({ children }: { children: ReactNode }) {
       )}
 
       {!online && (
-        <div className="sticky top-0 z-40 bg-amber-500 text-white text-center text-[12.5px] font-semibold py-1.5 px-3">
+        <div className="no-print sticky top-0 z-40 bg-amber-500 text-white text-center text-[12.5px] font-semibold py-1.5 px-3">
           Offline — changes will sync when you're back online
         </div>
       )}
 
       <div className="flex-1 pb-24">{children}</div>
 
-      <nav className="fixed bottom-0 inset-x-0 z-40">
+      <nav className="no-print fixed bottom-0 inset-x-0 z-40">
         <div className="app-shell-safe mx-auto max-w-[480px] bg-white/95 dark:bg-[#0e1823]/95 backdrop-blur border-t border-line dark:border-line-dark grid grid-cols-4 safe-b">
           {tabs.map(({ to, label, Icon }) => (
             <NavLink
