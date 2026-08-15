@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { motion } from 'motion/react'
 import { useApp } from '../state/AppContext'
 import { CLIENT_ID } from '../config'
 import { Button, Input, Field, Spinner } from '../components/ui'
@@ -36,7 +37,12 @@ export function Login() {
   return (
     <div className="min-h-screen flex flex-col bg-ink">
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-10">
-        <div className="w-full max-w-sm bg-white dark:bg-card-dark rounded-3xl shadow-2xl p-7 rise">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
+          className="w-full max-w-sm bg-white dark:bg-card-dark rounded-3xl shadow-2xl p-7"
+        >
           <div className="flex items-center gap-3 mb-6">
             <Logo />
             <div>
@@ -115,7 +121,7 @@ export function Login() {
               {error}
             </div>
           )}
-        </div>
+        </motion.div>
       </div>
 
       <div className="text-center text-white/40 text-[11px] pb-6 px-6">

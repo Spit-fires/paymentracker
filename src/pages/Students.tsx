@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { motion } from 'motion/react'
 import { useApp } from '../state/AppContext'
 import { studentPeriodPaidAny, studentBalanceFee } from '../lib/ledger'
 import { periodNow } from '../lib/format'
 import { K, getKV, setKV } from '../lib/db'
 import { Card, EmptyState, Modal, Button, useBlobUrl } from '../components/ui'
 import { StudentForm, type FormValue } from '../components/StudentForm'
+import { fadeUp } from '../components/anim'
 import {
   IconPlus,
   IconSearch,
@@ -255,41 +257,48 @@ export function Students() {
           </Card>
         ) : (
           <div className="space-y-2">
-            {filtered.map((s) => {
+            {filtered.map((s, i) => {
               const paid = studentPeriodPaidAny(payments, s.id, period)
               return (
-                <Link
+                <motion.div
                   key={s.id}
-                  to={mode === 'record' ? `/payment/${s.id}` : `/student/${s.id}`}
-                  className="block"
+                  variants={fadeUp}
+                  custom={i}
+                  initial="hidden"
+                  animate="show"
                 >
-                  <Card className="!rounded-xl p-3 flex items-center gap-3 active:scale-[0.99] transition">
-                    <StudentAvatar s={s} />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[14.5px] font-bold text-ink dark:text-white truncate flex items-center gap-2">
-                        {s.name}
-                        {s.archived && (
-                          <span className="text-[10px] font-semibold text-muted border border-line dark:border-line-dark rounded px-1">
-                            archived
-                          </span>
-                        )}
+                  <Link
+                    to={mode === 'record' ? `/payment/${s.id}` : `/student/${s.id}`}
+                    className="block"
+                  >
+                    <Card className="!rounded-xl p-3 flex items-center gap-3 active:scale-[0.99] transition">
+                      <StudentAvatar s={s} />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[14.5px] font-bold text-ink dark:text-white truncate flex items-center gap-2">
+                          {s.name}
+                          {s.archived && (
+                            <span className="text-[10px] font-semibold text-muted border border-line dark:border-line-dark rounded px-1">
+                              archived
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[12px] text-muted dark:text-muted-dark">
+                          {s.batch || 'No batch'}
+                        </div>
                       </div>
-                      <div className="text-[12px] text-muted dark:text-muted-dark">
-                        {s.batch || 'No batch'}
+                      <div
+                        className={`text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0 ${
+                          paid
+                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                            : 'bg-red-50 text-red-600 dark:bg-red-900/40 dark:text-red-300'
+                        }`}
+                      >
+                        {paid ? 'Paid' : 'Due'}
                       </div>
-                    </div>
-                    <div
-                      className={`text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0 ${
-                        paid
-                          ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-                          : 'bg-red-50 text-red-600 dark:bg-red-900/40 dark:text-red-300'
-                      }`}
-                    >
-                      {paid ? 'Paid' : 'Due'}
-                    </div>
-                    <IconArrow className="w-4 h-4 text-faint dark:text-[#5f7a92]" />
-                  </Card>
-                </Link>
+                      <IconArrow className="w-4 h-4 text-faint dark:text-[#5f7a92]" />
+                    </Card>
+                  </Link>
+                </motion.div>
               )
             })}
           </div>

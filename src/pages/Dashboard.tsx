@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { motion } from 'motion/react'
 import { useApp } from '../state/AppContext'
 import { balanceOf, duesForPeriod, monthTotals, type DuesRow } from '../lib/ledger'
 import { fmtTaka, periodNow, periodLabel } from '../lib/format'
 import { Card, EmptyState, Button } from '../components/ui'
 import { SyncIndicator } from '../components/Layout'
 import { ReauthBanner } from '../components/ReauthBanner'
+import { fadeUp, useCountUp } from '../components/anim'
 import { IconReceipt, IconPlus, IconSearch, IconCheck, IconArrow, IconCalendar, IconUsers } from '../components/Icons'
 
 function shiftPeriod(p: string, delta: number): string {
@@ -23,7 +25,8 @@ export function Dashboard() {
 
   const rows = useMemo(() => duesForPeriod(students, payments, period), [students, payments, period])
   const total = useMemo(() => monthTotals(payments, period), [payments, period])
-  const totalStr = fmtTaka(total)
+  const totalDisp = useCountUp(total)
+  const totalStr = fmtTaka(Math.round(totalDisp))
   const sizeFor = (s: string) =>
     s.length > 16 ? 'text-[11.5px]' : s.length > 11 ? 'text-[13.5px]' : 'text-[17px]'
 
@@ -40,7 +43,8 @@ export function Dashboard() {
     }
     return s
   }, [payments, period])
-  const recordedStr = fmtTaka(recordedTotal)
+  const recordedDisp = useCountUp(recordedTotal)
+  const recordedStr = fmtTaka(Math.round(recordedDisp))
   const billed = rows.filter((r) => r.fee > 0)
   const paidCount = billed.filter((r) => r.paidAny).length
   const dueCount = billed.length - paidCount
@@ -142,13 +146,13 @@ export function Dashboard() {
       <div className="grid grid-cols-2 gap-2.5 px-4 mt-4">
         <Card className="!rounded-2xl p-3.5">
           <div className="text-[11px] font-semibold text-muted dark:text-muted-dark">Collected this month</div>
-          <div className={`font-bold text-teal tabular-nums mt-1 leading-tight ${sizeFor(recordedStr)}`}>
+          <div className={`font-bold text-teal tabular-nums mt-1 leading-tight ${sizeFor(fmtTaka(recordedTotal))}`}>
             {recordedStr}
           </div>
         </Card>
         <Card className="!rounded-2xl p-3.5">
           <div className="text-[11px] font-semibold text-muted dark:text-muted-dark">Collected for this month</div>
-          <div className={`font-bold text-teal tabular-nums mt-1 leading-tight ${sizeFor(totalStr)}`}>
+          <div className={`font-bold text-teal tabular-nums mt-1 leading-tight ${sizeFor(fmtTaka(total))}`}>
             {totalStr}
           </div>
         </Card>
@@ -200,8 +204,9 @@ export function Dashboard() {
             )}
           </div>
           <div className="space-y-2">
-            {batches.map((b) => (
-              <Card key={b.batch} className="!rounded-xl p-3.5 flex items-center gap-3">
+            {batches.map((b, i) => (
+              <motion.div key={b.batch} variants={fadeUp} custom={i} initial="hidden" animate="show">
+                <Card className="!rounded-xl p-3.5 flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-[#e8f0f7] dark:bg-hover-dark grid place-items-center text-ink dark:text-accent-dark shrink-0">
                   <IconUsers className="w-5 h-5" />
                 </div>
@@ -223,6 +228,7 @@ export function Dashboard() {
                   )}
                 </div>
               </Card>
+              </motion.div>
             ))}
           </div>
         </div>
@@ -250,8 +256,9 @@ export function Dashboard() {
           </Card>
         ) : (
           <div className="space-y-2">
-            {unpaid.map((r) => (
-              <Card key={r.student.id} className="!rounded-xl p-3.5 flex items-center gap-3">
+            {unpaid.map((r, i) => (
+              <motion.div key={r.student.id} variants={fadeUp} custom={i} initial="hidden" animate="show">
+                <Card className="!rounded-xl p-3.5 flex items-center gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="text-[14.5px] font-bold text-ink dark:text-white truncate">
                     {r.student.name}
@@ -267,6 +274,7 @@ export function Dashboard() {
                   View <IconArrow className="w-3.5 h-3.5" />
                 </button>
               </Card>
+              </motion.div>
             ))}
           </div>
         )}

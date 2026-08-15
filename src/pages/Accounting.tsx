@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { motion, AnimatePresence } from 'motion/react'
 import { useApp } from '../state/AppContext'
 import { fmtTaka, fmtDate } from '../lib/format'
 import { getKV, setKV, K } from '../lib/db'
@@ -255,11 +256,29 @@ export function Accounting() {
       </div>
 
       {/* Postings */}
-      {tab === 'postings' && <PostingPanel />}
+      <AnimatePresence mode="wait" initial={false}>
+      {tab === 'postings' && (
+        <motion.div
+          key="postings"
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -4 }}
+          transition={{ duration: 0.15, ease: [0.25, 0.1, 0.25, 1] }}
+        >
+          <PostingPanel />
+        </motion.div>
+      )}
 
       {/* Ledger */}
       {tab === 'ledger' && (
-        <div className="px-4 mt-3">
+        <motion.div
+          key="ledger"
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -4 }}
+          transition={{ duration: 0.15, ease: [0.25, 0.1, 0.25, 1] }}
+        >
+          <div className="px-4 mt-3">
           {ledgerRows.length === 0 ? (
             <Card className="!rounded-2xl">
               <EmptyState
@@ -329,11 +348,19 @@ export function Accounting() {
             </Card>
           )}
         </div>
+        </motion.div>
       )}
 
       {/* Commissions */}
       {tab === 'commissions' && (
-        <div className="px-4 mt-3 space-y-3">
+        <motion.div
+          key="commissions"
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -4 }}
+          transition={{ duration: 0.15, ease: [0.25, 0.1, 0.25, 1] }}
+        >
+          <div className="px-4 mt-3 space-y-3">
           <Card className="!rounded-xl p-4 flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-teal/10 dark:bg-teal/20 grid place-items-center shrink-0">
               <IconUsers className="w-5 h-5 text-teal" />
@@ -400,7 +427,9 @@ export function Accounting() {
             </Card>
           )}
         </div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </div>
   )
 }

@@ -7,6 +7,8 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from 'react'
+import { motion, AnimatePresence } from 'motion/react'
+import { pressTap, pressSpring } from './anim'
 
 export function cx(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ')
@@ -27,7 +29,11 @@ export function useBlobUrl(blob?: Blob | null): string | null {
   return url
 }
 
-interface BtnProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface BtnProps
+  extends Omit<
+    ButtonHTMLAttributes<HTMLButtonElement>,
+    'onDrag' | 'onDragStart' | 'onDragEnd' | 'onAnimationStart' | 'onAnimationEnd'
+  > {
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'soft'
   full?: boolean
   size?: 'md' | 'lg' | 'sm'
@@ -35,7 +41,7 @@ interface BtnProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 export function Button({ variant = 'primary', full, size = 'md', className, ...rest }: BtnProps) {
   const base =
-    'inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none select-none'
+    'inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-colors disabled:opacity-40 disabled:pointer-events-none select-none'
   const sizes: Record<string, string> = {
     sm: 'text-[13.5px] px-3 py-2',
     md: 'text-[15px] px-4 py-2.5 min-h-[44px]',
@@ -51,7 +57,9 @@ export function Button({ variant = 'primary', full, size = 'md', className, ...r
     danger: 'bg-danger text-white hover:bg-red-700',
   }
   return (
-    <button
+    <motion.button
+      whileTap={pressTap}
+      transition={pressSpring}
       className={cx(base, sizes[size], variants[variant], full && 'w-full', className)}
       {...rest}
     />
@@ -206,29 +214,45 @@ export function Modal({
   children: ReactNode
   title?: string
 }) {
-  if (!open) return null
   return (
-    <div className="fixed inset-0 z-50 grid place-items-end sm:place-items-center">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={onClose} />
-      <div className="relative bg-white dark:bg-card-dark w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl p-5 pb-8 rise max-h-[88dvh] overflow-y-auto">
-        <div className="mx-auto w-10 h-1 rounded-full bg-line dark:bg-line-dark mb-4 sm:hidden" />
-        {title && (
-          <div className="flex items-center justify-between mb-4">
-            <div className="text-[16px] font-bold text-ink dark:text-white">{title}</div>
-            <button
-              onClick={onClose}
-              className="w-8 h-8 grid place-items-center rounded-full bg-black/5 dark:bg-white/10 text-muted dark:text-muted-dark"
-              aria-label="Close"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        )}
-        {children}
-      </div>
-    </div>
+    <AnimatePresence>
+      {open && (
+        <div className="fixed inset-0 z-50 grid place-items-end sm:place-items-center">
+          <motion.div
+            className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
+            onClick={onClose}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.16 }}
+          />
+          <motion.div
+            className="relative bg-white dark:bg-card-dark w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl p-5 pb-8 max-h-[88dvh] overflow-y-auto"
+            initial={{ opacity: 0, y: 48 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 48 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+          >
+            <div className="mx-auto w-10 h-1 rounded-full bg-line dark:bg-line-dark mb-4 sm:hidden" />
+            {title && (
+              <div className="flex items-center justify-between mb-4">
+                <div className="text-[16px] font-bold text-ink dark:text-white">{title}</div>
+                <button
+                  onClick={onClose}
+                  className="w-8 h-8 grid place-items-center rounded-full bg-black/5 dark:bg-white/10 text-muted dark:text-muted-dark"
+                  aria-label="Close"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            )}
+            {children}
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
   )
 }
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { motion } from 'motion/react'
 import { useApp } from '../state/AppContext'
 import { verifyPin } from '../lib/pin'
 import { getKV, K } from '../lib/db'
@@ -49,7 +50,12 @@ export function Lock() {
   const del = () => setPin((p) => p.slice(0, -1))
 
   return (
-    <div className="min-h-screen bg-ink flex flex-col items-center justify-center px-8">
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.28, ease: [0.25, 0.1, 0.25, 1] }}
+      className="min-h-screen bg-ink flex flex-col items-center justify-center px-8"
+    >
       <Logo size={64} className="mb-4" />
       <div className="text-white/90 text-[17px] font-semibold">Payment Tracker is locked</div>
       <div className="text-white/50 text-[12.5px] mt-1">Enter your PIN to continue</div>
@@ -70,6 +76,6 @@ export function Lock() {
           ),
         )}
       </div>
-    </div>
+    </motion.div>
   )
 }

@@ -1,4 +1,5 @@
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { motion, AnimatePresence } from 'motion/react'
 import { AppProvider, useApp } from './state/AppContext'
 import { Layout } from './components/Layout'
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -14,12 +15,19 @@ import { Settings } from './pages/Settings'
 import { Accounting } from './pages/Accounting'
 import { Spinner } from './components/ui'
 import { Logo } from './components/Logo'
+import { AppMotion, pageVariants } from './components/anim'
 
 function Splash() {
   return (
     <div className="min-h-screen bg-ink grid place-items-center">
       <div className="flex flex-col items-center gap-4">
-        <Logo size={64} />
+        <motion.div
+          initial={{ scale: 0.7, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 22 }}
+        >
+          <Logo size={64} />
+        </motion.div>
         <Spinner className="w-6 h-6 text-white/70" />
         <div className="text-[12px] text-white/50 tracking-wide">Payment Tracker</div>
       </div>
@@ -27,15 +35,18 @@ function Splash() {
   )
 }
 
-function Gate() {
-  const { initialized, user, locked } = useApp()
-  if (!initialized) return <Splash />
-  if (user && locked) return <Lock />
-  if (!user) return <Login />
+function AnimatedRoutes() {
+  const location = useLocation()
   return (
-    <ErrorBoundary>
-      <Layout>
-        <Routes>
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.div
+        key={location.pathname}
+        variants={pageVariants}
+        initial="initial"
+        animate="animate"
+        exit="exit"
+      >
+        <Routes location={location}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/students" element={<Students />} />
@@ -47,6 +58,20 @@ function Gate() {
           <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
+      </motion.div>
+    </AnimatePresence>
+  )
+}
+
+function Gate() {
+  const { initialized, user, locked } = useApp()
+  if (!initialized) return <Splash />
+  if (user && locked) return <Lock />
+  if (!user) return <Login />
+  return (
+    <ErrorBoundary>
+      <Layout>
+        <AnimatedRoutes />
       </Layout>
     </ErrorBoundary>
   )
@@ -55,9 +80,11 @@ function Gate() {
 export default function App() {
   return (
     <AppProvider>
-      <HashRouter>
-        <Gate />
-      </HashRouter>
+      <AppMotion>
+        <HashRouter>
+          <Gate />
+        </HashRouter>
+      </AppMotion>
     </AppProvider>
   )
 }
