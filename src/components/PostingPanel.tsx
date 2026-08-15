@@ -136,7 +136,7 @@ export function PostingPanel() {
       ) : (
         <Card className="!rounded-xl overflow-hidden">
           <div className="grid grid-cols-[1fr_auto_auto_1fr] gap-x-2 px-3 py-2.5 text-[11px] font-bold uppercase tracking-wider text-faint border-b border-line dark:border-line-dark">
-            <div>Date</div>
+            <div>Date Received</div>
             <div className="text-right w-[72px]">Ledger</div>
             <div className="text-right w-[80px]">Received</div>
             <div className="text-right">Received By</div>
@@ -149,7 +149,7 @@ export function PostingPanel() {
                 className="w-full text-left grid grid-cols-[1fr_auto_auto_1fr] gap-x-2 px-3 py-2.5 border-b border-line/60 dark:border-line-dark/60 last:border-0 hover:bg-cream dark:hover:bg-input-dark transition"
               >
                 <div className="min-w-0">
-                  <div className="text-[13px] font-semibold text-ink dark:text-white truncate">
+                  <div className="text-[13px] font-semibold text-ink dark:text-white">
                     {fmtDate(posting.date)}
                   </div>
                 </div>
@@ -165,14 +165,17 @@ export function PostingPanel() {
                   {fmtTaka(posting.amount)}
                 </div>
                 <div className="text-right min-w-0">
-                  <span className="block text-[12.5px] font-semibold text-ink dark:text-white truncate">
+                  <span className="block text-[12.5px] font-semibold text-ink dark:text-white">
                     {posting.receivedBy?.name || 'None'}
                   </span>
                 </div>
               </button>
             ))}
           </div>
-          <div className="px-3 py-2.5 bg-cream dark:bg-input-dark border-t border-line dark:border-line-dark flex justify-end">
+          <div className="px-3 py-2.5 bg-cream dark:bg-input-dark border-t border-line dark:border-line-dark flex items-center justify-between gap-3">
+            <div className="text-[12px] font-semibold text-muted dark:text-muted-dark">
+              Ready for Posting
+            </div>
             <div
               className={cx(
                 'text-[15px] font-bold tabular-nums',
@@ -202,7 +205,7 @@ export function PostingPanel() {
               autoFocus
             />
           </Field>
-          <Field label="Date">
+          <Field label="Date Received">
             <Input
               type="date"
               value={draft.date}
