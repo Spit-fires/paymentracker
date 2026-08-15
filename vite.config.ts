@@ -10,7 +10,7 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'logo.png', 'paid.png', 'icons/pwa-192.png', 'icons/pwa-512.png', 'icons/maskable-512.png'],
+      includeAssets: ['favicon.svg', 'logo.png', 'paid.png', 'icons/pwa-192.png', 'icons/pwa-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png'],
       workbox: {
         // html-to-image fetches receipt images with cache-busting query params;
         // serve precached logo/paid assets for ANY query string so captures
