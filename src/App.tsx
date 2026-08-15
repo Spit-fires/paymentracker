@@ -13,14 +13,13 @@ import { ReceiptLookup } from './pages/ReceiptLookup'
 import { Settings } from './pages/Settings'
 import { Accounting } from './pages/Accounting'
 import { Spinner } from './components/ui'
+import { Logo } from './components/Logo'
 
 function Splash() {
   return (
     <div className="min-h-screen bg-ink grid place-items-center">
       <div className="flex flex-col items-center gap-4">
-        <div className="w-16 h-16 rounded-2xl bg-white/10 grid place-items-center text-[38px] font-bold text-white">
-          ৳
-        </div>
+        <Logo size={64} />
         <Spinner className="w-6 h-6 text-white/70" />
         <div className="text-[12px] text-white/50 tracking-wide">Payment Tracker</div>
       </div>

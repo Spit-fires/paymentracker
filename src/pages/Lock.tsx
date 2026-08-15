@@ -3,6 +3,7 @@ import { useApp } from '../state/AppContext'
 import { verifyPin } from '../lib/pin'
 import { getKV, K } from '../lib/db'
 import type { Session } from '../types'
+import { Logo } from '../components/Logo'
 
 function PinDots({ len }: { len: number }) {
   return (
@@ -49,9 +50,7 @@ export function Lock() {
 
   return (
     <div className="min-h-screen bg-ink flex flex-col items-center justify-center px-8">
-      <div className="w-16 h-16 rounded-2xl bg-white/10 grid place-items-center text-white text-[30px] font-bold mb-4">
-        ৳
-      </div>
+      <Logo size={64} className="mb-4" />
       <div className="text-white/90 text-[17px] font-semibold">Payment Tracker is locked</div>
       <div className="text-white/50 text-[12.5px] mt-1">Enter your PIN to continue</div>
       <PinDots len={pin.length} />

@@ -3,17 +3,7 @@ import { useApp } from '../state/AppContext'
 import { CLIENT_ID } from '../config'
 import { Button, Input, Field, Spinner } from '../components/ui'
 import { IconGoogle } from '../components/Icons'
-
-function Logo({ size = 56 }: { size?: number }) {
-  return (
-    <div
-      className="rounded-2xl grid place-items-center text-white font-bold bg-gradient-to-br from-ink to-ink-soft shadow-lg shadow-ink/30"
-      style={{ width: size, height: size, fontSize: size * 0.5 }}
-    >
-      ৳
-    </div>
-  )
-}
+import { Logo } from '../components/Logo'
 
 export function Login() {
   const { clientId, saveClientId, login } = useApp()
