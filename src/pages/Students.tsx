@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useApp } from '../state/AppContext'
-import { studentPeriodPaidAny } from '../lib/ledger'
+import { studentPeriodPaidAny, studentBalanceFee } from '../lib/ledger'
 import { periodNow } from '../lib/format'
 import { K, getKV, setKV } from '../lib/db'
 import { Card, EmptyState, Modal, Button, useBlobUrl } from '../components/ui'
@@ -45,6 +45,7 @@ export function Students() {
   const [sort, setSort] = useState<SortKey>('name')
   const [sortOpen, setSortOpen] = useState(false)
   const [batchFilter, setBatchFilter] = useState(batchParam)
+  const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'due'>('all')
 
   // restore the last-used batch filter when arriving here without a ?batch=
   // param (e.g. returning after recording a payment), and remember it for next time
@@ -91,6 +92,11 @@ export function Students() {
   const filtered = useMemo(() => {
     let list = students.filter((s) => (showArchived ? true : !s.archived))
     if (batchFilter) list = list.filter((s) => s.batch === batchFilter)
+    if (statusFilter === 'paid') {
+      list = list.filter((s) => studentPeriodPaidAny(payments, s.id, period))
+    } else if (statusFilter === 'due') {
+      list = list.filter((s) => !studentPeriodPaidAny(payments, s.id, period) && studentBalanceFee(s) > 0)
+    }
     if (q.trim()) {
       const t = q.trim().toLowerCase()
       list = list.filter(
@@ -102,7 +108,7 @@ export function Students() {
     else if (sort === 'batch') sorted.sort((a, b) => a.batch.localeCompare(b.batch) || a.name.localeCompare(b.name))
     else sorted.sort((a, b) => b.createdAt - a.createdAt)
     return sorted
-  }, [students, q, batchFilter, sort, showArchived])
+  }, [students, q, batchFilter, sort, showArchived, statusFilter, payments, period])
 
   const onAdd = async (v: FormValue) => {
     if (!online) return showToast('You need to be online to add students', 'err')
@@ -161,7 +167,22 @@ export function Students() {
         </div>
 
         {/* Toolbar */}
-        <div className="flex items-center gap-2 mt-3">
+        <div className="flex flex-wrap items-center gap-2 mt-3">
+          <div className="flex items-center rounded-lg border border-line dark:border-line-dark bg-white dark:bg-card-dark p-0.5">
+            {(['all', 'paid', 'due'] as const).map((k) => (
+              <button
+                key={k}
+                onClick={() => setStatusFilter(k)}
+                className={`rounded-md px-2.5 py-1.5 text-[12.5px] font-semibold transition ${
+                  statusFilter === k
+                    ? 'bg-ink text-white'
+                    : 'text-body/70 dark:text-muted-dark'
+                }`}
+              >
+                {k === 'all' ? 'All' : k === 'paid' ? 'Paid' : 'Due'}
+              </button>
+            ))}
+          </div>
           <button
             onClick={() => setSortOpen(true)}
             className="rounded-lg border border-line dark:border-line-dark bg-white dark:bg-card-dark px-3 py-2 text-[13px] font-semibold text-ink dark:text-white active:scale-95 transition"
