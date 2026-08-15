@@ -57,6 +57,22 @@ export interface Payment {
   deletedAt?: number
 }
 
+/** Cash handover ("posting"): accumulated cash given to an authorized person
+ *  (e.g. Hasan sir). The posting ledger is ALL-TIME — collected minus posted
+ *  never resets. */
+export interface Posting {
+  id: string
+  /** cash handed over (৳) */
+  amount: number
+  /** who took the cash — teachers dropdown, optional ("None"), editable later */
+  receivedBy?: ReceivedBy
+  /** handover date, epoch ms */
+  date: number
+  updatedAt: number
+  /** tombstone — set (instead of removing) when deleted; syncs deletes across devices */
+  deletedAt?: number
+}
+
 export interface Center {
   name: string
   tagline: string
@@ -93,7 +109,7 @@ export interface DriveRefs {
   studentsFolderId?: string
   /** Google account that owns this folder — refs are only trusted for that account. */
   ownerEmail?: string
-  fileIds: { students?: string; payments?: string; meta?: string }
+  fileIds: { students?: string; payments?: string; meta?: string; postings?: string }
   /** modifiedTime of each JSON file at last sync — lets pull() skip downloads */
   stamps?: Record<string, string>
 }
@@ -111,11 +127,11 @@ export interface Session {
   theme: 'light' | 'dark'
   lastPulledAt: number
   /** per-file: timestamp of the last snapshot each JSON file was fully processed from */
-  pulledAt?: Partial<Record<'students' | 'payments' | 'meta', number>>
+  pulledAt?: Partial<Record<'students' | 'payments' | 'meta' | 'postings', number>>
 }
 
 export type OutboxOp =
-  | { kind: 'pushJSON'; file: 'students' | 'payments' | 'meta' }
+  | { kind: 'pushJSON'; file: 'students' | 'payments' | 'meta' | 'postings' }
   | {
       kind: 'uploadMedia'
       type: 'photo' | 'receipt'

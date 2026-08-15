@@ -11,6 +11,7 @@ import {
 import type {
   Student,
   Payment,
+  Posting,
   Center,
   Session,
   SessionUser,
@@ -77,6 +78,7 @@ interface Ctx {
   reauthError: string | null
   students: Student[]
   payments: Payment[]
+  postings: Posting[]
   teachers: Teacher[]
   center: Center
   receiptSeq: number
@@ -97,6 +99,10 @@ interface Ctx {
   addPayment: (input: NewPaymentInput) => Promise<Payment>
   updatePayment: (id: string, patch: Partial<Payment>) => Promise<void>
   deletePayment: (id: string) => Promise<void>
+
+  addPosting: (input: { amount: number; receivedBy?: ReceivedBy; date: number }) => Promise<Posting>
+  updatePosting: (id: string, patch: Partial<Posting>) => Promise<void>
+  deletePosting: (id: string) => Promise<void>
 
   updateCenter: (c: Center) => Promise<void>
 
@@ -129,6 +135,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [reauthError, setReauthError] = useState<string | null>(null)
   const [students, setStudents] = useState<Student[]>([])
   const [payments, setPayments] = useState<Payment[]>([])
+  const [postings, setPostings] = useState<Posting[]>([])
   const [teachers, setTeachers] = useState<Teacher[]>([])
   const [center, setCenter] = useState<Center>(defaultCenter())
   const [receiptSeq, setReceiptSeq] = useState(0)
@@ -146,6 +153,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const refreshData = useCallback(async () => {
     setStudents((await db.students.toArray()).filter((s) => !s.deletedAt))
     setPayments((await db.payments.toArray()).filter((p) => !p.deletedAt))
+    setPostings((await db.postings.toArray()).filter((p) => !p.deletedAt))
     setCenter((await getKV<Center>(K.CENTER)) || defaultCenter())
     setTeachers(((await getKV<Teacher[]>(K.TEACHERS)) || []).filter((t) => !t.deletedAt))
     setReceiptSeq((await getKV<number>(K.RECEIPT_SEQ)) || 0)
@@ -596,6 +604,49 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [refreshData, scheduleSync],
   )
 
+  const addPosting = useCallback(
+    async (input: { amount: number; receivedBy?: ReceivedBy; date: number }): Promise<Posting> => {
+      const now = Date.now()
+      const p: Posting = {
+        id: newId(),
+        amount: input.amount,
+        receivedBy: input.receivedBy,
+        date: input.date,
+        updatedAt: now,
+      }
+      await db.postings.add(p)
+      await queueOp({ kind: 'pushJSON', file: 'postings' })
+      await refreshData()
+      scheduleSync()
+      return p
+    },
+    [refreshData, scheduleSync],
+  )
+
+  const updatePosting = useCallback(
+    async (id: string, patch: Partial<Posting>) => {
+      const cur = await db.postings.get(id)
+      if (!cur) return
+      await db.postings.put({ ...cur, ...patch, updatedAt: Date.now() })
+      await queueOp({ kind: 'pushJSON', file: 'postings' })
+      await refreshData()
+      scheduleSync()
+    },
+    [refreshData, scheduleSync],
+  )
+
+  const deletePosting = useCallback(
+    async (id: string) => {
+      const cur = await db.postings.get(id)
+      if (!cur) return
+      await db.postings.put({ ...cur, deletedAt: Date.now(), updatedAt: Date.now() })
+      await queueOp({ kind: 'pushJSON', file: 'postings' })
+      await refreshData()
+      scheduleSync()
+    },
+    [refreshData, scheduleSync],
+  )
+
   const updateCenter = useCallback(
     async (c: Center) => {
       await setKV(K.CENTER, c)
@@ -635,6 +686,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       reauthError,
       students,
       payments,
+      postings,
       teachers,
       center,
       receiptSeq,
@@ -652,6 +704,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addPayment,
       updatePayment,
       deletePayment,
+      addPosting,
+      updatePosting,
+      deletePosting,
       updateCenter,
       setTheme,
       setPin,
@@ -671,6 +726,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       reauthError,
       students,
       payments,
+      postings,
       teachers,
       center,
       receiptSeq,
@@ -688,6 +744,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addPayment,
       updatePayment,
       deletePayment,
+      addPosting,
+      updatePosting,
+      deletePosting,
       updateCenter,
       setTheme,
       setPin,

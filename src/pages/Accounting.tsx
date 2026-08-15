@@ -4,10 +4,11 @@ import { useApp } from '../state/AppContext'
 import { fmtTaka, fmtDate } from '../lib/format'
 import { getKV, setKV, K } from '../lib/db'
 import { Card, PageHeader, EmptyState, cx } from '../components/ui'
+import { PostingPanel } from '../components/PostingPanel'
 import { IconBook, IconSearch, IconUsers } from '../components/Icons'
 import type { Payment } from '../types'
 
-type Tab = 'ledger' | 'commissions'
+type Tab = 'ledger' | 'commissions' | 'postings'
 
 interface AcctFilters {
   batch: string
@@ -21,7 +22,12 @@ const num = (v?: number) => (typeof v === 'number' && isFinite(v) ? v : 0)
 export function Accounting() {
   const { payments, students, teachers, center } = useApp()
   const [params, setParams] = useSearchParams()
-  const tab = (params.get('tab') === 'commissions' ? 'commissions' : 'ledger') as Tab
+  const tab =
+    params.get('tab') === 'commissions'
+      ? 'commissions'
+      : params.get('tab') === 'postings'
+        ? 'postings'
+        : 'ledger'
 
   const [q, setQ] = useState('')
   const [batch, setBatch] = useState('')
@@ -128,11 +134,12 @@ export function Accounting() {
 
       <div className="px-4">
         {/* Sub-navigation */}
-        <div className="grid grid-cols-2 gap-1.5 p-1 rounded-2xl bg-[#eef2f6] dark:bg-input-dark">
+        <div className="grid grid-cols-3 gap-1.5 p-1 rounded-2xl bg-[#eef2f6] dark:bg-input-dark">
           {(
             [
               ['ledger', 'Ledger'],
               ['commissions', 'Commissions'],
+              ['postings', 'Posting'],
             ] as Array<[Tab, string]>
           ).map(([t, label]) => (
             <button
@@ -150,7 +157,8 @@ export function Accounting() {
           ))}
         </div>
 
-        {/* Filters */}
+        {/* Filters — ledger/commissions only; the posting ledger has its own view */}
+        {tab !== 'postings' && (
         <div className="mt-3 space-y-2.5">
           <div className="relative">
             <IconSearch className="w-[18px] h-[18px] absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />
@@ -243,7 +251,11 @@ export function Accounting() {
             </label>
           </div>
         </div>
+        )}
       </div>
+
+      {/* Postings */}
+      {tab === 'postings' && <PostingPanel />}
 
       {/* Ledger */}
       {tab === 'ledger' && (

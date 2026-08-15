@@ -1,4 +1,4 @@
-import type { Student, Payment } from '../types'
+import type { Student, Payment, Posting } from '../types'
 
 export function studentPeriodPaid(payments: Payment[], studentId: string, period: string): number {
   return payments
@@ -110,6 +110,36 @@ export function monthTotals(payments: Payment[], period: string): number {
 
 export function totalAllTime(payments: Payment[]): number {
   return payments.reduce((s, p) => s + balanceOf(p), 0)
+}
+
+/** Cash handed over ("posted") so far — sum of all ACTIVE postings
+ *  (the caller must pass postings already filtered for tombstones). */
+export function postingTotal(postings: Posting[]): number {
+  return postings.reduce((s, p) => s + p.amount, 0)
+}
+
+/** Cash still in hand, ready to hand over: all-time collected (balance of
+ *  every receipt) minus everything already posted. All-time, never resets. */
+export function readyToPost(payments: Payment[], postings: Posting[]): number {
+  return totalAllTime(payments) - postingTotal(postings)
+}
+
+export interface PostingRow {
+  posting: Posting
+  /** running Ladger — collected minus postings up to and including this row */
+  balanceAfter: number
+}
+
+/** Ledger rows oldest → newest, each carrying the running balance after it.
+ *  The last row's balanceAfter equals readyToPost. */
+export function postingLedger(payments: Payment[], postings: Posting[]): PostingRow[] {
+  const collected = totalAllTime(payments)
+  const sorted = [...postings].sort((a, b) => a.date - b.date || a.id.localeCompare(b.id))
+  let running = collected
+  return sorted.map((posting) => {
+    running -= posting.amount
+    return { posting, balanceAfter: running }
+  })
 }
 
 export function paymentModes(payments: Payment[]): Record<string, number> {

@@ -49,6 +49,7 @@ export function Settings() {
     clearPin,
     students,
     payments,
+    postings,
     showToast,
     needsReauth,
     teachers,
@@ -116,6 +117,7 @@ export function Settings() {
       driveRefs,
       students: students.map(({ photoBlob: _pb, ...rest }) => rest),
       payments: payments.map(({ pngBlob: _pb, ...rest }) => rest),
+      postings,
     }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -139,6 +141,15 @@ export function Settings() {
         await db.students.bulkPut(j.students)
         await db.payments.bulkPut(j.payments)
       })
+      // postings only when the backup carries them — restoring a pre-posting
+      // backup must never wipe the live cash-handover ledger
+      if (Array.isArray(j.postings)) {
+        await db.transaction('rw', db.postings, async () => {
+          await db.postings.clear()
+          await db.postings.bulkPut(j.postings)
+        })
+        await queueOp({ kind: 'pushJSON', file: 'postings' })
+      }
       if (j.center) await setKV(K.CENTER, j.center)
       await setKV(K.RECEIPT_SEQ, j.receiptSeq || 0)
       if (j.driveRefs) await setKV(K.DRIVE, j.driveRefs)
@@ -155,7 +166,7 @@ export function Settings() {
 
   const exportSheet = async () => {
     try {
-      const link = await exportToSheet(students, payments, center)
+      const link = await exportToSheet(students, payments, postings, center)
       showToast('Google Sheet created', 'ok')
       openExternal(link)
     } catch (e) {

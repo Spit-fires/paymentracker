@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie'
-import type { Student, Payment, OutboxEntry, OutboxOp } from '../types'
+import type { Student, Payment, Posting, OutboxEntry, OutboxOp } from '../types'
 
 export const K = {
   CENTER: 'center',
@@ -55,6 +55,7 @@ export async function setKV(key: string, value: unknown): Promise<void> {
 class PTDatabase extends Dexie {
   students!: Table<Student, string>
   payments!: Table<Payment, string>
+  postings!: Table<Posting, string>
   outbox!: Table<OutboxEntry, number>
 
   constructor() {
@@ -62,6 +63,14 @@ class PTDatabase extends Dexie {
     this.version(1).stores({
       students: 'id, batch, archived',
       payments: 'id, studentId, receiptNo, period',
+      outbox: '++id, at',
+    })
+    // v2 adds the postings table (cash handover ledger). The v1 schema is
+    // kept verbatim above — Dexie upgrades existing installs to v2 in place.
+    this.version(2).stores({
+      students: 'id, batch, archived',
+      payments: 'id, studentId, receiptNo, period',
+      postings: 'id',
       outbox: '++id, at',
     })
   }
@@ -75,6 +84,10 @@ export async function getStudents(): Promise<Student[]> {
 
 export async function getPayments(): Promise<Payment[]> {
   return db.payments.toArray()
+}
+
+export async function getPostings(): Promise<Posting[]> {
+  return db.postings.toArray()
 }
 
 export async function queueOp(op: OutboxOp): Promise<void> {
