@@ -172,6 +172,16 @@ export function PostingPanel() {
               </button>
             ))}
           </div>
+          <div className="px-3 py-2.5 bg-cream dark:bg-input-dark border-t border-line dark:border-line-dark flex justify-end">
+            <div
+              className={cx(
+                'text-[15px] font-bold tabular-nums',
+                ready < 0 ? 'text-danger' : 'text-teal dark:text-teal-bright',
+              )}
+            >
+              {fmtTaka(ready)}
+            </div>
+          </div>
         </Card>
       )}
 
