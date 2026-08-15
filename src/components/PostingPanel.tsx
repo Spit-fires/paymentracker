@@ -114,7 +114,7 @@ export function PostingPanel() {
           </div>
           <div className="text-right shrink-0">
             <div className="text-[11px] uppercase tracking-wider text-faint">Posted</div>
-            <div className="text-[16px] font-bold text-muted dark:text-muted-dark tabular-nums">
+            <div className="text-[24px] font-bold text-danger tabular-nums leading-tight">
               {fmtTaka(posted)}
             </div>
           </div>
@@ -152,7 +152,7 @@ export function PostingPanel() {
                     {fmtDate(posting.date)}
                   </div>
                 </div>
-                <div className="text-right w-[80px] text-[12.5px] font-bold text-ink dark:text-white tabular-nums pt-0.5">
+                <div className="text-right w-[80px] text-[12.5px] font-bold text-danger tabular-nums pt-0.5">
                   {fmtTaka(posting.amount)}
                 </div>
                 <div className="text-right min-w-0">
