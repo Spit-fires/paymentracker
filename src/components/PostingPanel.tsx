@@ -135,18 +135,17 @@ export function PostingPanel() {
         </Card>
       ) : (
         <Card className="!rounded-xl overflow-hidden">
-          <div className="grid grid-cols-[1fr_auto_auto_1fr] gap-x-2 px-3 py-2.5 text-[11px] font-bold uppercase tracking-wider text-faint border-b border-line dark:border-line-dark">
+          <div className="grid grid-cols-[1fr_auto_1fr] gap-x-2 px-3 py-2.5 text-[11px] font-bold uppercase tracking-wider text-faint border-b border-line dark:border-line-dark">
             <div>Date Received</div>
             <div className="text-right w-[80px]">Received Amount</div>
-            <div className="text-right w-[72px]">Balance</div>
             <div className="text-right">Received By</div>
           </div>
           <div className="max-h-[46dvh] overflow-y-auto">
-            {rows.map(({ posting, ledger }) => (
+            {rows.map(({ posting }) => (
               <button
                 key={posting.id}
                 onClick={() => openEdit(posting)}
-                className="w-full text-left grid grid-cols-[1fr_auto_auto_1fr] gap-x-2 px-3 py-2.5 border-b border-line/60 dark:border-line-dark/60 last:border-0 hover:bg-cream dark:hover:bg-input-dark transition"
+                className="w-full text-left grid grid-cols-[1fr_auto_1fr] gap-x-2 px-3 py-2.5 border-b border-line/60 dark:border-line-dark/60 last:border-0 hover:bg-cream dark:hover:bg-input-dark transition"
               >
                 <div className="min-w-0">
                   <div className="text-[13px] font-semibold text-ink dark:text-white">
@@ -155,14 +154,6 @@ export function PostingPanel() {
                 </div>
                 <div className="text-right w-[80px] text-[12.5px] font-bold text-ink dark:text-white tabular-nums pt-0.5">
                   {fmtTaka(posting.amount)}
-                </div>
-                <div
-                  className={cx(
-                    'text-right w-[72px] text-[12.5px] font-bold tabular-nums pt-0.5',
-                    ledger < 0 ? 'text-danger' : 'text-teal dark:text-teal-bright',
-                  )}
-                >
-                  {fmtTaka(ledger)}
                 </div>
                 <div className="text-right min-w-0">
                   <span className="block text-[12.5px] font-semibold text-ink dark:text-white">

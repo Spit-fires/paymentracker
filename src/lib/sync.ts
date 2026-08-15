@@ -150,13 +150,12 @@ export async function exportToSheet(
       p.receivedBy?.name || '',
     ]),
   ])
-  // Posting ledger - running balance like the in-app ledger
+  // Posting ledger - handovers with the running in-hand balance kept in-app
   await client().sheetValues(id, 'Posting!A1', [
-    ['Date Received', 'Received Amount', 'Balance', 'Received By'],
+    ['Date Received', 'Received Amount', 'Received By'],
     ...postingLedger(payments, postings).map((r) => [
       fmtDate(r.posting.date),
       r.posting.amount,
-      r.ledger,
       r.posting.receivedBy?.name || '',
     ]),
   ])
