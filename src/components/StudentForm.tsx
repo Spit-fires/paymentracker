@@ -18,7 +18,7 @@ export function initialForm(s?: Student): FormValue {
   return {
     name: s?.name || '',
     phone: s?.phone ?? '+880',
-    phone2: s?.phone2 || '',
+    phone2: s?.phone2 ?? '+880',
     batch: s?.batch || '',
     defaultFee: s?.defaultFee ? String(s.defaultFee) : '',
     realPayment: s?.realPayment ? String(s.realPayment) : '',
@@ -68,6 +68,12 @@ export function StudentForm({
     setPreview(previewUrl.current)
   }
 
+  // strip a bare "+880" prefix the teacher left untouched - never save it
+  const clean = (v: string) => {
+    const digits = v.replace(/\D/g, '')
+    return digits === '' || digits === '880' ? '' : v
+  }
+
   const submit = () => {
     if (!f.name.trim()) return setErr('Student name is required')
     const fee = f.defaultFee.trim() ? Number(f.defaultFee) : 0
@@ -79,7 +85,7 @@ export function StudentForm({
       return setErr('Commission must be a number')
     }
     setErr('')
-    onSubmit(f)
+    onSubmit({ ...f, phone: clean(f.phone), phone2: clean(f.phone2) })
   }
 
   return (
