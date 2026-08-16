@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { motion } from 'motion/react'
 import { useApp } from '../state/AppContext'
-import { studentPeriodPaidAny, studentBalanceFee } from '../lib/ledger'
+import { studentPeriodPaidAny, studentPeriodBalance, studentBalanceFee } from '../lib/ledger'
 import { periodNow } from '../lib/format'
 import { K, getKV, setKV } from '../lib/db'
 import { Card, EmptyState, Modal, Button, useBlobUrl } from '../components/ui'
 import { StudentForm, type FormValue } from '../components/StudentForm'
 import { fadeUp } from '../components/anim'
+import type { Student } from '../types'
 import {
   IconPlus,
   IconSearch,
@@ -95,9 +96,19 @@ export function Students() {
     let list = students.filter((s) => (showArchived ? true : !s.archived))
     if (batchFilter) list = list.filter((s) => s.batch === batchFilter)
     if (statusFilter === 'paid') {
-      list = list.filter((s) => studentPeriodPaidAny(payments, s.id, period))
+      list = list.filter((s) => {
+        const paid = studentPeriodBalance(payments, s.id, period)
+        const fee = studentBalanceFee(s)
+        // fully paid: paid something this month and nothing left owing
+        return studentPeriodPaidAny(payments, s.id, period) && Math.max(0, fee - paid) === 0
+      })
     } else if (statusFilter === 'due') {
-      list = list.filter((s) => !studentPeriodPaidAny(payments, s.id, period) && studentBalanceFee(s) > 0)
+      list = list.filter((s) => {
+        const paid = studentPeriodBalance(payments, s.id, period)
+        const fee = studentBalanceFee(s)
+        // owes anything this month - includes partially paid students
+        return Math.max(0, fee - paid) > 0
+      })
     }
     if (q.trim()) {
       const t = q.trim().toLowerCase()
@@ -111,6 +122,77 @@ export function Students() {
     else sorted.sort((a, b) => b.createdAt - a.createdAt)
     return sorted
   }, [students, q, batchFilter, sort, showArchived, statusFilter, payments, period])
+
+  /** Payment status for this month: fully paid / partially paid / nothing paid. */
+  const statusOf = (s: Student): 'paid' | 'partial' | 'due' => {
+    const paid = studentPeriodBalance(payments, s.id, period)
+    const due = Math.max(0, studentBalanceFee(s) - paid)
+    if (!studentPeriodPaidAny(payments, s.id, period)) return 'due'
+    return due > 0 ? 'partial' : 'paid'
+  }
+
+  // when the batch filter is All, chunk the sorted list into batch sections so
+  // students never appear in a random flat order
+  const groups = useMemo(() => {
+    if (batchFilter) return null
+    const m = new Map<string, Student[]>()
+    for (const s of filtered) {
+      const b = s.batch || 'No batch'
+      const arr = m.get(b)
+      if (arr) arr.push(s)
+      else m.set(b, [s])
+    }
+    return [...m.entries()].sort((a, b) => {
+      if (a[0] === 'No batch') return 1
+      if (b[0] === 'No batch') return -1
+      return a[0] < b[0] ? -1 : 1
+    })
+  }, [filtered, batchFilter])
+
+  const CHIP: Record<'paid' | 'partial' | 'due', string> = {
+    paid: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+    partial: 'bg-amber-50 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+    due: 'bg-red-50 text-red-600 dark:bg-red-900/40 dark:text-red-300',
+  }
+
+  const renderRow = (s: Student, i: number) => {
+    const st = statusOf(s)
+    return (
+      <motion.div
+        key={s.id}
+        variants={fadeUp}
+        custom={i}
+        initial="hidden"
+        animate="show"
+      >
+        <Link
+          to={mode === 'record' ? `/payment/${s.id}` : `/student/${s.id}`}
+          className="block"
+        >
+          <Card className="!rounded-xl p-3 flex items-center gap-3 active:scale-[0.99] transition">
+            <StudentAvatar s={s} />
+            <div className="flex-1 min-w-0">
+              <div className="text-[14.5px] font-bold text-ink dark:text-white truncate flex items-center gap-2">
+                {s.name}
+                {s.archived && (
+                  <span className="text-[10px] font-semibold text-muted border border-line dark:border-line-dark rounded px-1">
+                    archived
+                  </span>
+                )}
+              </div>
+              <div className="text-[12px] text-muted dark:text-muted-dark">
+                {s.batch || 'No batch'}
+              </div>
+            </div>
+            <div className={`text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0 ${CHIP[st]}`}>
+              {st === 'paid' ? 'Paid' : st === 'partial' ? 'Partially paid' : 'Due'}
+            </div>
+            <IconArrow className="w-4 h-4 text-faint dark:text-[#5f7a92]" />
+          </Card>
+        </Link>
+      </motion.div>
+    )
+  }
 
   const onAdd = async (v: FormValue) => {
     if (!online) return showToast('You need to be online to add students', 'err')
@@ -256,51 +338,19 @@ export function Students() {
             />
           </Card>
         ) : (
-          <div className="space-y-2">
-            {filtered.map((s, i) => {
-              const paid = studentPeriodPaidAny(payments, s.id, period)
-              return (
-                <motion.div
-                  key={s.id}
-                  variants={fadeUp}
-                  custom={i}
-                  initial="hidden"
-                  animate="show"
-                >
-                  <Link
-                    to={mode === 'record' ? `/payment/${s.id}` : `/student/${s.id}`}
-                    className="block"
-                  >
-                    <Card className="!rounded-xl p-3 flex items-center gap-3 active:scale-[0.99] transition">
-                      <StudentAvatar s={s} />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[14.5px] font-bold text-ink dark:text-white truncate flex items-center gap-2">
-                          {s.name}
-                          {s.archived && (
-                            <span className="text-[10px] font-semibold text-muted border border-line dark:border-line-dark rounded px-1">
-                              archived
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-[12px] text-muted dark:text-muted-dark">
-                          {s.batch || 'No batch'}
-                        </div>
-                      </div>
-                      <div
-                        className={`text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0 ${
-                          paid
-                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-                            : 'bg-red-50 text-red-600 dark:bg-red-900/40 dark:text-red-300'
-                        }`}
-                      >
-                        {paid ? 'Paid' : 'Due'}
-                      </div>
-                      <IconArrow className="w-4 h-4 text-faint dark:text-[#5f7a92]" />
-                    </Card>
-                  </Link>
-                </motion.div>
-              )
-            })}
+          <div className="space-y-4">
+            {groups ? (
+              groups.map(([batch, list]) => (
+                <div key={batch}>
+                  <div className="text-[11.5px] font-bold uppercase tracking-[0.14em] text-muted dark:text-muted-dark px-1 pt-1 pb-2">
+                    {batch} · {list.length}
+                  </div>
+                  <div className="space-y-2">{list.map((s, i) => renderRow(s, i))}</div>
+                </div>
+              ))
+            ) : (
+              <div className="space-y-2">{filtered.map((s, i) => renderRow(s, i))}</div>
+            )}
           </div>
         )}
       </div>

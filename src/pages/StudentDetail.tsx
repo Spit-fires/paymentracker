@@ -150,6 +150,7 @@ export function StudentDetail() {
   }
 
   const allPaid = due === 0 && (fee > 0 || paidAny)
+  const partial = paidAny && due > 0
 
   return (
     <div>
@@ -203,12 +204,14 @@ export function StudentDetail() {
             </div>
             <div
               className={`text-[13px] font-bold px-2.5 py-1 rounded-full ${
-                allPaid
-                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-                  : 'bg-red-50 text-red-600 dark:bg-red-900/40 dark:text-red-300'
+                partial
+                  ? 'bg-amber-50 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                  : allPaid
+                    ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                    : 'bg-red-50 text-red-600 dark:bg-red-900/40 dark:text-red-300'
               }`}
             >
-              {allPaid ? 'Paid' : `Due ${fmtTaka(due)}`}
+              {partial ? `Partially paid · Due ${fmtTaka(due)}` : allPaid ? 'Paid' : `Due ${fmtTaka(due)}`}
             </div>
           </div>
           <div className="text-[20px] font-bold text-ink dark:text-white mt-1 tabular-nums">

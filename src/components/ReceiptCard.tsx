@@ -110,7 +110,6 @@ export function ReceiptCard({ center, student, payment }: Props) {
           border: `1.5px solid ${NAVY}`,
           borderRadius: 0,
           background: CREAM,
-          overflow: 'hidden',
           position: 'relative',
           zIndex: 0,
         }}
@@ -138,6 +137,34 @@ export function ReceiptCard({ center, student, payment }: Props) {
         <div style={{ borderTop: `1px dashed ${LINE}`, padding: '8px 16px', fontSize: 10.5, fontStyle: 'italic', color: MUTED }}>
           Taka {takaToWords(payment.amount)} Only
         </div>
+        {/* PAID seal - anchored to the amount panel, centered between the Due
+            and Amount paid columns, so it never drifts when the rest of the
+            receipt grows or shrinks */}
+        {showPaid && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'grid',
+              placeItems: 'center',
+              zIndex: 1,
+              pointerEvents: 'none',
+              userSelect: 'none',
+            }}
+          >
+            <img
+              src={paidSrc}
+              alt="PAID"
+              style={{
+                width: 150,
+                height: 'auto',
+                transform: 'rotate(-15deg)',
+                opacity: 0.5,
+                mixBlendMode: 'multiply',
+              }}
+            />
+          </div>
+        )}
       </div>
 
       {/* Rules */}
@@ -180,27 +207,6 @@ export function ReceiptCard({ center, student, payment }: Props) {
           <div style={{ marginTop: 2, fontSize: 9, color: GOLD, fontWeight: 600 }}>উৎসাহ এডুকেয়ার</div>
         </div>
       </div>
-
-      {/* PAID seal - faint watermark, right of the amount paid */}
-      {showPaid && (
-        <img
-          src={paidSrc}
-          alt="PAID"
-          style={{
-            position: 'absolute',
-            right: 8,
-            top: '50%',
-            transform: 'translateY(-50%) rotate(-15deg)',
-            width: 145,
-            height: 'auto',
-            opacity: 0.5,
-            mixBlendMode: 'multiply',
-            pointerEvents: 'none',
-            userSelect: 'none',
-            zIndex: 1,
-          }}
-        />
-      )}
     </div>
   )
 }
