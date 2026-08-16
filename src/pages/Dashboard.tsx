@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
 import { useApp } from '../state/AppContext'
 import { balanceOf, duesForPeriod, monthTotals, type DuesRow } from '../lib/ledger'
@@ -206,6 +206,7 @@ export function Dashboard() {
           <div className="space-y-2">
             {batches.map((b, i) => (
               <motion.div key={b.batch} variants={fadeUp} custom={i} initial="hidden" animate="show">
+                <Link to={`/students?batch=${encodeURIComponent(b.batch)}`} className="block active:scale-[0.99] transition">
                 <Card className="!rounded-xl p-3.5 flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-[#e8f0f7] dark:bg-hover-dark grid place-items-center text-ink dark:text-accent-dark shrink-0">
                   <IconUsers className="w-5 h-5" />
@@ -228,6 +229,7 @@ export function Dashboard() {
                   )}
                 </div>
               </Card>
+              </Link>
               </motion.div>
             ))}
           </div>
