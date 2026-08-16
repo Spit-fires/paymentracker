@@ -86,6 +86,25 @@ export function ReceiptView() {
     return fetch(dataUrl).then((r) => r.blob())
   }
 
+  /**
+   * Resolve a promise to a fallback after ms - a hung Drive fetch or an
+   * iOS-PWA navigator.share must never leave the button spinning forever.
+   */
+  const withTimeout = <T,>(p: Promise<T>, ms: number, fallback: T): Promise<T> =>
+    new Promise((resolve) => {
+      const t = window.setTimeout(() => resolve(fallback), ms)
+      p.then((v) => {
+        window.clearTimeout(t)
+        resolve(v)
+      }).catch(() => {
+        window.clearTimeout(t)
+        resolve(fallback)
+      })
+    })
+
+  const isIOSPWA =
+    (navigator as Navigator & { standalone?: boolean }).standalone === true
+
   /** WhatsApp gets a direct viewable Drive link (wa.me can't attach images;
    *  sending the PNG file also doesn't auto-open for the parent). */
   const onWhatsApp = async () => {
@@ -95,12 +114,19 @@ export function ReceiptView() {
     }
     setWaBusy(true)
     try {
-      // Try to get the public Drive link first
-      let link = await receiptViewLink(payment.id)
-      // If not available yet (receipt still uploading), retry once
+      // Bounded Drive calls - a hung fetch falls back instead of spinning.
+      let link = await withTimeout(receiptViewLink(payment.id), 6000, null)
+      // Freshly created receipt - the PNG may still be uploading to Drive.
+      // Give it a couple of short polls (online only) before falling back.
+      if (!link && navigator.onLine) {
+        for (let i = 0; !link && i < 2; i++) {
+          await new Promise((r) => setTimeout(r, 1500))
+          link = await withTimeout(receiptViewLink(payment.id), 6000, null)
+        }
+      }
       if (!link && payment.pngFileId) {
         log('info', `Retrying ensurePublic for receipt #${payment.receiptNo}`)
-        link = await retryEnsurePublic(payment.id)
+        link = await withTimeout(retryEnsurePublic(payment.id), 6000, null)
       }
       if (link) {
         const text = fillLink(link)
@@ -108,31 +134,47 @@ export function ReceiptView() {
         openExternal(waLink(student.phone, text))
         return
       }
-      // Link not available - receipt may not be synced yet
       log('warn', `Receipt #${payment.receiptNo} has no Drive link (pngFileId: ${payment.pngFileId || 'none'})`)
-      showToast('Receipt not yet on Drive - sharing image instead', 'info')
+      // iOS standalone PWA: navigator.share({files}) can hang without ever
+      // resolving - use the same plain wa.me path as the Remind button,
+      // which works on every device.
+      if (isIOSPWA) {
+        openExternal(waLink(student.phone, fillLink('')))
+        return
+      }
+      // PNG not uploaded yet (e.g. offline) - share the image file instead.
+      try {
+        const blob = await withTimeout(pngBlob(), 10000, null)
+        if (!blob) {
+          openExternal(waLink(student.phone, fillLink('')))
+          return
+        }
+        const file = new File([blob], fileName, { type: 'image/png' })
+        const nav = navigator as Navigator & {
+          canShare?: (d: { files: File[] }) => boolean
+        }
+        if (nav.canShare && nav.canShare({ files: [file] })) {
+          // Timeout so a hanging share sheet never locks the button; we do
+          // NOT fall through to openExternal on timeout (double-open risk).
+          await withTimeout(
+            navigator.share({
+              files: [file],
+              text: fillLink(''),
+              title: `Receipt #${payment.receiptNo}`,
+            }),
+            8000,
+            undefined,
+          )
+        } else {
+          openExternal(waLink(student.phone, fillLink('')))
+        }
+      } catch {
+        /* user closed the share sheet */
+      }
     } catch (e) {
       log('error', `Failed to get receipt link: ${e instanceof Error ? e.message : e}`)
-      showToast('Could not get receipt link - sharing image instead', 'info')
-    }
-    // PNG not uploaded yet (e.g. offline) - share the image file instead
-    try {
-      const blob = await pngBlob()
-      const file = new File([blob], fileName, { type: 'image/png' })
-      const nav = navigator as Navigator & {
-        canShare?: (d: { files: File[] }) => boolean
-      }
-      if (nav.canShare && nav.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          text: fillLink(''),
-          title: `Receipt #${payment.receiptNo}`,
-        })
-      } else {
-        openExternal(waLink(student.phone, fillLink('')))
-      }
-    } catch {
-      /* user closed the share sheet */
+      // Last resort - never leave the user stuck on the button.
+      openExternal(waLink(student.phone, fillLink('')))
     } finally {
       setWaBusy(false)
     }
