@@ -249,6 +249,15 @@ export function StudentDetail() {
           >
             <IconPhone className="w-4.5 h-4.5" /> Call
           </Button>
+          <Button
+            variant="secondary"
+            size="lg"
+            onClick={() => openExternal(`https://wa.me/${waPhone(student.phone || student.phone2 || '')}`)}
+            disabled={!student.phone && !student.phone2}
+            title={student.phone || student.phone2 ? undefined : "Add a phone number to open WhatsApp"}
+          >
+            <IconWhatsApp className="w-4.5 h-4.5" /> WhatsApp
+          </Button>
         </div>
 
         <div className="flex items-center justify-between mt-4 pt-3 border-t border-line dark:border-line-dark">

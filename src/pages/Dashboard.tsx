@@ -8,8 +8,7 @@ import { Card, EmptyState, Button } from '../components/ui'
 import { SyncIndicator } from '../components/Layout'
 import { ReauthBanner } from '../components/ReauthBanner'
 import { fadeUp, useCountUp } from '../components/anim'
-import { IconReceipt, IconPlus, IconSearch, IconCheck, IconArrow, IconCalendar, IconUsers, IconWhatsApp } from '../components/Icons'
-import { openExternal } from '../lib/phone'
+import { IconReceipt, IconPlus, IconSearch, IconCheck, IconArrow, IconCalendar, IconUsers } from '../components/Icons'
 
 function shiftPeriod(p: string, delta: number): string {
   const [y, m] = p.split('-').map(Number)
@@ -188,9 +187,6 @@ export function Dashboard() {
           onClick={() => navigate('/students?new=1')}
         >
           <IconPlus className="w-5 h-5" /> Add student
-        </Button>
-        <Button variant="secondary" size="lg" full onClick={() => openExternal('https://wa.me')}>
-          <IconWhatsApp className="w-5 h-5" /> WhatsApp
         </Button>
       </div>
 
