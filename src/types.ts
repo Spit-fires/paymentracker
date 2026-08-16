@@ -87,6 +87,8 @@ export interface Attendance {
   day: string
   status: AttendanceStatus
   updatedAt: number
+  /** ticked after the absent WhatsApp message is sent; a per-student 'cleared' marker for the day */
+  cleared?: boolean
   /** tombstone - set (instead of removing) when deleted; syncs deletes across devices */
   deletedAt?: number
 }

@@ -356,7 +356,7 @@ function TakeView() {
 }
 
 function ClearView() {
-  const { students, attendances, center } = useApp()
+  const { students, attendances, center, toggleCleared } = useApp()
   const [day, setDay] = useState(todayKey())
 
   const groups = useMemo(() => {
@@ -379,6 +379,12 @@ function ClearView() {
   const template = (center.attendanceMsg || defaultCenter().attendanceMsg || '').trim()
   const total = groups.reduce((n, [, list]) => n + list.length, 0)
 
+  const clearedById = useMemo(() => {
+    const m = new Map<string, boolean>()
+    for (const a of attendances) if (a.day === day) m.set(a.id, Boolean(a.cleared))
+    return m
+  }, [attendances, day])
+
   return (
     <div className="px-4 space-y-3 pb-6">
       <Card className="!rounded-2xl p-4 space-y-3">
@@ -394,7 +400,8 @@ function ClearView() {
           {total ? (
             <>
               <span className="font-bold text-danger">{total} absent</span> student{total > 1 ? 's' : ''} on{' '}
-              {fmtDateLong(isoDayToMs(day))}. Tap a student to open WhatsApp with the message pre-filled.
+              {fmtDateLong(isoDayToMs(day))}. Tap a student to open WhatsApp with the message pre-filled, then
+              tick the box next to Message once it's sent.
             </>
           ) : (
             'No absent students on this day.'
@@ -438,6 +445,19 @@ function ClearView() {
                     <div className="text-[14px] font-bold text-ink dark:text-white truncate">{s.name}</div>
                     {phone && <div className="text-[12px] text-muted dark:text-muted-dark truncate">{phone}</div>}
                   </div>
+                  <button
+                    onClick={() => void toggleCleared(`${s.id}_${day}`, !clearedById.get(`${s.id}_${day}`))}
+                    aria-label={clearedById.get(`${s.id}_${day}`) ? 'Mark not cleared' : 'Mark cleared'}
+                    title={clearedById.get(`${s.id}_${day}`) ? 'Marked - sent the message' : 'Tick after sending the message'}
+                    className={cx(
+                      'w-9 h-9 rounded-xl grid place-items-center border-2 shrink-0 transition active:scale-95',
+                      clearedById.get(`${s.id}_${day}`)
+                        ? 'bg-emerald-500 border-emerald-500 text-white'
+                        : 'border-line dark:border-line-dark text-transparent',
+                    )}
+                  >
+                    <IconCheck className="w-4.5 h-4.5" />
+                  </button>
                   <Button
                     variant="soft"
                     size="sm"

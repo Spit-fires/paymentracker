@@ -112,6 +112,7 @@ interface Ctx {
     day: string
     marks: Array<{ studentId: string; status: AttendanceStatus }>
   }) => Promise<void>
+  toggleCleared: (id: string, cleared: boolean) => Promise<void>
 
   updateCenter: (c: Center) => Promise<void>
 
@@ -687,6 +688,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [refreshData, scheduleSync],
   )
 
+  const toggleCleared = useCallback(
+    async (id: string, cleared: boolean) => {
+      const row = attendances.find((a) => a.id === id)
+      if (!row) return
+      await db.attendance.put({ ...row, cleared, updatedAt: Date.now() })
+      await queueOp({ kind: 'pushJSON', file: 'attendance' })
+      await refreshData()
+      scheduleSync()
+    },
+    [attendances, refreshData, scheduleSync],
+  )
+
   const updateCenter = useCallback(
     async (c: Center) => {
       await setKV(K.CENTER, c)
@@ -749,6 +762,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updatePosting,
       deletePosting,
       saveAttendance,
+      toggleCleared,
       updateCenter,
       setTheme,
       setPin,
@@ -791,6 +805,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updatePosting,
       deletePosting,
       saveAttendance,
+      toggleCleared,
       updateCenter,
       setTheme,
       setPin,
