@@ -88,7 +88,14 @@ export function Accounting() {
         if (ql && !s.name.toLowerCase().includes(ql)) return false
         return true
       })
-      .sort((a, b) => b.date - a.date)
+      .sort((a, b) => {
+        if (!batch) {
+          const ba = studentMap.get(a.studentId)?.batch || ''
+          const bb = studentMap.get(b.studentId)?.batch || ''
+          if (ba !== bb) return ba < bb ? -1 : 1
+        }
+        return b.date - a.date
+      })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [payments, students, q, batch, from, to])
 

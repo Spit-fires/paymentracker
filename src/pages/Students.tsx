@@ -131,24 +131,6 @@ export function Students() {
     return due > 0 ? 'partial' : 'paid'
   }
 
-  // when the batch filter is All, chunk the sorted list into batch sections so
-  // students never appear in a random flat order
-  const groups = useMemo(() => {
-    if (batchFilter) return null
-    const m = new Map<string, Student[]>()
-    for (const s of filtered) {
-      const b = s.batch || 'No batch'
-      const arr = m.get(b)
-      if (arr) arr.push(s)
-      else m.set(b, [s])
-    }
-    return [...m.entries()].sort((a, b) => {
-      if (a[0] === 'No batch') return 1
-      if (b[0] === 'No batch') return -1
-      return a[0] < b[0] ? -1 : 1
-    })
-  }, [filtered, batchFilter])
-
   const CHIP: Record<'paid' | 'partial' | 'due', string> = {
     paid: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
     partial: 'bg-amber-50 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
@@ -338,20 +320,7 @@ export function Students() {
             />
           </Card>
         ) : (
-          <div className="space-y-4">
-            {groups ? (
-              groups.map(([batch, list]) => (
-                <div key={batch}>
-                  <div className="text-[11.5px] font-bold uppercase tracking-[0.14em] text-muted dark:text-muted-dark px-1 pt-1 pb-2">
-                    {batch} · {list.length}
-                  </div>
-                  <div className="space-y-2">{list.map((s, i) => renderRow(s, i))}</div>
-                </div>
-              ))
-            ) : (
-              <div className="space-y-2">{filtered.map((s, i) => renderRow(s, i))}</div>
-            )}
-          </div>
+          <div className="space-y-2">{filtered.map((s, i) => renderRow(s, i))}</div>
         )}
       </div>
 
