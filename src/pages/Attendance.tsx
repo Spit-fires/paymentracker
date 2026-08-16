@@ -46,12 +46,6 @@ const STATUS_STYLE: Record<AttendanceStatus, { label: string; cell: string; chip
   },
 }
 
-const GRID_CELL = {
-  present: 'bg-teal-500',
-  absent: 'bg-danger',
-  leave: 'bg-amber-500',
-} as const
-
 function isoDayToMs(day: string): number {
   // noon local - safe against DST/timezone edge shifts
   return new Date(`${day}T12:00:00`).getTime()
@@ -467,6 +461,7 @@ function StatsView() {
   const { students, attendances } = useApp()
   const [scope, setScope] = useState<Scope>('student')
   const [studentId, setStudentId] = useState('')
+  const [studentQuery, setStudentQuery] = useState('')
   const [batch, setBatch] = useState('')
   const [day, setDay] = useState(todayKey())
   const [ready, setReady] = useState(false)
@@ -486,11 +481,10 @@ function StatsView() {
 
   useEffect(() => {
     if (!ready) {
-      if (studentOptions.length && !studentId) setStudentId(studentOptions[0].id)
       if (batches.length && !batch) setBatch(batches[0])
       setReady(true)
     }
-  }, [ready, studentOptions, studentId, batches, batch])
+  }, [ready, batches, batch])
 
   const months = useMemo(() => {
     const out: Array<{ key: string; label: string }> = []
@@ -538,43 +532,7 @@ function StatsView() {
     return { counts: c, total: rows.length }
   }, [studentId, attendances])
 
-  // heat grid: last 6 months, weeks starting Sunday
-  const heat = useMemo(() => {
-    if (!studentId) return [] as Array<{ day: string; status?: AttendanceStatus; inMonth: boolean }[]>
-    const byDay = new Map<string, AttendanceStatus>()
-    for (const a of attendances) if (a.studentId === studentId) byDay.set(a.day, a.status)
-    const now = new Date()
-    const start = new Date(now.getFullYear(), now.getMonth() - 5, 1)
-    const cursor = new Date(start)
-    cursor.setDate(cursor.getDate() - cursor.getDay()) // back to Sunday
-    const weeks: Array<{ day: string; status?: AttendanceStatus; inMonth: boolean }[]> = []
-    const today = todayKey()
-    for (let w = 0; w < 28; w++) {
-      const week: Array<{ day: string; status?: AttendanceStatus; inMonth: boolean }> = []
-      for (let d = 0; d < 7; d++) {
-        const key = dayKey(cursor)
-        week.push({
-          day: key,
-          status: byDay.get(key),
-          inMonth: key >= dayKey(start) && key <= today,
-        })
-        cursor.setDate(cursor.getDate() + 1)
-      }
-      weeks.push(week)
-    }
-    return weeks
-  }, [studentId, attendances])
-
-  const heatMonths = useMemo(() => {
-    const now = new Date()
-    const out: string[] = []
-    for (let i = 5; i >= 0; i--) {
-      out.push(new Date(now.getFullYear(), now.getMonth() - i, 1).toLocaleDateString('en-GB', { month: 'short' }))
-    }
-    return out
-  }, [])
-
-  /* ---------- Batch scope ---------- */
+  /* ---------- Batch scope ---------- */  /* ---------- Batch scope ---------- */
   const days = useMemo(() => {
     const out: string[] = []
     const now = new Date()
@@ -654,63 +612,75 @@ function StatsView() {
 
       {scope === 'student' && (
         <>
-          <Select value={studentId} onChange={(e) => setStudentId(e.target.value)}>
-            {studentOptions.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-                {s.archived ? ' (archived)' : ''}
-              </option>
-            ))}
-          </Select>
-          {studentId && (
+          {!studentId ? (
+            <div className="space-y-2">
+              <input
+                value={studentQuery}
+                onChange={(e) => setStudentQuery(e.target.value)}
+                placeholder="Search students by name or batch…"
+                className="w-full rounded-xl bg-white dark:bg-card-dark border border-line dark:border-line-dark px-4 py-3 text-[15px] text-body dark:text-text-dark placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-teal/25"
+              />
+              {(() => {
+                const ql = studentQuery.trim().toLowerCase()
+                const matches = studentOptions
+                  .filter((s) => !ql || s.name.toLowerCase().includes(ql) || s.batch.toLowerCase().includes(ql))
+                  .slice(0, 10)
+                if (!ql) {
+                  return (
+                    <div className="text-[12.5px] text-muted dark:text-muted-dark px-1">
+                      Type to find a student.
+                    </div>
+                  )
+                }
+                if (!matches.length) {
+                  return (
+                    <div className="text-[12.5px] text-muted dark:text-muted-dark px-1">
+                      No students match “{studentQuery}”.
+                    </div>
+                  )
+                }
+                return (
+                  <div className="rounded-xl border border-line dark:border-line-dark bg-white dark:bg-card-dark overflow-hidden">
+                    {matches.map((s, i) => (
+                      <button
+                        key={s.id}
+                        onClick={() => {
+                          setStudentId(s.id)
+                          setStudentQuery('')
+                        }}
+                        className={cx(
+                          'w-full text-left px-4 py-3 flex items-center justify-between gap-2 transition active:bg-cream dark:active:bg-input-dark',
+                          i > 0 && 'border-t border-line/60 dark:border-line-dark/60',
+                        )}
+                      >
+                        <span className="text-[14px] font-semibold text-ink dark:text-white truncate">{s.name}</span>
+                        <span className="text-[11.5px] text-faint shrink-0">
+                          {s.batch || 'No batch'}
+                          {s.archived ? ' · archived' : ''}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )
+              })()}
+            </div>
+          ) : (
             <>
+              <button
+                onClick={() => setStudentId('')}
+                className="w-full rounded-xl bg-white dark:bg-card-dark border border-line dark:border-line-dark px-4 py-3 flex items-center justify-between gap-2 text-left transition active:scale-[0.99]"
+              >
+                <span className="text-[14px] font-semibold text-ink dark:text-white truncate">
+                  {studentOptions.find((s) => s.id === studentId)?.name}
+                </span>
+                <span className="text-[12px] font-semibold text-teal shrink-0">Change</span>
+              </button>
               <SummaryChips counts={studentTotals.counts} total={studentTotals.total} />
               <Card className="!rounded-2xl p-4">
                 <div className="text-[13px] font-bold text-ink dark:text-white mb-2">
                   Monthly attendance · last 12 months
                 </div>
                 <Bars labels={studentSeries.labels} data={studentSeries.data} dark={dark} />
-              </Card>
-              <Card className="!rounded-2xl p-4">
-                <div className="text-[13px] font-bold text-ink dark:text-white mb-3">
-                  Last 6 months
-                </div>
-                <div className="grid grid-cols-6 gap-1 mb-1.5">
-                  {heatMonths.map((m) => (
-                    <div key={m} className="text-[9.5px] font-semibold text-muted dark:text-muted-dark text-center">
-                      {m}
-                    </div>
-                  ))}
-                </div>
-                <div className="flex flex-col gap-1">
-                  {heat.map((week, wi) => (
-                    <div key={wi} className="grid grid-cols-[auto_repeat(7,1fr)] gap-1 items-center">
-                      <div className="w-3.5 text-center text-[9px] text-faint font-semibold">
-                        {['S', 'M', 'T', 'W', 'T', 'F', 'S'][wi % 7]}
-                      </div>
-                      {week.map((cell) => (
-                        <div
-                          key={cell.day}
-                          title={`${cell.day}: ${cell.status || 'no mark'}`}
-                          className={cx(
-                            'aspect-square rounded-[4px]',
-                            !cell.inMonth && 'opacity-0',
-                            cell.inMonth && !cell.status && 'bg-[#e8edf2] dark:bg-[#223141]',
-                            cell.inMonth && cell.status && GRID_CELL[cell.status],
-                          )}
-                        />
-                      ))}
-                    </div>
-                  ))}
-                </div>
-                <div className="flex items-center gap-3 mt-3 text-[10.5px] text-muted dark:text-muted-dark">
-                  <span>Less</span>
-                  <span className="w-3.5 h-3.5 rounded-[4px] bg-[#e8edf2] dark:bg-[#223141]" />
-                  <span className="w-3.5 h-3.5 rounded-[4px] bg-teal-500" />
-                  <span className="w-3.5 h-3.5 rounded-[4px] bg-danger" />
-                  <span className="w-3.5 h-3.5 rounded-[4px] bg-amber-500" />
-                  <span>More</span>
-                </div>
               </Card>
             </>
           )}
