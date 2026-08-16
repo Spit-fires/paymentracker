@@ -17,7 +17,7 @@ export interface FormValue {
 export function initialForm(s?: Student): FormValue {
   return {
     name: s?.name || '',
-    phone: s?.phone || '',
+    phone: s?.phone ?? '+880',
     phone2: s?.phone2 || '',
     batch: s?.batch || '',
     defaultFee: s?.defaultFee ? String(s.defaultFee) : '',
