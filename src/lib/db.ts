@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie'
-import type { Student, Payment, Posting, OutboxEntry, OutboxOp } from '../types'
+import type { Student, Payment, Posting, Attendance, OutboxEntry, OutboxOp } from '../types'
 
 export const K = {
   CENTER: 'center',
@@ -12,6 +12,8 @@ export const K = {
   ACCT_FILTERS: 'acctFilters',
   /** per-device receipt-number reservation: { high, used } - issued while used < high */
   SEQ_RESERVED: 'seqReserved',
+  /** last-used Attendance batch filter */
+  ATT_BATCH: 'attBatch',
 } as const
 
 /**
@@ -56,6 +58,7 @@ class PTDatabase extends Dexie {
   students!: Table<Student, string>
   payments!: Table<Payment, string>
   postings!: Table<Posting, string>
+  attendance!: Table<Attendance, string>
   outbox!: Table<OutboxEntry, number>
 
   constructor() {
@@ -73,6 +76,14 @@ class PTDatabase extends Dexie {
       postings: 'id',
       outbox: '++id, at',
     })
+    // v3 adds the attendance table (per-student per-day marks)
+    this.version(3).stores({
+      students: 'id, batch, archived',
+      payments: 'id, studentId, receiptNo, period',
+      postings: 'id',
+      attendance: 'id, studentId, day, batch',
+      outbox: '++id, at',
+    })
   }
 }
 
@@ -88,6 +99,10 @@ export async function getPayments(): Promise<Payment[]> {
 
 export async function getPostings(): Promise<Posting[]> {
   return db.postings.toArray()
+}
+
+export async function getAttendance(): Promise<Attendance[]> {
+  return db.attendance.toArray()
 }
 
 export async function queueOp(op: OutboxOp): Promise<void> {

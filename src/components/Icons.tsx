@@ -208,3 +208,11 @@ export const IconBook = (p: P) => (
     <path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5" />
   </svg>
 )
+
+export const IconClipboardCheck = (p: P) => (
+  <svg {...base(p)}>
+    <rect x="8" y="2" width="8" height="4" rx="1" />
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+    <path d="m9 14 2 2 4-4" />
+  </svg>
+)

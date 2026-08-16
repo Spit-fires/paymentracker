@@ -73,6 +73,24 @@ export interface Posting {
   deletedAt?: number
 }
 
+export type AttendanceStatus = 'present' | 'absent' | 'leave'
+
+/** One attendance mark per student per day. The id is deterministic
+ *  (`studentId_day`), so re-taking a day updates instead of duplicating and
+ *  two devices editing the same day merge cleanly via the LWW machinery. */
+export interface Attendance {
+  id: string
+  studentId: string
+  /** denormalized for fast batch filtering without joins */
+  batch: string
+  /** local day key, 'YYYY-MM-DD' */
+  day: string
+  status: AttendanceStatus
+  updatedAt: number
+  /** tombstone - set (instead of removing) when deleted; syncs deletes across devices */
+  deletedAt?: number
+}
+
 export interface Center {
   name: string
   tagline: string
@@ -89,6 +107,8 @@ export interface Center {
   reminderMsg?: string
   /** WhatsApp receipt-share template; tokens: {student} {period} {center} {link} */
   receiptMsg?: string
+  /** WhatsApp absent-student template; tokens: {student} {date} {batch} {center} */
+  attendanceMsg?: string
   /** custom PAID stamp image as a dataURL, uploaded in Settings */
   paidImage?: string
 }
@@ -109,7 +129,7 @@ export interface DriveRefs {
   studentsFolderId?: string
   /** Google account that owns this folder - refs are only trusted for that account. */
   ownerEmail?: string
-  fileIds: { students?: string; payments?: string; meta?: string; postings?: string }
+  fileIds: { students?: string; payments?: string; meta?: string; postings?: string; attendance?: string }
   /** modifiedTime of each JSON file at last sync - lets pull() skip downloads */
   stamps?: Record<string, string>
 }
@@ -127,11 +147,11 @@ export interface Session {
   theme: 'light' | 'dark'
   lastPulledAt: number
   /** per-file: timestamp of the last snapshot each JSON file was fully processed from */
-  pulledAt?: Partial<Record<'students' | 'payments' | 'meta' | 'postings', number>>
+  pulledAt?: Partial<Record<'students' | 'payments' | 'meta' | 'postings' | 'attendance', number>>
 }
 
 export type OutboxOp =
-  | { kind: 'pushJSON'; file: 'students' | 'payments' | 'meta' | 'postings' }
+  | { kind: 'pushJSON'; file: 'students' | 'payments' | 'meta' | 'postings' | 'attendance' }
   | {
       kind: 'uploadMedia'
       type: 'photo' | 'receipt'

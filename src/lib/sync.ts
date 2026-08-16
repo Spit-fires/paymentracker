@@ -1,5 +1,5 @@
 import { DriveClient } from './drive'
-import { db, getKV, setKV, queueOp, getStudents, getPayments, getPostings, K } from './db'
+import { db, getKV, setKV, queueOp, getStudents, getPayments, getPostings, getAttendance, K } from './db'
 import { fmtDate } from './format'
 import { log } from './logs'
 import { postingLedger } from './ledger'
@@ -10,6 +10,7 @@ import type {
   Student,
   Payment,
   Posting,
+  Attendance,
   Center,
   Session,
   Teacher,
@@ -69,7 +70,7 @@ function cleanPayment(p: Payment) {
   return rest
 }
 
-async function buildJSON(file: 'students' | 'payments' | 'meta' | 'postings'): Promise<string> {
+async function buildJSON(file: 'students' | 'payments' | 'meta' | 'postings' | 'attendance'): Promise<string> {
   if (file === 'students') {
     const students = (await getStudents()).map(cleanStudent)
     return JSON.stringify({ version: 1, updatedAt: Date.now(), students })
@@ -82,6 +83,10 @@ async function buildJSON(file: 'students' | 'payments' | 'meta' | 'postings'): P
     // Posting has no Blob fields - the raw records serialize as-is
     const postings = await getPostings()
     return JSON.stringify({ version: 1, updatedAt: Date.now(), postings })
+  }
+  if (file === 'attendance') {
+    const attendance = await getAttendance()
+    return JSON.stringify({ version: 1, updatedAt: Date.now(), attendance })
   }
   const center = (await getKV<Center>(K.CENTER)) || defaultCenter()
   const receiptSeq = (await getKV<number>(K.RECEIPT_SEQ)) || 0
@@ -101,6 +106,8 @@ export function defaultCenter(): Center {
     reminderMsg:
       'Assalamu alaikum {student},\n\nThis is a friendly reminder that your {period} fee is pending for {center}. Please make the payment at your earliest convenience. Thank you!',
     receiptMsg: '{student} এর {period} বেতন পরিশোধের রশিদ দেখতে নিচের লিংকে ক্লিক করুন। {link}',
+    attendanceMsg:
+      'Assalamu alaikum {student},\n\nYou were marked absent on {date} for {batch} at {center}. Please let us know if everything is okay. Thank you!',
   }
 }
 
@@ -111,6 +118,7 @@ export async function exportToSheet(
   students: Student[],
   payments: Payment[],
   postings: Posting[],
+  attendance: Attendance[],
   center: Center,
 ): Promise<string> {
   const drive = await getKV<DriveRefs>(K.DRIVE)
@@ -124,6 +132,7 @@ export async function exportToSheet(
     { updateSheetProperties: { properties: { sheetId: 0, title: 'Students' }, fields: 'title' } },
     { addSheet: { properties: { title: 'Payments' } } },
     { addSheet: { properties: { title: 'Posting' } } },
+    { addSheet: { properties: { title: 'Attendance' } } },
   ])
   await client().sheetValues(id, 'Students!A1', [
     ['Name', 'Phone', 'Alt number', 'Batch / Class', 'Default fee (৳)', 'Notes', 'Archived'],
@@ -158,6 +167,29 @@ export async function exportToSheet(
       r.posting.amount,
       r.posting.receivedBy?.name || '',
     ]),
+  ])
+  // Attendance - one row per marked day per batch with the status counts
+  const attDays = new Map<string, Attendance[]>()
+  for (const a of attendance.filter((x) => !x.deletedAt)) {
+    const key = `${a.day}|${a.batch}`
+    const arr = attDays.get(key)
+    if (arr) arr.push(a)
+    else attDays.set(key, [a])
+  }
+  await client().sheetValues(id, 'Attendance!A1', [
+    ['Day', 'Batch / Class', 'Present', 'Absent', 'Leave'],
+    ...[...attDays.entries()]
+      .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+      .map(([key, rows]) => {
+        const [day, batch] = key.split('|')
+        return [
+          day,
+          batch,
+          rows.filter((r) => r.status === 'present').length,
+          rows.filter((r) => r.status === 'absent').length,
+          rows.filter((r) => r.status === 'leave').length,
+        ]
+      }),
   ])
   return webViewLink
 }
@@ -296,6 +328,9 @@ function postingSig(p: Posting): string {
     p.deletedAt ?? null,
   ])
 }
+function attendanceSig(a: Attendance): string {
+  return JSON.stringify([a.studentId, a.day, a.batch, a.status, a.deletedAt ?? null])
+}
 
 /**
  * Union-merge two teacher lists (last-writer-wins per member, tombstones for
@@ -330,7 +365,7 @@ function mergeTeachers(local: Teacher[], remote: Teacher[]): Teacher[] {
  */
 export async function pull(): Promise<{
   changed: boolean
-  needPush: Array<'students' | 'payments' | 'meta' | 'postings'>
+  needPush: Array<'students' | 'payments' | 'meta' | 'postings' | 'attendance'>
 }> {
   const drive = await getKV<DriveRefs>(K.DRIVE)
   if (!drive?.rootFolderId) return { changed: false, needPush: [] }
@@ -344,24 +379,25 @@ export async function pull(): Promise<{
   // reached another. `lastPulledAt` stays as the baseline for pre-upgrade
   // sessions and as a safety net for files never processed since then.
   const pulledAt = { ...(session.pulledAt || {}) }
-  // CRITICAL: postings is a NEW file type - NO device ever processed it, so
-  // its baseline must be 0, never lastPulledAt. With the legacy fallback a
-  // postings snapshot older than the fleet's latest meta write would be
-  // silently skipped forever (the exact bug class that hid tombstones).
-  const baseAt = (f: 'students' | 'payments' | 'meta' | 'postings') =>
-    f === 'postings' ? (pulledAt.postings ?? 0) : (pulledAt[f] ?? session.lastPulledAt) || 0
+  // CRITICAL: postings and attendance are NEW file types - NO device ever
+  // processed them, so their baseline must be 0, never lastPulledAt. With the
+  // legacy fallback a snapshot older than the fleet's latest meta write would
+  // be silently skipped forever (the exact bug class that hid tombstones).
+  const baseAt = (f: 'students' | 'payments' | 'meta' | 'postings' | 'attendance') =>
+    f === 'postings' || f === 'attendance' ? (pulledAt[f] ?? 0) : (pulledAt[f] ?? session.lastPulledAt) || 0
   let changed = false
   let pullDirty = false
   let latest = session.lastPulledAt
-  const needPush: Array<'students' | 'payments' | 'meta' | 'postings'> = []
+  const needPush: Array<'students' | 'payments' | 'meta' | 'postings' | 'attendance'> = []
   const stamps = { ...(drive.stamps || {}) }
   let stampDirty = false
 
-  const files: Array<['students' | 'payments' | 'meta' | 'postings', string | undefined]> = [
+  const files: Array<['students' | 'payments' | 'meta' | 'postings' | 'attendance', string | undefined]> = [
     ['students', drive.fileIds.students],
     ['payments', drive.fileIds.payments],
     ['meta', drive.fileIds.meta],
     ['postings', drive.fileIds.postings],
+    ['attendance', drive.fileIds.attendance],
   ]
   // run two passes: the second is nearly free (in-memory stamps skip
   // unchanged files) and catches files that another device rewrote while
@@ -614,6 +650,58 @@ export async function pull(): Promise<{
             await db.postings.bulkPut(merged)
           })
           changed = true
+        } else if (file === 'attendance' && Array.isArray(j.attendance)) {
+          // mirrors the postings merge - tombstones, then missing records
+          // (absence is NEVER a delete), then LWW per student-day
+          await db.transaction('rw', db.attendance, async () => {
+            const local = new Map((await db.attendance.toArray()).map((a) => [a.id, a]))
+            const remoteIds = new Set(j.attendance.map((a: Attendance) => a.id))
+            // 1) tombstones: purge locally unless we edited the record after
+            //    the remote delete - a newer local edit resurrects it via re-push
+            for (const a of j.attendance) {
+              if (!a.deletedAt) continue
+              const cur = local.get(a.id)
+              if (!cur) continue
+              if ((cur.updatedAt || 0) > (a.deletedAt || 0)) {
+                if (!needPush.includes('attendance')) needPush.push('attendance')
+                continue
+              }
+              await db.attendance.delete(a.id)
+              local.delete(a.id)
+            }
+            // 2) records missing from the file: absence is NEVER a delete -
+            //    deletes are explicit tombstones above. Missing = the author's
+            //    snapshot predates it → re-push to converge
+            for (const loc of local.values()) {
+              if (remoteIds.has(loc.id)) continue
+              if (!needPush.includes('attendance')) needPush.push('attendance')
+            }
+            // 3) plain records: keep local when fresher than our last pull
+            //    or newer than the remote record; otherwise take remote
+            const merged = j.attendance
+              .filter((a: Attendance) => !a.deletedAt)
+              .map((a: Attendance) => {
+                const cur = local.get(a.id)
+                if (!cur) return a
+                // a local tombstone always beats a stale remote copy - re-push
+                // so every device converges on the tombstone
+                if (cur.deletedAt && !a.deletedAt) {
+                  if (!needPush.includes('attendance')) needPush.push('attendance')
+                  return cur
+                }
+                const keepLocal =
+                  (cur.updatedAt || 0) > baseAt('attendance') || (cur.updatedAt || 0) >= (a.updatedAt || 0)
+                const div =
+                  (cur.updatedAt || 0) > (a.updatedAt || 0) ||
+                  ((cur.updatedAt || 0) === (a.updatedAt || 0) && attendanceSig(cur) !== attendanceSig(a))
+                if (keepLocal && div) {
+                  if (!needPush.includes('attendance')) needPush.push('attendance')
+                }
+                return keepLocal ? cur : a
+              })
+            await db.attendance.bulkPut(merged)
+          })
+          changed = true
         } else if (file === 'meta' && j.center) {
           await setKV(K.CENTER, { ...((await getKV<Center>(K.CENTER)) || {}), ...j.center })
           const seq = Math.max(j.receiptSeq || 0, (await getKV<number>(K.RECEIPT_SEQ)) || 0)
@@ -707,6 +795,25 @@ export async function ensureDriveStructure(): Promise<DriveRefs> {
         log('sync', 'Created _postings.json (schema upgrade)')
         return drive
       }
+      // schema upgrade: installs that predate the attendance panel have no
+      // _attendance.json ref - create it now so attendance syncs across the fleet
+      if (!existing.fileIds.attendance) {
+        const files = await c.list(`'${existing.rootFolderId}' in parents and trashed=false`)
+        const hit = files.find((f) => f.name === '_attendance.json')
+        const attendance =
+          hit?.id ||
+          (await c.createFile(
+            existing.rootFolderId,
+            '_attendance.json',
+            'application/json',
+            JSON.stringify({ version: 1, updatedAt: 0 }),
+            { pt: '_attendance.json' },
+          ))
+        const drive = { ...existing, fileIds: { ...existing.fileIds, attendance } }
+        await setKV(K.DRIVE, drive)
+        log('sync', 'Created _attendance.json (schema upgrade)')
+        return drive
+      }
       return existing
     } catch (e) {
       if (!isNotFound(e)) throw e
@@ -755,6 +862,7 @@ export async function ensureDriveStructure(): Promise<DriveRefs> {
       payments: await mk('_payments.json'),
       meta: await mk('_meta.json'),
       postings: await mk('_postings.json'),
+      attendance: await mk('_attendance.json'),
     },
   }
   await setKV(K.DRIVE, drive)

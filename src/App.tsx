@@ -13,6 +13,7 @@ import { ReceiptView } from './pages/ReceiptView'
 import { ReceiptLookup } from './pages/ReceiptLookup'
 import { Settings } from './pages/Settings'
 import { Accounting } from './pages/Accounting'
+import { Attendance } from './pages/Attendance'
 import { Spinner } from './components/ui'
 import { Logo } from './components/Logo'
 import { AppMotion, pageVariants } from './components/anim'
@@ -50,6 +51,7 @@ function AnimatedRoutes() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/students" element={<Students />} />
+          <Route path="/attendance" element={<Attendance />} />
           <Route path="/accounting" element={<Accounting />} />
           <Route path="/student/:id" element={<StudentDetail />} />
           <Route path="/payment/:id" element={<Payment />} />

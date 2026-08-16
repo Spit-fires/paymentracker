@@ -50,6 +50,7 @@ export function Settings() {
     students,
     payments,
     postings,
+    attendances,
     showToast,
     needsReauth,
     teachers,
@@ -118,6 +119,7 @@ export function Settings() {
       students: students.map(({ photoBlob: _pb, ...rest }) => rest),
       payments: payments.map(({ pngBlob: _pb, ...rest }) => rest),
       postings,
+      attendance: attendances,
     }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -150,6 +152,15 @@ export function Settings() {
         })
         await queueOp({ kind: 'pushJSON', file: 'postings' })
       }
+      // attendance only when the backup carries it - a pre-attendance backup
+      // must never wipe live attendance records
+      if (Array.isArray(j.attendance)) {
+        await db.transaction('rw', db.attendance, async () => {
+          await db.attendance.clear()
+          await db.attendance.bulkPut(j.attendance)
+        })
+        await queueOp({ kind: 'pushJSON', file: 'attendance' })
+      }
       if (j.center) await setKV(K.CENTER, j.center)
       await setKV(K.RECEIPT_SEQ, j.receiptSeq || 0)
       if (j.driveRefs) await setKV(K.DRIVE, j.driveRefs)
@@ -166,7 +177,7 @@ export function Settings() {
 
   const exportSheet = async () => {
     try {
-      const link = await exportToSheet(students, payments, postings, center)
+      const link = await exportToSheet(students, payments, postings, attendances, center)
       showToast('Google Sheet created', 'ok')
       openExternal(link)
     } catch (e) {
@@ -409,8 +420,20 @@ export function Settings() {
               placeholder={defaultCenter().receiptMsg}
             />
           </Field>
+          <Field
+            label="Absent student message"
+            hint="Sent to absent students from the Attendance page. {date} and {batch} are filled in automatically."
+          >
+            <Textarea
+              value={form.attendanceMsg ?? defaultCenter().attendanceMsg ?? ''}
+              onChange={(e) => setForm({ ...form, attendanceMsg: e.target.value })}
+              rows={4}
+              placeholder={defaultCenter().attendanceMsg}
+            />
+          </Field>
           <p className="text-[11.5px] text-faint">
-            Available tokens: <span className="font-mono">{"{student} {period} {center} {link}"}</span> - leave
+            Available tokens:{" "}
+            <span className="font-mono">{"{student} {period} {center} {link} {date} {batch}"}</span> - leave
             a field empty to keep the default message.
           </p>
           <Button variant="soft" full onClick={() => void saveCenter()} disabled={saved}>

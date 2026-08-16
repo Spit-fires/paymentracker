@@ -12,6 +12,8 @@ import type {
   Student,
   Payment,
   Posting,
+  Attendance,
+  AttendanceStatus,
   Center,
   Session,
   SessionUser,
@@ -79,6 +81,7 @@ interface Ctx {
   students: Student[]
   payments: Payment[]
   postings: Posting[]
+  attendances: Attendance[]
   teachers: Teacher[]
   center: Center
   receiptSeq: number
@@ -103,6 +106,12 @@ interface Ctx {
   addPosting: (input: { amount: number; receivedBy?: ReceivedBy; date: number }) => Promise<Posting>
   updatePosting: (id: string, patch: Partial<Posting>) => Promise<void>
   deletePosting: (id: string) => Promise<void>
+
+  saveAttendance: (input: {
+    batch: string
+    day: string
+    marks: Array<{ studentId: string; status: AttendanceStatus }>
+  }) => Promise<void>
 
   updateCenter: (c: Center) => Promise<void>
 
@@ -136,6 +145,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [students, setStudents] = useState<Student[]>([])
   const [payments, setPayments] = useState<Payment[]>([])
   const [postings, setPostings] = useState<Posting[]>([])
+  const [attendances, setAttendances] = useState<Attendance[]>([])
   const [teachers, setTeachers] = useState<Teacher[]>([])
   const [center, setCenter] = useState<Center>(defaultCenter())
   const [receiptSeq, setReceiptSeq] = useState(0)
@@ -154,6 +164,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setStudents((await db.students.toArray()).filter((s) => !s.deletedAt))
     setPayments((await db.payments.toArray()).filter((p) => !p.deletedAt))
     setPostings((await db.postings.toArray()).filter((p) => !p.deletedAt))
+    setAttendances((await db.attendance.toArray()).filter((a) => !a.deletedAt))
     setCenter((await getKV<Center>(K.CENTER)) || defaultCenter())
     setTeachers(((await getKV<Teacher[]>(K.TEACHERS)) || []).filter((t) => !t.deletedAt))
     setReceiptSeq((await getKV<number>(K.RECEIPT_SEQ)) || 0)
@@ -647,6 +658,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [refreshData, scheduleSync],
   )
 
+  const saveAttendance = useCallback(
+    async (input: {
+      batch: string
+      day: string
+      marks: Array<{ studentId: string; status: AttendanceStatus }>
+    }) => {
+      // one logical edit per batch-day: a single timestamp keeps same-day
+      // edits from two devices merging into a perpetual re-push loop (equal
+      // stamps + equal sigs converge instantly)
+      const now = Date.now()
+      const batch = input.batch
+      await db.transaction('rw', db.attendance, async () => {
+        const rows: Attendance[] = input.marks.map((m) => ({
+          id: `${m.studentId}_${input.day}`,
+          studentId: m.studentId,
+          batch,
+          day: input.day,
+          status: m.status,
+          updatedAt: now,
+        }))
+        await db.attendance.bulkPut(rows)
+      })
+      await queueOp({ kind: 'pushJSON', file: 'attendance' })
+      await refreshData()
+      scheduleSync()
+    },
+    [refreshData, scheduleSync],
+  )
+
   const updateCenter = useCallback(
     async (c: Center) => {
       await setKV(K.CENTER, c)
@@ -687,6 +727,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       students,
       payments,
       postings,
+      attendances,
       teachers,
       center,
       receiptSeq,
@@ -707,6 +748,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addPosting,
       updatePosting,
       deletePosting,
+      saveAttendance,
       updateCenter,
       setTheme,
       setPin,
@@ -727,6 +769,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       students,
       payments,
       postings,
+      attendances,
       teachers,
       center,
       receiptSeq,
@@ -747,6 +790,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addPosting,
       updatePosting,
       deletePosting,
+      saveAttendance,
       updateCenter,
       setTheme,
       setPin,

@@ -62,6 +62,16 @@ export function periodNow(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
+/** Local calendar-day key 'YYYY-MM-DD' - never toISOString(), which shifts
+ *  a local day onto UTC and can land on yesterday/tomorrow. */
+export function dayKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+export function todayKey(): string {
+  return dayKey(new Date())
+}
+
 export function periodLabel(period: string): string {
   const [y, m] = period.split('-').map(Number)
   if (!y || !m || m < 1 || m > 12) return period

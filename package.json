@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
+    "chart.js": "^4.5.1",
     "dexie": "^4.4.4",
     "html-to-image": "^1.11.13",
     "modern-screenshot": "^4.7.0",
