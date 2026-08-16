@@ -125,10 +125,10 @@ export function ReceiptCard({ center, student, payment }: Props) {
           </div>
           {showDue && (
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 9.5, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#b23b3b' }}>
+              <div style={{ fontSize: 9.5, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#b23b3b', fontWeight: 800 }}>
                 Due
               </div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: '#b23b3b', marginTop: 3, lineHeight: 1 }}>
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#e11d1d', marginTop: 3, lineHeight: 1 }}>
                 {fmtTaka(due)}
               </div>
             </div>
