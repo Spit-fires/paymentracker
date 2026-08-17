@@ -607,8 +607,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     async (id: string) => {
       const cur = await db.payments.get(id)
       if (!cur) return
-      if (cur.pngFileId) await queueOp({ kind: 'deleteMedia', fileId: cur.pngFileId })
-      await db.payments.put({ ...cur, deletedAt: Date.now(), updatedAt: Date.now() })
+      // don't delete the Drive PNG eagerly: if the tombstone push fails, the
+      // receipt must stay intact for the other devices. queueMediaDeletes
+      // (flushOutbox) removes the PNG only after the push has succeeded.
+      const now = Date.now()
+      const tombstone = { ...cur, deletedAt: now, updatedAt: now }
+      if (cur.pngFileId) tombstone.pendingMedia = cur.pngFileId
+      await db.payments.put(tombstone)
       await queueOp({ kind: 'pushJSON', file: 'payments' })
       await refreshData()
       scheduleSync()

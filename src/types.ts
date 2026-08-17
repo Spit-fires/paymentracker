@@ -55,6 +55,9 @@ export interface Payment {
   updatedAt: number
   /** tombstone - set (instead of removing) when deleted; syncs deletes across devices */
   deletedAt?: number
+  /** local-only flag on a tombstone: the Drive PNG to delete AFTER the
+   *  tombstone push succeeds - never serialized, never synced */
+  pendingMedia?: string
 }
 
 /** Cash handover ("posting"): accumulated cash given to an authorized person

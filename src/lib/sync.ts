@@ -66,7 +66,7 @@ function cleanStudent(s: Student) {
   return rest
 }
 function cleanPayment(p: Payment) {
-  const { pngBlob: _pb, ...rest } = p
+  const { pngBlob: _pb, pendingMedia: _pm, ...rest } = p
   return rest
 }
 
@@ -293,6 +293,16 @@ export async function flushOutbox(): Promise<void> {
       try {
         await applyOp(e.op)
         await db.outbox.delete(e.id!)
+        // a receipt tombstone reached Drive - only now is its PNG safe to
+        // delete; the push failing below keeps the media alive instead of
+        // orphaning the receipt on other devices
+        if (e.op.kind === 'pushJSON' && e.op.file === 'payments') {
+          const pending = (await db.payments.toArray()).filter((p) => p.deletedAt && p.pendingMedia)
+          for (const p of pending) {
+            await queueOp({ kind: 'deleteMedia', fileId: p.pendingMedia! })
+            await db.payments.update(p.id, { pendingMedia: undefined })
+          }
+        }
       } catch (err) {
         log('error', `Outbox op failed (${e.op.kind}): ${err instanceof Error ? err.message : err}`)
         throw err // abort this pass - op stays queued
@@ -435,8 +445,17 @@ export async function pull(): Promise<{
                 if (!needPush.includes('students')) needPush.push('students')
                 continue
               }
-              await db.students.delete(s.id)
-              local.delete(s.id)
+              // keep the tombstone locally instead of purging: a device that
+              // forgets the delete would re-broadcast the record on its next
+              // whole-file push and resurrect it everywhere
+              await db.students.put({
+                ...s,
+                photoBlob: cur.photoBlob,
+                photoFileId: s.photoFileId || cur.photoFileId,
+                folderId: s.folderId || cur.folderId,
+                folderShared: s.folderShared || cur.folderShared,
+              })
+              local.set(s.id, s)
             }
             // 2) records missing from the file: absence is NEVER a delete -
             //    deletes are explicit tombstones above. Missing = the author's
@@ -506,8 +525,11 @@ export async function pull(): Promise<{
                 if (!needPush.includes('payments')) needPush.push('payments')
                 continue
               }
-              await db.payments.delete(p.id)
-              local.delete(p.id)
+              // keep the tombstone locally instead of purging: a device that
+              // forgets the delete would re-broadcast the record on its next
+              // whole-file push and resurrect it everywhere
+              await db.payments.put({ ...p, pngBlob: cur.pngBlob, pngFileId: p.pngFileId || cur.pngFileId })
+              local.set(p.id, p)
             }
             // 2) records missing from the file: absence is NEVER a delete -
             //    deletes are explicit tombstones above. Missing = the author's
@@ -614,8 +636,11 @@ export async function pull(): Promise<{
                 if (!needPush.includes('postings')) needPush.push('postings')
                 continue
               }
-              await db.postings.delete(p.id)
-              local.delete(p.id)
+              // keep the tombstone locally instead of purging: a device that
+              // forgets the delete would re-broadcast the record on its next
+              // whole-file push and resurrect it everywhere
+              await db.postings.put(p)
+              local.set(p.id, p)
             }
             // 2) records missing from the file: absence is NEVER a delete -
             //    deletes are explicit tombstones above. Missing = the
@@ -666,8 +691,11 @@ export async function pull(): Promise<{
                 if (!needPush.includes('attendance')) needPush.push('attendance')
                 continue
               }
-              await db.attendance.delete(a.id)
-              local.delete(a.id)
+              // keep the tombstone locally instead of purging: a device that
+              // forgets the delete would re-broadcast the record on its next
+              // whole-file push and resurrect it everywhere
+              await db.attendance.put(a)
+              local.set(a.id, a)
             }
             // 2) records missing from the file: absence is NEVER a delete -
             //    deletes are explicit tombstones above. Missing = the author's
