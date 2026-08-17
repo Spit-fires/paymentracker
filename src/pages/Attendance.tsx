@@ -14,7 +14,7 @@ import { fmtDateLong, fillMessage, todayKey, dayKey } from '../lib/format'
 import { defaultCenter } from '../lib/sync'
 import { getKV, setKV, K } from '../lib/db'
 import { waLink, openExternal } from '../lib/phone'
-import { Card, PageHeader, EmptyState, Button, Select, Input, cx } from '../components/ui'
+import { Card, PageHeader, EmptyState, Button, Select, Input, Modal, cx } from '../components/ui'
 import { IconClipboardCheck, IconWhatsApp, IconCheck } from '../components/Icons'
 import type { AttendanceStatus } from '../types'
 
@@ -142,16 +142,38 @@ function Bars({
   )
 }
 
-function SummaryChips({ counts, total }: { counts: Record<AttendanceStatus, number>; total: number }) {
+function SummaryChips({
+  counts,
+  total,
+  onPick,
+}: {
+  counts: Record<AttendanceStatus, number>
+  total: number
+  onPick?: (s: AttendanceStatus) => void
+}) {
   const pct = total ? Math.round((counts.present / total) * 100) : 0
   return (
     <div className="grid grid-cols-4 gap-2">
-      {STATUSES.map((s) => (
-        <div key={s} className={cx('rounded-xl px-2 py-2.5 text-center', STATUS_STYLE[s].chip)}>
-          <div className="text-[16px] font-bold leading-tight tabular-nums">{counts[s]}</div>
-          <div className="text-[10.5px] font-semibold opacity-80">{STATUS_STYLE[s].label}</div>
-        </div>
-      ))}
+      {STATUSES.map((s) =>
+        onPick ? (
+          <button
+            key={s}
+            onClick={() => onPick(s)}
+            className={cx(
+              'rounded-xl px-2 py-2.5 text-center transition active:scale-[0.96]',
+              STATUS_STYLE[s].chip,
+            )}
+          >
+            <div className="text-[16px] font-bold leading-tight tabular-nums">{counts[s]}</div>
+            <div className="text-[10.5px] font-semibold opacity-80">{STATUS_STYLE[s].label}</div>
+          </button>
+        ) : (
+          <div key={s} className={cx('rounded-xl px-2 py-2.5 text-center', STATUS_STYLE[s].chip)}>
+            <div className="text-[16px] font-bold leading-tight tabular-nums">{counts[s]}</div>
+            <div className="text-[10.5px] font-semibold opacity-80">{STATUS_STYLE[s].label}</div>
+          </div>
+        ),
+      )}
       <div className="rounded-xl px-2 py-2.5 text-center bg-ink/5 dark:bg-white/10">
         <div className="text-[16px] font-bold leading-tight tabular-nums">{pct}%</div>
         <div className="text-[10.5px] font-semibold opacity-70">Attendance</div>
@@ -485,6 +507,7 @@ function StatsView() {
   const [batch, setBatch] = useState('')
   const [day, setDay] = useState(todayKey())
   const [ready, setReady] = useState(false)
+  const [datesFor, setDatesFor] = useState<AttendanceStatus | null>(null)
   const dark = document.documentElement.classList.contains('dark')
 
   const studentOptions = useMemo(
@@ -590,7 +613,18 @@ function StatsView() {
     return { counts: c, total: rows.length }
   }, [batch, attendances, students])
 
-  /* ---------- Day scope ---------- */
+  /* ---------- Date drilldown (chip → exact dates) ---------- */
+  const dateRows = useMemo(() => {
+    if (!datesFor) return [] as string[]
+    const rows =
+      scope === 'student'
+        ? attendances.filter((a) => a.studentId === studentId && a.status === datesFor)
+        : (() => {
+            const active = new Set(students.filter((s) => !s.archived && s.batch === batch).map((s) => s.id))
+            return attendances.filter((a) => a.batch === batch && active.has(a.studentId) && a.status === datesFor)
+          })()
+    return [...new Set(rows.map((a) => a.day))].sort((a, b) => (a < b ? 1 : -1))
+  }, [datesFor, scope, studentId, batch, attendances, students])
   const dayGroups = useMemo(() => {
     const active = new Set(students.filter((s) => !s.archived).map((s) => s.id))
     const byBatch = new Map<string, { counts: Record<AttendanceStatus, number>; total: number }>()
@@ -695,7 +729,8 @@ function StatsView() {
                 </span>
                 <span className="text-[12px] font-semibold text-teal shrink-0">Change</span>
               </button>
-              <SummaryChips counts={studentTotals.counts} total={studentTotals.total} />
+              <SummaryChips counts={studentTotals.counts} total={studentTotals.total} onPick={setDatesFor} />
+              <div className="text-[11px] text-faint -mt-1">Tap a count to see the exact dates.</div>
               <Card className="!rounded-2xl p-4">
                 <div className="text-[13px] font-bold text-ink dark:text-white mb-2">
                   Monthly attendance · last 12 months
@@ -718,7 +753,8 @@ function StatsView() {
           </Select>
           {batch && (
             <>
-              <SummaryChips counts={batchTotals.counts} total={batchTotals.total} />
+              <SummaryChips counts={batchTotals.counts} total={batchTotals.total} onPick={setDatesFor} />
+              <div className="text-[11px] text-faint -mt-1">Tap a count to see the exact dates.</div>
               <Card className="!rounded-2xl p-4">
                 <div className="text-[13px] font-bold text-ink dark:text-white mb-2">
                   Daily attendance · last 30 days
@@ -798,6 +834,38 @@ function StatsView() {
             </div>
           )}
         </>
+      )}
+
+      {datesFor && (
+        <Modal
+          open
+          onClose={() => setDatesFor(null)}
+          title={`${STATUS_STYLE[datesFor].label} · ${dateRows.length} day${dateRows.length === 1 ? '' : 's'}`}
+        >
+          {dateRows.length === 0 ? (
+            <div className="text-[13px] text-muted dark:text-muted-dark py-4 text-center">
+              No records for this status.
+            </div>
+          ) : (
+            <div>
+              {dateRows.map((d, i) => (
+                <div
+                  key={d}
+                  className={cx(
+                    'flex items-center gap-3 py-2.5',
+                    i > 0 && 'border-t border-line/60 dark:border-line-dark/60',
+                  )}
+                >
+                  <span className={cx('w-2.5 h-2.5 rounded-full shrink-0', STATUS_STYLE[datesFor].cell)} />
+                  <span className="text-[14px] font-semibold text-ink dark:text-white">
+                    {fmtDateLong(isoDayToMs(d))}
+                  </span>
+                  <span className="ml-auto text-[11.5px] text-faint tabular-nums">{d}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Modal>
       )}
     </div>
   )
