@@ -38,10 +38,11 @@ function Splash() {
   )
 }
 
-const WELCOME_TEXT = 'Welcome Back'
+const WELCOME_TEXT = 'Welcome back'
 
 /** Centered, animated greeting shown once per app load (after login/lock). */
 function WelcomeBack() {
+  const { center } = useApp()
   const [gone, setGone] = useState(false)
   useEffect(() => {
     const t = window.setTimeout(() => setGone(true), 1500)
@@ -81,6 +82,17 @@ function WelcomeBack() {
                 </motion.span>
               ))}
             </div>
+            <motion.div
+              initial={{ y: 10, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.9, duration: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
+              className="max-w-[85vw] truncate text-[15px] font-semibold text-ink/70 dark:text-white/70"
+            >
+              to{' '}
+              <span className="text-ink dark:text-accent-dark font-bold">
+                {center.name || 'UTSAHO EDUCARE'}
+              </span>
+            </motion.div>
           </div>
         </motion.div>
       )}
