@@ -347,22 +347,16 @@ export function Settings() {
             <Input value={form.tagline} onChange={(e) => setForm({ ...form, tagline: e.target.value })} />
           </Field>
           <div className="grid grid-cols-1 gap-3">
-            <Field label="Address / area" hint="Multi-line - use the toolbar for bold, colors and alignment">
+            <Field
+              label="Address & phone"
+              hint="Multi-line - use the toolbar for bold, colors and alignment. Shown on every receipt."
+            >
               <RichEditor
                 value={form.addressHtml || ''}
                 onChange={(html, text) =>
                   setForm((p) => ({ ...p, addressHtml: html || undefined, address: text || '' }))
                 }
-                placeholder="e.g. House 12, Road 5, Dhanmondi, Dhaka"
-              />
-            </Field>
-            <Field label="Phone" hint="Multi-line - e.g. hotline on the first line, mobile on the second">
-              <RichEditor
-                value={form.phoneHtml || ''}
-                onChange={(html, text) =>
-                  setForm((p) => ({ ...p, phoneHtml: html || undefined, phone: text || '' }))
-                }
-                placeholder="e.g. +880 1234 567890"
+                placeholder={'e.g. House 12, Road 5, Dhanmondi, Dhaka\n+880 1234 567890'}
               />
             </Field>
           </div>
