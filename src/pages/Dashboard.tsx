@@ -78,7 +78,7 @@ export function Dashboard() {
       .sort((a, b) => a.batch.localeCompare(b.batch))
   }, [rows, balanceByStudent])
 
-  const firstName = user?.name?.split(' ')[0] || 'Teacher'
+  const firstName = user?.name?.split('xyz')[0] || 'Teacher'
 
   const onSearch = (e: React.FormEvent) => {
     e.preventDefault()
