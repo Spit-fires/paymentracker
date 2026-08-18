@@ -57,6 +57,11 @@ export function fmtDateLong(ms: number): string {
   })
 }
 
+/** weekday name, e.g. "Wednesday" */
+export function fmtWeekday(ms: number): string {
+  return new Date(ms).toLocaleDateString('en-GB', { weekday: 'long' })
+}
+
 export function periodNow(): string {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`

@@ -439,7 +439,7 @@ export function Settings() {
           </Field>
           <Field
             label="Absent student message"
-            hint="Sent to absent students from the Attendance page. {date}, {batch}, {routine} and {routine date} are filled in automatically - plan the routine in the Routine panel first."
+            hint="Sent to absent students from the Attendance page. {date}, {batch}, {routine}, {routine date} and {routine day} are filled in automatically - plan the routine in the Routine panel first."
           >
             <Textarea
               value={form.attendanceMsg ?? defaultCenter().attendanceMsg ?? ''}
@@ -451,7 +451,7 @@ export function Settings() {
           <p className="text-[11.5px] text-faint">
             Available tokens:{" "}
             <span className="font-mono">
-              {"{student} {period} {center} {link} {date} {batch} {routine} {routine date}"}
+              {"{student} {period} {center} {link} {date} {batch} {routine} {routine date} {routine day}"}
             </span>{" "}
             - leave a field empty to keep the default message.
           </p>

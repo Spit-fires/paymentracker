@@ -10,7 +10,7 @@ import {
   Legend,
 } from 'chart.js'
 import { useApp } from '../state/AppContext'
-import { fmtDateLong, fillMessage, todayKey, dayKey, addDays } from '../lib/format'
+import { fmtDateLong, fmtWeekday, fillMessage, todayKey, dayKey, addDays } from '../lib/format'
 import { defaultCenter } from '../lib/sync'
 import { getKV, setKV, K } from '../lib/db'
 import { waLink, openExternal } from '../lib/phone'
@@ -489,6 +489,7 @@ function ClearView() {
                 // legacy time/subjects records from before the merge are ignored
                 routine: found?.routine?.text || '',
                 'routine date': found ? fmtDateLong(isoDayToMs(found.day)) : '',
+                'routine day': found ? fmtWeekday(isoDayToMs(found.day)) : '',
               })
               return (
                 <Card key={s.id} className="!rounded-xl p-3.5 flex items-center gap-3">
