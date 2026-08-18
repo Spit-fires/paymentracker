@@ -86,12 +86,9 @@ function WelcomeBack() {
               initial={{ y: 10, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.9, duration: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
-              className="max-w-[85vw] truncate text-[15px] font-semibold text-ink/70 dark:text-white/70"
+              className="max-w-[85vw] truncate text-[20px] font-bold text-ink dark:text-accent-dark"
             >
-              to{' '}
-              <span className="text-ink dark:text-accent-dark font-bold">
-                {center.name || 'UTSAHO EDUCARE'}
-              </span>
+              {center.name || 'UTSAHO EDUCARE'}
             </motion.div>
           </div>
         </motion.div>
