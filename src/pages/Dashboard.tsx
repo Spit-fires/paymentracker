@@ -157,13 +157,13 @@ export function Dashboard() {
           </div>
         </Card>
         <button onClick={() => navigate('/students?mode=record')} className="text-left">
-          <Card className="!rounded-2xl p-3.5 h-full flex flex-col justify-center active:scale-[0.98] transition">
-            <div className="text-[11px] font-semibold text-muted dark:text-muted-dark">Record payment</div>
-            <div className="inline-flex items-center gap-1.5 text-teal font-bold mt-1">
+          <div className="h-full flex flex-col justify-center rounded-2xl bg-ink text-white dark:bg-ink-soft p-3.5 border border-ink dark:border-ink-soft shadow-[0_2px_8px_rgba(18,49,79,0.28)] active:scale-[0.98] transition">
+            <div className="text-[11px] font-semibold text-white/70">Record payment</div>
+            <div className="inline-flex items-center gap-1.5 text-white font-bold mt-1">
               <IconReceipt className="w-4 h-4" />
               <span className="text-[14px] leading-tight">Tap to record</span>
             </div>
-          </Card>
+          </div>
         </button>
       </div>
 

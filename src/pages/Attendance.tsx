@@ -10,7 +10,7 @@ import {
   Legend,
 } from 'chart.js'
 import { useApp } from '../state/AppContext'
-import { fmtDateLong, fillMessage, todayKey, dayKey } from '../lib/format'
+import { fmtDateLong, fillMessage, todayKey, dayKey, addDays } from '../lib/format'
 import { defaultCenter } from '../lib/sync'
 import { getKV, setKV, K } from '../lib/db'
 import { waLink, openExternal } from '../lib/phone'
@@ -458,7 +458,10 @@ function ClearView() {
           <div className="space-y-2">
             {list.map((s) => {
               const phone = s.phone || s.phone2 || ''
-              const routine = routines.find((r) => r.batch === (s.batch || batch) && r.day === day)
+              // the message tells the parent about the NEXT class, so we use
+              // the routine planned for the day after the attendance day
+              const routineDay = addDays(day, 1)
+              const routine = routines.find((r) => r.batch === (s.batch || batch) && r.day === routineDay)
               const msg = fillMessage(template, {
                 student: s.name,
                 date: fmtDateLong(isoDayToMs(day)),
@@ -467,6 +470,7 @@ function ClearView() {
                 // only new-format routines (single text field) are valid -
                 // legacy time/subjects records from before the merge are ignored
                 routine: routine?.text || '',
+                'routine date': fmtDateLong(isoDayToMs(routineDay)),
               })
               return (
                 <Card key={s.id} className="!rounded-xl p-3.5 flex items-center gap-3">

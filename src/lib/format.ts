@@ -94,6 +94,13 @@ export function newId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 }
 
+/** day key shifted by a number of days (e.g. +1 = the next day) */
+export function addDays(key: string, delta: number): string {
+  const d = new Date(`${key}T12:00:00`)
+  d.setDate(d.getDate() + delta)
+  return dayKey(d)
+}
+
 /** Fill {token} placeholders in an editable message template. Unknown tokens
  *  are left verbatim so templates stay forward-compatible. Tokens may contain
  *  spaces (e.g. {routine time}) - they are matched greedily per word group. */
