@@ -138,6 +138,20 @@ let toastId = 0
 // which otherwise races two GIS popup flows and can log the user out
 let bootStarted = false
 
+/** Receipts no longer print a separate phone block - the old phone field is
+ *  merged into the rich Address & phone field. Preserves the data when the
+ *  address block is still empty, drops it otherwise (the user already merged
+ *  it by hand). */
+function migrateLegacyPhone(c: Center): Center {
+  if (!c.phone && !c.phoneHtml) return c
+  const next: Center = { ...c, phone: '', phoneHtml: undefined }
+  if (!c.addressHtml && !c.address) {
+    next.addressHtml = c.phoneHtml || undefined
+    next.address = c.phone || ''
+  }
+  return next
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [initialized, setInitialized] = useState(false)
   const [user, setUser] = useState<SessionUser | null>(null)
@@ -173,7 +187,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPostings((await db.postings.toArray()).filter((p) => !p.deletedAt))
     setAttendances((await db.attendance.toArray()).filter((a) => !a.deletedAt))
     setRoutines((await db.routines.toArray()).filter((r) => !r.deletedAt))
-    setCenter((await getKV<Center>(K.CENTER)) || defaultCenter())
+    const loaded = (await getKV<Center>(K.CENTER)) || defaultCenter()
+    // soft-migrate the legacy phone field: receipts no longer print it - if
+    // the address block is empty, the old phone moves there (preserved as
+    // rich HTML when it was one), otherwise the phone is dropped. The pending
+    // meta op flushes on the next sync tick.
+    const migrated = migrateLegacyPhone(loaded)
+    if (migrated !== loaded) {
+      await setKV(K.CENTER, migrated)
+      await queueOp({ kind: 'pushJSON', file: 'meta' })
+    }
+    setCenter(migrated)
     setTeachers(((await getKV<Teacher[]>(K.TEACHERS)) || []).filter((t) => !t.deletedAt))
     setReceiptSeq((await getKV<number>(K.RECEIPT_SEQ)) || 0)
   }, [])
