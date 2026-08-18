@@ -1,4 +1,11 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
+import { EditorContent, useEditor, useEditorState } from '@tiptap/react'
+import { StarterKit } from '@tiptap/starter-kit'
+import { Underline } from '@tiptap/extension-underline'
+import { TextStyle } from '@tiptap/extension-text-style'
+import { Color } from '@tiptap/extension-color'
+import { TextAlign } from '@tiptap/extension-text-align'
+import { Placeholder } from '@tiptap/extension-placeholder'
 import { cx } from './ui'
 
 const ALLOWED_TAGS = new Set([
@@ -78,75 +85,89 @@ const COLORS = [
 
 const SIZES = [12, 14, 16, 18, 20, 24]
 
-function exec(cmd: string, value?: string) {
-  document.execCommand('styleWithCSS', false, 'true')
-  document.execCommand(cmd, false, value)
-}
-
-function wrapSelection(tag: string, attrs: Record<string, string>) {
-  const sel = window.getSelection()
-  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return
-  const range = sel.getRangeAt(0)
-  const span = document.createElement(tag)
-  for (const [k, v] of Object.entries(attrs)) span.setAttribute(k, v)
-  span.appendChild(range.cloneContents())
-  range.deleteContents()
-  range.insertNode(span)
-  sel.removeAllRanges()
-  const r = document.createRange()
-  r.selectNodeContents(span)
-  sel.addRange(r)
-}
-
 interface Props {
   value?: string
   onChange: (html: string, text: string) => void
   placeholder?: string
 }
 
+type ToolbarState = {
+  bold: boolean
+  italic: boolean
+  underline: boolean
+  strike: boolean
+  align: 'left' | 'center' | 'right'
+  bullet: boolean
+  ordered: boolean
+  color: string | undefined
+  fontSize: string | undefined
+  canUndo: boolean
+  canRedo: boolean
+}
+
 export function RichEditor({ value, onChange, placeholder }: Props) {
-  const ref = useRef<HTMLDivElement>(null)
-  const last = useRef('')
+  const editor = useEditor({
+    immediatelyRender: false,
+    extensions: [
+      StarterKit,
+      Underline,
+      TextStyle,
+      Color.configure({ types: [TextStyle.name] }),
+      TextAlign.configure({ types: ['paragraph', 'heading'] }),
+      Placeholder.configure({ placeholder, emptyEditorClass: 'is-editor-empty' }),
+    ],
+    content: value || '',
+    onUpdate: ({ editor }) => onChange(editor.getHTML(), editor.getText()),
+  })
 
-  // seed the editor from the store; never clobber a focused document
+  // controlled sync: apply an external value only when it differs and the
+  // user isn't editing right now (never clobber an in-progress document)
   useEffect(() => {
-    const el = ref.current
-    if (!el || document.activeElement === el) return
-    const v = value || ''
-    if (last.current !== v) {
-      last.current = v
-      el.innerHTML = v
-    }
-  }, [value])
+    if (!editor || !value) return
+    if (editor.isFocused) return
+    if (editor.getHTML() === value) return
+    editor.commands.setContent(value, { emitUpdate: false })
+  }, [value, editor])
 
-  const emit = () => {
-    const el = ref.current
-    if (!el) return
-    last.current = el.innerHTML
-    onChange(el.innerHTML, el.innerText)
+  const toolbar = useEditorState<ToolbarState | null>({
+    editor,
+    selector: (ctx) => {
+      const e = ctx.editor
+      if (!e) return null
+      return {
+        bold: e.isActive('bold'),
+        italic: e.isActive('italic'),
+        underline: e.isActive('underline'),
+        strike: e.isActive('strike'),
+        align: e.isActive({ textAlign: 'center' })
+          ? 'center'
+          : e.isActive({ textAlign: 'right' })
+            ? 'right'
+            : 'left',
+        bullet: e.isActive('bulletList'),
+        ordered: e.isActive('orderedList'),
+        color: (e.getAttributes('textStyle').color as string | undefined) || undefined,
+        fontSize: (e.getAttributes('textStyle').fontSize as string | undefined) || undefined,
+        canUndo: e.can().undo(),
+        canRedo: e.can().redo(),
+      }
+    },
+  })
+
+  if (!editor) {
+    return (
+      <div className="rounded-xl border border-line dark:border-line-dark overflow-hidden min-h-[96px]" />
+    )
   }
 
-  const run = (cmd: string, value?: string) => {
-    elFocus()
-    exec(cmd, value)
-    emit()
-  }
+  const chain = () => editor.chain().focus()
 
-  const setSize = (px: number) => {
-    elFocus()
-    wrapSelection('span', { style: `font-size:${px}px` })
-    emit()
-  }
-
-  const setColor = (c: string) => {
-    elFocus()
-    exec('foreColor', c)
-    emit()
-  }
-
-  const elFocus = () => ref.current?.focus()
-
-  const btn = (active: boolean, onClick: () => void, label: string, title: string) => (
+  const btn = (
+    active: boolean,
+    onClick: () => void,
+    label: string,
+    title: string,
+  ) => (
     <button
       key={title}
       type="button"
@@ -164,18 +185,29 @@ export function RichEditor({ value, onChange, placeholder }: Props) {
     </button>
   )
 
+  const setSize = (px: number) => {
+    chain().setMark('textStyle', { fontSize: `${px}px` }).run()
+  }
+
+  const setColor = (c: string) => {
+    if (c === 'inherit') chain().unsetColor().run()
+    else chain().setColor(c).run()
+  }
+
+  const divider = <span key="d" className="w-px h-5 bg-line dark:bg-line-dark mx-1" />
+
   return (
     <div className="rounded-xl border border-line dark:border-line-dark overflow-hidden">
       <div className="flex flex-wrap gap-0.5 items-center bg-cream dark:bg-input-dark px-1.5 py-1 border-b border-line dark:border-line-dark">
-        {btn(false, () => run('bold'), 'B', 'Bold')}
-        {btn(false, () => run('italic'), 'I', 'Italic')}
-        {btn(false, () => run('underline'), 'U', 'Underline')}
-        {btn(false, () => run('strikeThrough'), 'S', 'Strikethrough')}
-        <span className="w-px h-5 bg-line dark:bg-line-dark mx-1" />
+        {btn(toolbar?.bold || false, () => chain().toggleBold().run(), 'B', 'Bold')}
+        {btn(toolbar?.italic || false, () => chain().toggleItalic().run(), 'I', 'Italic')}
+        {btn(toolbar?.underline || false, () => chain().toggleUnderline().run(), 'U', 'Underline')}
+        {btn(toolbar?.strike || false, () => chain().toggleStrike().run(), 'S', 'Strikethrough')}
+        {divider}
         <select
           onMouseDown={(e) => e.stopPropagation()}
           onChange={(e) => setSize(Number(e.target.value))}
-          defaultValue=""
+          value={toolbar?.fontSize ? toolbar.fontSize.replace('px', '') : ''}
           className="h-8 rounded-lg bg-white dark:bg-card-dark border border-line dark:border-line-dark px-1 text-[12px] font-semibold text-body dark:text-text-dark"
           title="Font size"
         >
@@ -188,40 +220,47 @@ export function RichEditor({ value, onChange, placeholder }: Props) {
             </option>
           ))}
         </select>
-        <span className="w-px h-5 bg-line dark:bg-line-dark mx-1" />
-        <select
-          onMouseDown={(e) => e.stopPropagation()}
-          onChange={(e) => setColor(e.target.value)}
-          defaultValue=""
-          className="h-8 rounded-lg bg-white dark:bg-card-dark border border-line dark:border-line-dark px-1 text-[12px] font-semibold text-body dark:text-text-dark"
-          title="Text color"
-        >
-          <option value="" disabled>
-            Color
-          </option>
+        {divider}
+        <div className="flex items-center gap-1" title="Text color">
           {COLORS.map((c) => (
-            <option key={c.label} value={c.value}>
-              {c.label}
-            </option>
+            <button
+              key={c.label}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => setColor(c.value)}
+              title={c.label}
+              aria-label={c.label}
+              className={cx(
+                'w-6 h-6 rounded-full border grid place-items-center transition active:scale-90',
+                c.value === 'inherit'
+                  ? 'border-line dark:border-line-dark bg-white dark:bg-card-dark text-faint dark:text-[#5f7a92]'
+                  : '',
+                toolbar?.color === c.value && 'ring-2 ring-teal/60 ring-offset-1 ring-offset-cream dark:ring-offset-input-dark',
+              )}
+            >
+              {c.value === 'inherit' ? (
+                <span className="text-[11px] leading-none font-bold">A</span>
+              ) : (
+                <span className="w-4 h-4 rounded-full" style={{ background: c.value }} />
+              )}
+            </button>
           ))}
-        </select>
-        <span className="w-px h-5 bg-line dark:bg-line-dark mx-1" />
-        {btn(false, () => run('justifyLeft'), '⇤', 'Align left')}
-        {btn(false, () => run('justifyCenter'), '⇹', 'Align center')}
-        {btn(false, () => run('justifyRight'), '⇥', 'Align right')}
-        <span className="w-px h-5 bg-line dark:bg-line-dark mx-1" />
-        {btn(false, () => run('insertUnorderedList'), '•≡', 'Bullet list')}
-        {btn(false, () => run('insertOrderedList'), '1≡', 'Numbered list')}
-        {btn(false, () => run('removeFormat'), '⌫', 'Clear formatting')}
+        </div>
+        {divider}
+        {btn(toolbar?.align === 'left', () => chain().setTextAlign('left').run(), '⇤', 'Align left')}
+        {btn(toolbar?.align === 'center', () => chain().setTextAlign('center').run(), '⇹', 'Align center')}
+        {btn(toolbar?.align === 'right', () => chain().setTextAlign('right').run(), '⇥', 'Align right')}
+        {divider}
+        {btn(toolbar?.bullet || false, () => chain().toggleBulletList().run(), '•≡', 'Bullet list')}
+        {btn(toolbar?.ordered || false, () => chain().toggleOrderedList().run(), '1≡', 'Numbered list')}
+        {btn(false, () => chain().unsetAllMarks().run(), '⌫', 'Clear formatting')}
+        {divider}
+        {btn(toolbar?.canUndo || false, () => chain().undo().run(), '↩', 'Undo')}
+        {btn(toolbar?.canRedo || false, () => chain().redo().run(), '↪', 'Redo')}
       </div>
-      <div
-        ref={ref}
-        contentEditable
-        suppressContentEditableWarning
-        onInput={emit}
-        onBlur={emit}
-        data-placeholder={placeholder}
-        className="rich-editor min-h-[96px] max-h-64 overflow-y-auto px-3 py-2.5 text-[14px] text-body dark:text-text-dark focus:outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-faint empty:before:pointer-events-none"
+      <EditorContent
+        editor={editor}
+        className="tiptap min-h-[96px] max-h-64 overflow-y-auto px-3 py-2.5 text-[14px] text-body dark:text-text-dark focus:outline-none [&_.ProseMirror]:outline-none [&_.ProseMirror]:min-h-[80px] [&_.ProseMirror]:whitespace-pre-wrap"
       />
     </div>
   )
