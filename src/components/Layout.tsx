@@ -56,6 +56,17 @@ export function Layout({ children }: { children: ReactNode }) {
 
       <div className="flex-1 pb-24">{children}</div>
 
+      <footer className="no-print px-6 pb-28">
+        <a
+          href="https://fh.js.cool/"
+          target="_blank"
+          rel="noreferrer"
+          className="block text-center text-[11.5px] font-medium text-faint dark:text-[#5f7a92] hover:text-ink dark:hover:text-accent-dark transition-colors"
+        >
+          Made by Fahad Hossain
+        </a>
+      </footer>
+
       <nav className="no-print fixed bottom-0 inset-x-0 z-40">
         <div className="app-shell-safe mx-auto max-w-[480px] bg-white/95 dark:bg-[#0e1823]/95 backdrop-blur border-t border-line dark:border-line-dark grid grid-cols-5 safe-b">
           {tabs.map(({ to, label, Icon }) => (

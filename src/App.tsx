@@ -91,6 +91,14 @@ function WelcomeBack() {
               {center.name || 'UTSAHO EDUCARE'}
             </motion.div>
           </div>
+          <a
+            href="https://fh.js.cool/"
+            target="_blank"
+            rel="noreferrer"
+            className="absolute bottom-5 inset-x-0 text-center text-[12px] font-medium text-ink/40 dark:text-white/40 hover:text-ink/70 dark:hover:text-white/70 transition-colors"
+          >
+            Made by Fahad Hossain
+          </a>
         </motion.div>
       )}
     </AnimatePresence>
