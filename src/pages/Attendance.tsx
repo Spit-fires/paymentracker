@@ -16,7 +16,7 @@ import { getKV, setKV, K } from '../lib/db'
 import { waLink, openExternal } from '../lib/phone'
 import { Card, PageHeader, EmptyState, Button, Select, Input, Modal, cx } from '../components/ui'
 import { IconClipboardCheck, IconWhatsApp, IconCheck } from '../components/Icons'
-import type { AttendanceStatus } from '../types'
+import type { AttendanceStatus, Routine } from '../types'
 
 ChartJS.register(BarController, BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 
@@ -412,6 +412,24 @@ function ClearView() {
   const template = (center.attendanceMsg || defaultCenter().attendanceMsg || '').trim()
   const total = groups.reduce((n, [, list]) => n + list.length, 0)
 
+  // per batch, find the NEXT marked routine day after the attendance day -
+  // holidays are simply days without a routine, so a Thursday message with a
+  // Saturday routine only sends the Saturday one
+  const routineByBatch = useMemo(() => {
+    const m = new Map<string, { day: string; routine?: Routine }>()
+    for (const [batch] of groups) {
+      for (let i = 1; i <= 14; i++) {
+        const d = addDays(day, i)
+        const routine = routines.find((r) => r.batch === batch && r.day === d)
+        if (routine) {
+          m.set(batch, { day: d, routine })
+          break
+        }
+      }
+    }
+    return m
+  }, [groups, routines, day])
+
   const clearedById = useMemo(() => {
     const m = new Map<string, boolean>()
     for (const a of attendances) if (a.day === day) m.set(a.id, Boolean(a.cleared))
@@ -458,10 +476,10 @@ function ClearView() {
           <div className="space-y-2">
             {list.map((s) => {
               const phone = s.phone || s.phone2 || ''
-              // the message tells the parent about the NEXT class, so we use
-              // the routine planned for the day after the attendance day
-              const routineDay = addDays(day, 1)
-              const routine = routines.find((r) => r.batch === (s.batch || batch) && r.day === routineDay)
+              // the message tells the parent about the NEXT class - the first
+              // day after the attendance day that has a routine for this batch
+              // (holidays are skipped because they have no routine)
+              const found = routineByBatch.get(batch)
               const msg = fillMessage(template, {
                 student: s.name,
                 date: fmtDateLong(isoDayToMs(day)),
@@ -469,8 +487,8 @@ function ClearView() {
                 center: center.name || 'our center',
                 // only new-format routines (single text field) are valid -
                 // legacy time/subjects records from before the merge are ignored
-                routine: routine?.text || '',
-                'routine date': fmtDateLong(isoDayToMs(routineDay)),
+                routine: found?.routine?.text || '',
+                'routine date': found ? fmtDateLong(isoDayToMs(found.day)) : '',
               })
               return (
                 <Card key={s.id} className="!rounded-xl p-3.5 flex items-center gap-3">
