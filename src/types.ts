@@ -99,16 +99,19 @@ export interface Attendance {
 /** One routine (class schedule) per batch per day. The id is deterministic
  *  (`day_batch`), so re-saving a day+batch updates instead of duplicating and
  *  two devices editing the same slot merge cleanly via the LWW machinery.
- *  `time` and `subjects` are free text (teacher-written), substituted into the
- *  absent-student WhatsApp message via {routine time} / {routine subjects}. */
+ *  `text` is free text (teacher-written), substituted into the absent-student
+ *  WhatsApp message via the {routine} token. `time`/`subjects` are legacy
+ *  fields kept for old records created before the merge. */
 export interface Routine {
   id: string
   /** local day key, 'YYYY-MM-DD' - defaults to tomorrow when planning */
   day: string
   batch: string
-  /** free-text class time, e.g. "3:00 PM - 5:00 PM" */
+  /** free text: class time + subjects, e.g. "3:00 PM - 5:00 PM\nMath, English" */
+  text?: string
+  /** @deprecated legacy, merged into text */
   time?: string
-  /** free-text subject list, one per line */
+  /** @deprecated legacy, merged into text */
   subjects?: string
   updatedAt: number
   /** tombstone - set (instead of removing) when deleted; syncs deletes across devices */

@@ -19,12 +19,16 @@ function fmtDay(day: string): string {
   })
 }
 
+/** merged text for a routine, falling back to the legacy time/subjects fields */
+function routineText(r: { text?: string; time?: string; subjects?: string }): string {
+  return r.text || [r.time, r.subjects].filter(Boolean).join('\n')
+}
+
 export function Routines() {
   const { students, routines, saveRoutine, deleteRoutine, showToast } = useApp()
   const [day, setDay] = useState(tomorrowKey())
   const [batch, setBatch] = useState('')
-  const [time, setTime] = useState('')
-  const [subjects, setSubjects] = useState('')
+  const [text, setText] = useState('')
   const [editing, setEditing] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -45,15 +49,13 @@ export function Routines() {
   const startEdit = (r: (typeof dayRows)[number]) => {
     setEditing(r.id)
     setBatch(r.batch)
-    setTime(r.time || '')
-    setSubjects(r.subjects || '')
+    setText(routineText(r))
   }
 
   const resetForm = () => {
     setEditing(null)
     setBatch('')
-    setTime('')
-    setSubjects('')
+    setText('')
   }
 
   const save = async () => {
@@ -61,7 +63,7 @@ export function Routines() {
     if (!batch) return showToast('Pick a batch first', 'err')
     setSaving(true)
     try {
-      await saveRoutine({ day, batch, time, subjects })
+      await saveRoutine({ day, batch, text })
       showToast(editing ? 'Routine updated' : 'Routine saved', 'ok')
       resetForm()
     } catch (e) {
@@ -79,7 +81,7 @@ export function Routines() {
 
   return (
     <div className="pb-4">
-      <PageHeader title="Routine" subtitle="Plan class time & subjects for each day" />
+      <PageHeader title="Routine" subtitle="Plan the class routine for each day" />
 
       <div className="px-4 space-y-3">
         {/* Planner card */}
@@ -121,19 +123,11 @@ export function Routines() {
             )}
           </div>
 
-          <Field label="Time">
-            <Input
-              value={time}
-              onChange={(e) => setTime(e.target.value)}
-              placeholder="e.g. 3:00 PM - 5:00 PM"
-            />
-          </Field>
-
-          <Field label="Subjects">
+          <Field label="Routine">
             <Textarea
-              value={subjects}
-              onChange={(e) => setSubjects(e.target.value)}
-              placeholder={'e.g.\nMathematics\nEnglish\nScience'}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder={'e.g. 3:00 PM - 5:00 PM\nMathematics, English, Science'}
               rows={4}
             />
           </Field>
@@ -164,8 +158,10 @@ export function Routines() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-[14px] font-bold text-ink dark:text-white truncate">{r.batch}</div>
-                    {r.time && (
-                      <div className="text-[12px] text-muted dark:text-muted-dark truncate">{r.time}</div>
+                    {routineText(r) && (
+                      <div className="text-[12px] text-muted dark:text-muted-dark whitespace-pre-line leading-snug line-clamp-2">
+                        {routineText(r)}
+                      </div>
                     )}
                   </div>
                   <button
@@ -193,7 +189,7 @@ export function Routines() {
             <EmptyState
               icon={<IconCheck className="w-7 h-7" />}
               title="Nothing planned for this day"
-              subtitle="Pick a batch and save a routine - {routine time} and {routine subjects} then fill themselves into the absent-student WhatsApp message."
+              subtitle="Pick a batch and save a routine - {routine} then fills itself into the absent-student WhatsApp message."
             />
           </Card>
         )}

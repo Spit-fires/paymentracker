@@ -116,7 +116,7 @@ interface Ctx {
   toggleCleared: (id: string, cleared: boolean) => Promise<void>
 
   routines: Routine[]
-  saveRoutine: (input: { day: string; batch: string; time: string; subjects: string }) => Promise<void>
+  saveRoutine: (input: { day: string; batch: string; text: string }) => Promise<void>
   deleteRoutine: (id: string) => Promise<void>
 
   updateCenter: (c: Center) => Promise<void>
@@ -713,7 +713,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   )
 
   const saveRoutine = useCallback(
-    async (input: { day: string; batch: string; time: string; subjects: string }) => {
+    async (input: { day: string; batch: string; text: string }) => {
       // one logical edit per day-batch slot: a single timestamp keeps edits
       // from two devices merging into a perpetual re-push loop
       const now = Date.now()
@@ -721,8 +721,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         id: `${input.day}_${input.batch}`,
         day: input.day,
         batch: input.batch,
-        time: input.time.trim(),
-        subjects: input.subjects.trim(),
+        text: input.text.trim(),
         updatedAt: now,
       })
       await queueOp({ kind: 'pushJSON', file: 'routines' })

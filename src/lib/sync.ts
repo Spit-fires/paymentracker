@@ -348,7 +348,7 @@ function attendanceSig(a: Attendance): string {
   return JSON.stringify([a.studentId, a.day, a.batch, a.status, a.deletedAt ?? null])
 }
 function routineSig(r: Routine): string {
-  return JSON.stringify([r.day, r.batch, r.time || '', r.subjects || '', r.deletedAt ?? null])
+  return JSON.stringify([r.day, r.batch, r.text || '', r.deletedAt ?? null])
 }
 
 /**

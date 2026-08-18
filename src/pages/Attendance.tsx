@@ -464,8 +464,7 @@ function ClearView() {
                 date: fmtDateLong(isoDayToMs(day)),
                 batch: s.batch || batch,
                 center: center.name || 'our center',
-                'routine time': routine?.time || '',
-                'routine subjects': routine?.subjects || '',
+                routine: routine?.text || [routine?.time, routine?.subjects].filter(Boolean).join('\n') || '',
               })
               return (
                 <Card key={s.id} className="!rounded-xl p-3.5 flex items-center gap-3">
