@@ -464,7 +464,9 @@ function ClearView() {
                 date: fmtDateLong(isoDayToMs(day)),
                 batch: s.batch || batch,
                 center: center.name || 'our center',
-                routine: routine?.text || [routine?.time, routine?.subjects].filter(Boolean).join('\n') || '',
+                // only new-format routines (single text field) are valid -
+                // legacy time/subjects records from before the merge are ignored
+                routine: routine?.text || '',
               })
               return (
                 <Card key={s.id} className="!rounded-xl p-3.5 flex items-center gap-3">
@@ -898,7 +900,7 @@ export function Attendance() {
           {(
             [
               ['take', 'Take attendance'],
-              ['clear', 'Absent info'],
+              ['clear', 'Absent Inform'],
               ['stats', 'Statistics'],
             ] as Array<[Tab, string]>
           ).map(([t, label]) => (

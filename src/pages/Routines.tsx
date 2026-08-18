@@ -19,9 +19,11 @@ function fmtDay(day: string): string {
   })
 }
 
-/** merged text for a routine, falling back to the legacy time/subjects fields */
-function routineText(r: { text?: string; time?: string; subjects?: string }): string {
-  return r.text || [r.time, r.subjects].filter(Boolean).join('\n')
+/** merged text for a routine - legacy time/subjects records (pre-merge) are
+ *  not valid and are ignored; editing one starts blank so saving re-creates
+ *  it in the new single-field format */
+function routineText(r: { text?: string }): string {
+  return r.text || ''
 }
 
 export function Routines() {
