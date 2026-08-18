@@ -683,6 +683,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const now = Date.now()
       const batch = input.batch
       await db.transaction('rw', db.attendance, async () => {
+        const marked = new Set(input.marks.map((m) => m.studentId))
         const rows: Attendance[] = input.marks.map((m) => ({
           id: `${m.studentId}_${input.day}`,
           studentId: m.studentId,
@@ -692,6 +693,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
           updatedAt: now,
         }))
         await db.attendance.bulkPut(rows)
+        // students unselected in this save get tombstones so the merge
+        // machinery converges on the un-marked state across devices
+        for (const cur of await db.attendance.toArray()) {
+          if (cur.day !== input.day || cur.batch !== batch || cur.deletedAt) continue
+          if (marked.has(cur.studentId)) continue
+          await db.attendance.put({ ...cur, deletedAt: now, updatedAt: now })
+        }
       })
       await queueOp({ kind: 'pushJSON', file: 'attendance' })
       await refreshData()
