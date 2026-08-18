@@ -123,64 +123,67 @@ export function ReceiptCard({ center, student, payment }: Props) {
           border: `1.5px solid ${NAVY}`,
           borderRadius: 0,
           background: CREAM,
-          display: 'flex',
+          position: 'relative',
         }}
       >
-        {/* amount stack + PAID seal: the seal is anchored to THIS block only,
-            so the Due column on the right can never shift it */}
-        <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
-          <div style={{ padding: '12px 16px' }}>
-            <div style={{ fontSize: 9.5, letterSpacing: '0.18em', textTransform: 'uppercase', color: MUTED }}>
-              Amount paid
+        <div style={{ display: 'flex' }}>
+          {/* amount stack */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ padding: '12px 16px' }}>
+              <div style={{ fontSize: 9.5, letterSpacing: '0.18em', textTransform: 'uppercase', color: MUTED }}>
+                Amount paid
+              </div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: NAVY, marginTop: 3, lineHeight: 1 }}>
+                {fmtTaka(payment.amount)}
+              </div>
             </div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: NAVY, marginTop: 3, lineHeight: 1 }}>
-              {fmtTaka(payment.amount)}
+            <div style={{ borderTop: `1px dashed ${LINE}`, padding: '8px 16px', fontSize: 10.5, fontStyle: 'italic', color: MUTED }}>
+              Taka {takaToWords(payment.amount)} Only
             </div>
           </div>
-          <div style={{ borderTop: `1px dashed ${LINE}`, padding: '8px 16px', fontSize: 10.5, fontStyle: 'italic', color: MUTED }}>
-            Taka {takaToWords(payment.amount)} Only
-          </div>
-          {showPaid && (
+          {showDue && (
             <div
               style={{
-                position: 'absolute',
-                inset: 0,
-                display: 'grid',
-                placeItems: 'center',
-                zIndex: 1,
-                pointerEvents: 'none',
-                userSelect: 'none',
+                padding: '12px 16px',
+                textAlign: 'right',
+                borderLeft: `1px dashed ${LINE}`,
+                background: '#fff',
               }}
             >
-              <img
-                src={paidSrc}
-                alt="PAID"
-                style={{
-                  width: 150,
-                  height: 'auto',
-                  transform: 'rotate(-15deg)',
-                  opacity: 0.5,
-                  mixBlendMode: 'multiply',
-                }}
-              />
+              <div style={{ fontSize: 9.5, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#b23b3b', fontWeight: 800 }}>
+                Due
+              </div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#e11d1d', marginTop: 3, lineHeight: 1 }}>
+                {fmtTaka(due)}
+              </div>
             </div>
           )}
         </div>
-        {showDue && (
+        {/* PAID seal - absolute over the whole amount panel, so it always
+            sits dead-center of the card regardless of the Due column */}
+        {showPaid && (
           <div
             style={{
-              padding: '12px 16px',
-              textAlign: 'right',
-              borderLeft: `1px dashed ${LINE}`,
-              background: '#fff',
+              position: 'absolute',
+              inset: 0,
+              display: 'grid',
+              placeItems: 'center',
+              zIndex: 1,
+              pointerEvents: 'none',
+              userSelect: 'none',
             }}
           >
-            <div style={{ fontSize: 9.5, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#b23b3b', fontWeight: 800 }}>
-              Due
-            </div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: '#e11d1d', marginTop: 3, lineHeight: 1 }}>
-              {fmtTaka(due)}
-            </div>
+            <img
+              src={paidSrc}
+              alt="PAID"
+              style={{
+                width: 150,
+                height: 'auto',
+                transform: 'rotate(-15deg)',
+                opacity: 0.5,
+                mixBlendMode: 'multiply',
+              }}
+            />
           </div>
         )}
       </div>
