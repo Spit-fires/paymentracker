@@ -96,11 +96,36 @@ export interface Attendance {
   deletedAt?: number
 }
 
+/** One routine (class schedule) per batch per day. The id is deterministic
+ *  (`day_batch`), so re-saving a day+batch updates instead of duplicating and
+ *  two devices editing the same slot merge cleanly via the LWW machinery.
+ *  `time` and `subjects` are free text (teacher-written), substituted into the
+ *  absent-student WhatsApp message via {routine time} / {routine subjects}. */
+export interface Routine {
+  id: string
+  /** local day key, 'YYYY-MM-DD' - defaults to tomorrow when planning */
+  day: string
+  batch: string
+  /** free-text class time, e.g. "3:00 PM - 5:00 PM" */
+  time?: string
+  /** free-text subject list, one per line */
+  subjects?: string
+  updatedAt: number
+  /** tombstone - set (instead of removing) when deleted; syncs deletes across devices */
+  deletedAt?: number
+}
+
 export interface Center {
   name: string
   tagline: string
+  /** plain-text address (legacy / mirror of addressHtml) */
   address: string
+  /** plain-text phone (legacy / mirror of phoneHtml) */
   phone: string
+  /** rich-text address as HTML - renders on receipts; plain text falls back to `address` */
+  addressHtml?: string
+  /** rich-text phone as HTML - renders on receipts; plain text falls back to `phone` */
+  phoneHtml?: string
   /** receipt logo as a dataURL (small PNG/JPG), uploaded in Settings */
   logo?: string
   /** plain-text payment rules (legacy, pre-rich-editor), shown at the bottom
@@ -134,7 +159,7 @@ export interface DriveRefs {
   studentsFolderId?: string
   /** Google account that owns this folder - refs are only trusted for that account. */
   ownerEmail?: string
-  fileIds: { students?: string; payments?: string; meta?: string; postings?: string; attendance?: string }
+  fileIds: { students?: string; payments?: string; meta?: string; postings?: string; attendance?: string; routines?: string }
   /** modifiedTime of each JSON file at last sync - lets pull() skip downloads */
   stamps?: Record<string, string>
 }
@@ -152,11 +177,11 @@ export interface Session {
   theme: 'light' | 'dark'
   lastPulledAt: number
   /** per-file: timestamp of the last snapshot each JSON file was fully processed from */
-  pulledAt?: Partial<Record<'students' | 'payments' | 'meta' | 'postings' | 'attendance', number>>
+  pulledAt?: Partial<Record<'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines', number>>
 }
 
 export type OutboxOp =
-  | { kind: 'pushJSON'; file: 'students' | 'payments' | 'meta' | 'postings' | 'attendance' }
+  | { kind: 'pushJSON'; file: 'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' }
   | {
       kind: 'uploadMedia'
       type: 'photo' | 'receipt'

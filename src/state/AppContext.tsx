@@ -14,6 +14,7 @@ import type {
   Posting,
   Attendance,
   AttendanceStatus,
+  Routine,
   Center,
   Session,
   SessionUser,
@@ -114,6 +115,10 @@ interface Ctx {
   }) => Promise<void>
   toggleCleared: (id: string, cleared: boolean) => Promise<void>
 
+  routines: Routine[]
+  saveRoutine: (input: { day: string; batch: string; time: string; subjects: string }) => Promise<void>
+  deleteRoutine: (id: string) => Promise<void>
+
   updateCenter: (c: Center) => Promise<void>
 
   setTheme: (t: 'light' | 'dark') => Promise<void>
@@ -147,6 +152,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [payments, setPayments] = useState<Payment[]>([])
   const [postings, setPostings] = useState<Posting[]>([])
   const [attendances, setAttendances] = useState<Attendance[]>([])
+  const [routines, setRoutines] = useState<Routine[]>([])
   const [teachers, setTeachers] = useState<Teacher[]>([])
   const [center, setCenter] = useState<Center>(defaultCenter())
   const [receiptSeq, setReceiptSeq] = useState(0)
@@ -166,6 +172,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPayments((await db.payments.toArray()).filter((p) => !p.deletedAt))
     setPostings((await db.postings.toArray()).filter((p) => !p.deletedAt))
     setAttendances((await db.attendance.toArray()).filter((a) => !a.deletedAt))
+    setRoutines((await db.routines.toArray()).filter((r) => !r.deletedAt))
     setCenter((await getKV<Center>(K.CENTER)) || defaultCenter())
     setTeachers(((await getKV<Teacher[]>(K.TEACHERS)) || []).filter((t) => !t.deletedAt))
     setReceiptSeq((await getKV<number>(K.RECEIPT_SEQ)) || 0)
@@ -705,6 +712,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [attendances, refreshData, scheduleSync],
   )
 
+  const saveRoutine = useCallback(
+    async (input: { day: string; batch: string; time: string; subjects: string }) => {
+      // one logical edit per day-batch slot: a single timestamp keeps edits
+      // from two devices merging into a perpetual re-push loop
+      const now = Date.now()
+      await db.routines.put({
+        id: `${input.day}_${input.batch}`,
+        day: input.day,
+        batch: input.batch,
+        time: input.time.trim(),
+        subjects: input.subjects.trim(),
+        updatedAt: now,
+      })
+      await queueOp({ kind: 'pushJSON', file: 'routines' })
+      await refreshData()
+      scheduleSync()
+    },
+    [refreshData, scheduleSync],
+  )
+
+  const deleteRoutine = useCallback(
+    async (id: string) => {
+      const cur = await db.routines.get(id)
+      if (!cur) return
+      await db.routines.put({ ...cur, deletedAt: Date.now(), updatedAt: Date.now() })
+      await queueOp({ kind: 'pushJSON', file: 'routines' })
+      await refreshData()
+      scheduleSync()
+    },
+    [refreshData, scheduleSync],
+  )
+
   const updateCenter = useCallback(
     async (c: Center) => {
       await setKV(K.CENTER, c)
@@ -746,6 +785,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       payments,
       postings,
       attendances,
+      routines,
       teachers,
       center,
       receiptSeq,
@@ -768,6 +808,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       deletePosting,
       saveAttendance,
       toggleCleared,
+      saveRoutine,
+      deleteRoutine,
       updateCenter,
       setTheme,
       setPin,
@@ -789,6 +831,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       payments,
       postings,
       attendances,
+      routines,
       teachers,
       center,
       receiptSeq,
@@ -811,6 +854,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       deletePosting,
       saveAttendance,
       toggleCleared,
+      saveRoutine,
+      deleteRoutine,
       updateCenter,
       setTheme,
       setPin,

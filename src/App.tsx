@@ -1,5 +1,6 @@
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'motion/react'
+import { useEffect, useState } from 'react'
 import { AppProvider, useApp } from './state/AppContext'
 import { Layout } from './components/Layout'
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -14,6 +15,7 @@ import { ReceiptLookup } from './pages/ReceiptLookup'
 import { Settings } from './pages/Settings'
 import { Accounting } from './pages/Accounting'
 import { Attendance } from './pages/Attendance'
+import { Routines } from './pages/Routines'
 import { Spinner } from './components/ui'
 import { Logo } from './components/Logo'
 import { AppMotion, pageVariants } from './components/anim'
@@ -36,6 +38,56 @@ function Splash() {
   )
 }
 
+const WELCOME_TEXT = 'Welcome Back'
+
+/** Centered, animated greeting shown once per app load (after login/lock). */
+function WelcomeBack() {
+  const [gone, setGone] = useState(false)
+  useEffect(() => {
+    const t = window.setTimeout(() => setGone(true), 1500)
+    return () => window.clearTimeout(t)
+  }, [])
+  return (
+    <AnimatePresence>
+      {!gone && (
+        <motion.div
+          key="welcome"
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
+          className="no-print fixed inset-0 z-[80] grid place-items-center bg-white dark:bg-[#0b1622]"
+        >
+          <div className="flex flex-col items-center gap-5">
+            <motion.div
+              initial={{ scale: 0.6, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 20 }}
+            >
+              <Logo size={44} />
+            </motion.div>
+            <div className="flex overflow-hidden">
+              {WELCOME_TEXT.split('').map((ch, i) => (
+                <motion.span
+                  key={i}
+                  initial={{ y: 26, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{
+                    delay: 0.15 + i * 0.035,
+                    duration: 0.45,
+                    ease: [0.25, 0.1, 0.25, 1],
+                  }}
+                  className="text-[26px] font-bold text-ink dark:text-white tracking-tight"
+                >
+                  {ch === ' ' ? '\u00A0' : ch}
+                </motion.span>
+              ))}
+            </div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  )
+}
+
 function AnimatedRoutes() {
   const location = useLocation()
   return (
@@ -52,6 +104,7 @@ function AnimatedRoutes() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/students" element={<Students />} />
           <Route path="/attendance" element={<Attendance />} />
+          <Route path="/routines" element={<Routines />} />
           <Route path="/accounting" element={<Accounting />} />
           <Route path="/student/:id" element={<StudentDetail />} />
           <Route path="/payment/:id" element={<Payment />} />
@@ -72,6 +125,7 @@ function Gate() {
   if (!user) return <Login />
   return (
     <ErrorBoundary>
+      <WelcomeBack />
       <Layout>
         <AnimatedRoutes />
       </Layout>

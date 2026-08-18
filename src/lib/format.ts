@@ -95,7 +95,8 @@ export function newId(): string {
 }
 
 /** Fill {token} placeholders in an editable message template. Unknown tokens
- *  are left verbatim so templates stay forward-compatible. */
+ *  are left verbatim so templates stay forward-compatible. Tokens may contain
+ *  spaces (e.g. {routine time}) - they are matched greedily per word group. */
 export function fillMessage(tpl: string, vars: Record<string, string | number>): string {
-  return tpl.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m))
+  return tpl.replace(/\{([\w ]+?)\}/g, (m, k: string) => (k.trim() in vars ? String(vars[k.trim()]) : m))
 }

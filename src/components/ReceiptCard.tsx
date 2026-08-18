@@ -67,9 +67,22 @@ export function ReceiptCard({ center, student, payment }: Props) {
               {center.tagline}
             </div>
           )}
-          {(center.address || center.phone) && (
-            <div style={{ fontSize: 9.5, color: MUTED, marginTop: 4 }}>
-              {[center.address, center.phone].filter(Boolean).join(' · ')}
+          {(center.addressHtml || center.phoneHtml || center.address || center.phone) && (
+            <div style={{ fontSize: 9.5, color: MUTED, marginTop: 4, lineHeight: 1.5 }}>
+              {center.addressHtml || center.address ? (
+                <div
+                  dangerouslySetInnerHTML={{
+                    __html: sanitizeHtml(center.addressHtml || center.address || ''),
+                  }}
+                />
+              ) : null}
+              {center.phoneHtml || center.phone ? (
+                <div
+                  dangerouslySetInnerHTML={{
+                    __html: sanitizeHtml(center.phoneHtml || center.phone || ''),
+                  }}
+                />
+              ) : null}
             </div>
           )}
         </div>

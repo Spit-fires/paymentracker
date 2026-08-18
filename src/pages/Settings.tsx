@@ -51,6 +51,7 @@ export function Settings() {
     payments,
     postings,
     attendances,
+    routines,
     showToast,
     needsReauth,
     teachers,
@@ -120,6 +121,7 @@ export function Settings() {
       payments: payments.map(({ pngBlob: _pb, ...rest }) => rest),
       postings,
       attendance: attendances,
+      routines: routines,
     }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -160,6 +162,15 @@ export function Settings() {
           await db.attendance.bulkPut(j.attendance)
         })
         await queueOp({ kind: 'pushJSON', file: 'attendance' })
+      }
+      // routines only when the backup carries it - a pre-routine backup must
+      // never wipe live class schedules
+      if (Array.isArray(j.routines)) {
+        await db.transaction('rw', db.routines, async () => {
+          await db.routines.clear()
+          await db.routines.bulkPut(j.routines)
+        })
+        await queueOp({ kind: 'pushJSON', file: 'routines' })
       }
       if (j.center) await setKV(K.CENTER, j.center)
       await setKV(K.RECEIPT_SEQ, j.receiptSeq || 0)
@@ -335,12 +346,24 @@ export function Settings() {
           <Field label="Tagline">
             <Input value={form.tagline} onChange={(e) => setForm({ ...form, tagline: e.target.value })} />
           </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Address / area">
-              <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+          <div className="grid grid-cols-1 gap-3">
+            <Field label="Address / area" hint="Multi-line - use the toolbar for bold, colors and alignment">
+              <RichEditor
+                value={form.addressHtml || ''}
+                onChange={(html, text) =>
+                  setForm((p) => ({ ...p, addressHtml: html || undefined, address: text || '' }))
+                }
+                placeholder="e.g. House 12, Road 5, Dhanmondi, Dhaka"
+              />
             </Field>
-            <Field label="Phone">
-              <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} inputMode="tel" />
+            <Field label="Phone" hint="Multi-line - e.g. hotline on the first line, mobile on the second">
+              <RichEditor
+                value={form.phoneHtml || ''}
+                onChange={(html, text) =>
+                  setForm((p) => ({ ...p, phoneHtml: html || undefined, phone: text || '' }))
+                }
+                placeholder="e.g. +880 1234 567890"
+              />
             </Field>
           </div>
           <Field label="বিশেষ নিয়মাবলী" hint="Shown at the bottom of every receipt - use the toolbar for bold, colors, sizes and alignment">
@@ -422,7 +445,7 @@ export function Settings() {
           </Field>
           <Field
             label="Absent student message"
-            hint="Sent to absent students from the Attendance page. {date} and {batch} are filled in automatically."
+            hint="Sent to absent students from the Attendance page. {date}, {batch}, {routine time} and {routine subjects} are filled in automatically - plan the routine in the Routine panel first."
           >
             <Textarea
               value={form.attendanceMsg ?? defaultCenter().attendanceMsg ?? ''}
@@ -433,8 +456,10 @@ export function Settings() {
           </Field>
           <p className="text-[11.5px] text-faint">
             Available tokens:{" "}
-            <span className="font-mono">{"{student} {period} {center} {link} {date} {batch}"}</span> - leave
-            a field empty to keep the default message.
+            <span className="font-mono">
+              {"{student} {period} {center} {link} {date} {batch} {routine time} {routine subjects}"}
+            </span>{" "}
+            - leave a field empty to keep the default message.
           </p>
           <Button variant="soft" full onClick={() => void saveCenter()} disabled={saved}>
             {saved ? <IconCheck className="w-4 h-4" /> : null} {saved ? 'Saved' : 'Save messages'}

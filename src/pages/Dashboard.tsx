@@ -4,11 +4,11 @@ import { motion } from 'motion/react'
 import { useApp } from '../state/AppContext'
 import { balanceOf, duesForPeriod, monthTotals, type DuesRow } from '../lib/ledger'
 import { fmtTaka, periodNow, periodLabel } from '../lib/format'
-import { Card, EmptyState, Button } from '../components/ui'
+import { Card, Button } from '../components/ui'
 import { SyncIndicator } from '../components/Layout'
 import { ReauthBanner } from '../components/ReauthBanner'
 import { fadeUp, useCountUp } from '../components/anim'
-import { IconReceipt, IconPlus, IconSearch, IconCheck, IconArrow, IconCalendar, IconUsers } from '../components/Icons'
+import { IconReceipt, IconSearch, IconCheck, IconCalendar, IconUsers, IconClock } from '../components/Icons'
 
 function shiftPeriod(p: string, delta: number): string {
   const [y, m] = p.split('-').map(Number)
@@ -47,7 +47,7 @@ export function Dashboard() {
   const recordedStr = fmtTaka(Math.round(recordedDisp))
   const billed = rows.filter((r) => r.fee > 0)
   const paidCount = billed.filter((r) => r.paidAny).length
-  const dueCount = billed.length - paidCount
+  const totalDue = rows.reduce((s, r) => s + r.due, 0)
 
   // net per-student collection (balance = real payment − commission) - used
   // for the batch collected figures, matching the home "Collected" total
@@ -77,12 +77,6 @@ export function Dashboard() {
       }))
       .sort((a, b) => a.batch.localeCompare(b.batch))
   }, [rows, balanceByStudent])
-
-  const unpaid = rows
-    .filter((r) => !r.paidAny && r.fee > 0)
-    .sort((a, b) => a.student.name.localeCompare(b.student.name))
-
-  const totalDue = rows.reduce((s, r) => s + r.due, 0)
 
   const firstName = user?.name?.split(' ')[0] || 'Teacher'
 
@@ -162,31 +156,26 @@ export function Dashboard() {
             {paidCount}/{billed.length}
           </div>
         </Card>
-        <Card className="!rounded-2xl p-3.5">
-          <div className="text-[11px] font-semibold text-muted dark:text-muted-dark">Pending</div>
-          <div
-            className={`text-[17px] font-bold tabular-nums mt-1 ${dueCount ? 'text-danger' : 'text-emerald-600'}`}
-          >
-            {dueCount}
-          </div>
-        </Card>
+        <button onClick={() => navigate('/students?mode=record')} className="text-left">
+          <Card className="!rounded-2xl p-3.5 h-full flex flex-col justify-center active:scale-[0.98] transition">
+            <div className="text-[11px] font-semibold text-muted dark:text-muted-dark">Record payment</div>
+            <div className="inline-flex items-center gap-1.5 text-teal font-bold mt-1">
+              <IconReceipt className="w-4 h-4" />
+              <span className="text-[14px] leading-tight">Tap to record</span>
+            </div>
+          </Card>
+        </button>
       </div>
 
       {/* Quick actions */}
-      <div className="grid grid-cols-2 gap-2.5 px-4 mt-3">
-        <Button
-          variant="primary"
-          size="lg"
-          onClick={() => navigate('/students?mode=record')}
-        >
-          <IconReceipt className="w-5 h-5" /> Record payment
-        </Button>
+      <div className="px-4 mt-3">
         <Button
           variant="secondary"
           size="lg"
-          onClick={() => navigate('/students?new=1')}
+          full
+          onClick={() => navigate('/routines')}
         >
-          <IconPlus className="w-5 h-5" /> Add student
+          <IconClock className="w-5 h-5" /> Routine
         </Button>
       </div>
 
@@ -235,52 +224,6 @@ export function Dashboard() {
           </div>
         </div>
       )}
-
-      {/* Unpaid list */}
-      <div className="mt-6 px-4 pb-4">
-        <div className="text-[11.5px] font-bold uppercase tracking-[0.14em] text-muted dark:text-muted-dark mb-2">
-          Not paid yet · {periodLabel(period)}
-        </div>
-        {unpaid.length === 0 ? (
-          <Card className="!rounded-2xl">
-            <EmptyState
-              icon={<IconCheck className="w-7 h-7" />}
-              title="All paid up!"
-              subtitle={rows.length ? `Everyone paid for ${periodLabel(period)}.` : 'Add students to get started.'}
-              action={
-                rows.length === 0 ? (
-                  <Button variant="secondary" onClick={() => navigate('/students?new=1')}>
-                    <IconPlus className="w-4 h-4" /> Add first student
-                  </Button>
-                ) : undefined
-              }
-            />
-          </Card>
-        ) : (
-          <div className="space-y-2">
-            {unpaid.map((r, i) => (
-              <motion.div key={r.student.id} variants={fadeUp} custom={i} initial="hidden" animate="show">
-                <Card className="!rounded-xl p-3.5 flex items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="text-[14.5px] font-bold text-ink dark:text-white truncate">
-                    {r.student.name}
-                  </div>
-                  <div className="text-[12px] text-muted dark:text-muted-dark">
-                    {r.student.batch} · {r.due > 0 ? `${fmtTaka(r.due)} pending` : 'no fee set'}
-                  </div>
-                </div>
-                <button
-                  onClick={() => navigate(`/student/${r.student.id}`)}
-                  className="inline-flex items-center gap-1 text-teal font-semibold text-[13px] whitespace-nowrap px-3 py-2 -mr-1"
-                >
-                  View <IconArrow className="w-3.5 h-3.5" />
-                </button>
-              </Card>
-              </motion.div>
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   )
 }

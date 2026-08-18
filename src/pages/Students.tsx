@@ -50,8 +50,8 @@ export function Students() {
   const [batchFilter, setBatchFilter] = useState(batchParam)
   const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'due'>('all')
 
-  // restore the last-used batch filter when arriving here without a ?batch=
-  // param (e.g. returning after recording a payment), and remember it for next time
+  // restore the last-used filters when arriving here without a ?batch= param
+  // (e.g. returning after recording a payment), and remember them for next time
   useEffect(() => {
     void (async () => {
       if (batchParam) {
@@ -68,6 +68,18 @@ export function Students() {
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // the All/Paid/Due status filter persists like the batch filter does
+  useEffect(() => {
+    void getKV<string>(K.STATUS_FILTER).then((saved) => {
+      if (saved === 'all' || saved === 'paid' || saved === 'due') setStatusFilter(saved)
+    })
+  }, [])
+
+  const setStatus = (k: 'all' | 'paid' | 'due') => {
+    setStatusFilter(k)
+    void setKV(K.STATUS_FILTER, k)
+  }
   const [showArchived, setShowArchived] = useState(false)
 
   useEffect(() => {
@@ -238,7 +250,7 @@ export function Students() {
             {(['all', 'paid', 'due'] as const).map((k) => (
               <button
                 key={k}
-                onClick={() => setStatusFilter(k)}
+                onClick={() => setStatus(k)}
                 className={`rounded-md px-2.5 py-1.5 text-[12.5px] font-semibold transition ${
                   statusFilter === k
                     ? 'bg-ink text-white'

@@ -362,7 +362,18 @@ function TakeView() {
                   {s.phone && <div className="text-[12px] text-muted dark:text-muted-dark truncate">{s.phone}</div>}
                 </div>
                 <div className="w-[210px] shrink-0">
-                  <StatusToggle value={marks[s.id] ?? null} onChange={(st) => setMarks({ ...marks, [s.id]: st })} />
+                  <StatusToggle
+                    value={marks[s.id] ?? null}
+                    onChange={(st) =>
+                      setMarks((prev) => {
+                        const next = { ...prev }
+                        // tapping the already-active status unselects it
+                        if (prev[s.id] === st) delete next[s.id]
+                        else next[s.id] = st
+                        return next
+                      })
+                    }
+                  />
                 </div>
               </Card>
             ))}
@@ -378,7 +389,7 @@ function TakeView() {
 }
 
 function ClearView() {
-  const { students, attendances, center, toggleCleared } = useApp()
+  const { students, attendances, center, routines, toggleCleared } = useApp()
   const [day, setDay] = useState(todayKey())
 
   const groups = useMemo(() => {
@@ -447,11 +458,14 @@ function ClearView() {
           <div className="space-y-2">
             {list.map((s) => {
               const phone = s.phone || s.phone2 || ''
+              const routine = routines.find((r) => r.batch === (s.batch || batch) && r.day === day)
               const msg = fillMessage(template, {
                 student: s.name,
                 date: fmtDateLong(isoDayToMs(day)),
                 batch: s.batch || batch,
                 center: center.name || 'our center',
+                'routine time': routine?.time || '',
+                'routine subjects': routine?.subjects || '',
               })
               return (
                 <Card key={s.id} className="!rounded-xl p-3.5 flex items-center gap-3">
@@ -885,7 +899,7 @@ export function Attendance() {
           {(
             [
               ['take', 'Take attendance'],
-              ['clear', 'Clear absent'],
+              ['clear', 'Absent info'],
               ['stats', 'Statistics'],
             ] as Array<[Tab, string]>
           ).map(([t, label]) => (
