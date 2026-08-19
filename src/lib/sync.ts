@@ -114,6 +114,8 @@ export function defaultCenter(): Center {
     receiptMsg: '{student} এর {period} বেতন পরিশোধের রশিদ দেখতে নিচের লিংকে ক্লিক করুন। {link}',
     attendanceMsg:
       'Assalamu alaikum {student},\n\nYou were marked absent on {date} for {batch} at {center}. Please let us know if everything is okay. Thank you!',
+    routineMsg:
+      'Assalamu alaikum {student},\n\nHere is your next class schedule for {batch} at {center}:\n\n{routine day}, {routine date}\n{routine}\n\nThank you!',
   }
 }
 

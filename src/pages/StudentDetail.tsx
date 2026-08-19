@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useApp } from '../state/AppContext'
 import { studentPeriodBalance, studentBalanceFee, studentPeriodPaidAny } from '../lib/ledger'
-import { fmtTaka, periodNow, periodLabel, fmtDate, fillMessage } from '../lib/format'
+import { fmtTaka, periodNow, periodLabel, fmtDate, fillMessage, todayKey, addDays, fmtWeekday, fmtDateLong } from '../lib/format'
 import { getKV, K, db } from '../lib/db'
 import { getToken } from '../lib/token'
 import { Card, Button, Modal, EmptyState, SectionLabel, PageHeader, useBlobUrl } from '../components/ui'
@@ -18,6 +18,7 @@ import {
 } from '../components/Icons'
 import { defaultCenter } from '../lib/sync'
 import { waLink, waPhone, openExternal } from '../lib/phone'
+import type { Routine } from '../types'
 
 export function StudentDetail() {
   const { id } = useParams<{ id: string }>()
@@ -26,6 +27,7 @@ export function StudentDetail() {
     students,
     payments,
     center,
+    routines,
     refreshData,
     updateStudent,
     archiveStudent,
@@ -131,6 +133,40 @@ export function StudentDetail() {
     period: periodLabel(period),
     center: centerName,
   })
+
+  // send the NEXT scheduled class for this student's batch - same lookup the
+  // attendance absent-message uses: the first day with a routine for the batch
+  // after today (holidays have no routine, so they're skipped automatically)
+  const onSendRoutine = () => {
+    let next: { day: string; routine: Routine } | undefined
+    if (student.batch) {
+      const t = todayKey()
+      for (let i = 1; i <= 14; i++) {
+        const d = addDays(t, i)
+        const r = routines.find((x) => x.batch === student.batch && x.day === d && x.text)
+        if (r) {
+          next = { day: d, routine: r }
+          break
+        }
+      }
+    }
+    if (!next) {
+      showToast(`No upcoming routine set for ${student.batch || 'this batch'}`, 'info')
+      return
+    }
+    const dayMs = new Date(`${next.day}T12:00:00`).getTime()
+    const template = (center.routineMsg || defaultCenter().routineMsg || '').trim()
+    const msg = fillMessage(template, {
+      student: student.name,
+      date: fmtDateLong(dayMs),
+      batch: student.batch || '',
+      center: center.name || defaultCenter().name,
+      routine: next.routine.text || '',
+      'routine date': fmtDateLong(dayMs),
+      'routine day': fmtWeekday(dayMs),
+    })
+    openExternal(waLink(student.phone, msg))
+  }
 
   const deleteAll = async () => {
     setBusy(true)
@@ -242,6 +278,16 @@ export function StudentDetail() {
             title={student.phone ? undefined : 'Add a phone number to send WhatsApp reminders'}
           >
             <IconWhatsApp className="w-4.5 h-4.5" /> Remind
+          </Button>
+          <Button
+            variant="secondary"
+            size="lg"
+            className="!text-teal dark:!text-teal-bright col-span-2"
+            onClick={onSendRoutine}
+            disabled={!student.phone}
+            title={student.phone ? undefined : 'Add a phone number to send routines on WhatsApp'}
+          >
+            <IconWhatsApp className="w-4.5 h-4.5" /> Send Routine
           </Button>
           <Button
             variant="secondary"

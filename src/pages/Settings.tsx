@@ -448,6 +448,17 @@ export function Settings() {
               placeholder={defaultCenter().attendanceMsg}
             />
           </Field>
+          <Field
+            label="Routine message"
+            hint="Sent from the Send Routine button on a student page. {routine}, {routine date} and {routine day} are the next scheduled class - plan it in the Routine panel first."
+          >
+            <Textarea
+              value={form.routineMsg ?? defaultCenter().routineMsg ?? ''}
+              onChange={(e) => setForm({ ...form, routineMsg: e.target.value })}
+              rows={4}
+              placeholder={defaultCenter().routineMsg}
+            />
+          </Field>
           <p className="text-[11.5px] text-faint">
             Available tokens:{" "}
             <span className="font-mono">

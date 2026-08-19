@@ -142,6 +142,8 @@ export interface Center {
   receiptMsg?: string
   /** WhatsApp absent-student template; tokens: {student} {date} {batch} {center} */
   attendanceMsg?: string
+  /** WhatsApp routine-send template; tokens: {student} {date} {batch} {center} {routine} {routine date} {routine day} */
+  routineMsg?: string
   /** custom PAID stamp image as a dataURL, uploaded in Settings */
   paidImage?: string
 }
