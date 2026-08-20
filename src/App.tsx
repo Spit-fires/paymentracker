@@ -121,6 +121,7 @@ function AnimatedRoutes() {
   // (or app restart) lands back where the list was scrolled
   const pos = useRef<Record<string, number>>(loadScroll())
   const prevPath = useRef(location.pathname)
+  const restoreTimer = useRef<number | undefined>(undefined)
 
   // when a route change starts, the old page is still on screen during its
   // exit animation - snapshot its scroll under the path we're leaving
@@ -131,14 +132,58 @@ function AnimatedRoutes() {
     }
   }, [location.pathname])
 
-  // keep the map across refresh/restart
+  // keep the map fresh and persisted three ways: debounced scroll writes,
+  // pagehide (refresh / tab close), visibility-hidden (tab switch / OS kill)
   useEffect(() => {
-    const save = () => {
+    let raf = 0
+    let saveTimer = 0
+    const persist = () => {
       pos.current[location.pathname] = window.scrollY
-      sessionStorage.setItem(SCROLL_KEY, JSON.stringify(pos.current))
+      try {
+        sessionStorage.setItem(SCROLL_KEY, JSON.stringify(pos.current))
+      } catch {
+        /* storage full or blocked - the in-memory map still works */
+      }
     }
-    window.addEventListener('pagehide', save)
-    return () => window.removeEventListener('pagehide', save)
+    const onScroll = () => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(() => {
+        clearTimeout(saveTimer)
+        saveTimer = window.setTimeout(persist, 250)
+      })
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') persist()
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('pagehide', persist)
+    return () => {
+      cancelAnimationFrame(raf)
+      clearTimeout(saveTimer)
+      window.removeEventListener('scroll', onScroll)
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('pagehide', persist)
+    }
+  }, [location.pathname])
+
+  const restore = () => {
+    window.scrollTo(0, pos.current[location.pathname] ?? 0)
+  }
+
+  // restore when the page mounts (this fires even on first load, where the
+  // enter animation is skipped), then re-apply once async content (photos…)
+  // has settled so the list doesn't drift. the timer is cancelled when we
+  // leave, so a late restore can never scroll the NEXT page.
+  useEffect(() => {
+    clearTimeout(restoreTimer.current)
+    const settle = window.setTimeout(restore, 300)
+    restoreTimer.current = window.setTimeout(restore, 0)
+    return () => {
+      clearTimeout(restoreTimer.current)
+      clearTimeout(settle)
+      restoreTimer.current = undefined
+    }
   }, [location.pathname])
 
   return (
@@ -149,9 +194,6 @@ function AnimatedRoutes() {
         initial="initial"
         animate="animate"
         exit="exit"
-        onAnimationStart={() => {
-          window.scrollTo(0, pos.current[location.pathname] ?? 0)
-        }}
       >
         <Routes location={location}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
