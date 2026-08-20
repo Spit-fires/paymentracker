@@ -1,6 +1,6 @@
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'motion/react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AppProvider, useApp } from './state/AppContext'
 import { Layout } from './components/Layout'
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -105,8 +105,42 @@ function WelcomeBack() {
   )
 }
 
+const SCROLL_KEY = 'pt-scroll'
+
+function loadScroll(): Record<string, number> {
+  try {
+    return JSON.parse(sessionStorage.getItem(SCROLL_KEY) || '{}')
+  } catch {
+    return {}
+  }
+}
+
 function AnimatedRoutes() {
   const location = useLocation()
+  // per-route scroll positions, persisted to sessionStorage so a refresh
+  // (or app restart) lands back where the list was scrolled
+  const pos = useRef<Record<string, number>>(loadScroll())
+  const prevPath = useRef(location.pathname)
+
+  // when a route change starts, the old page is still on screen during its
+  // exit animation - snapshot its scroll under the path we're leaving
+  useEffect(() => {
+    prevPath.current = location.pathname
+    return () => {
+      pos.current[prevPath.current] = window.scrollY
+    }
+  }, [location.pathname])
+
+  // keep the map across refresh/restart
+  useEffect(() => {
+    const save = () => {
+      pos.current[location.pathname] = window.scrollY
+      sessionStorage.setItem(SCROLL_KEY, JSON.stringify(pos.current))
+    }
+    window.addEventListener('pagehide', save)
+    return () => window.removeEventListener('pagehide', save)
+  }, [location.pathname])
+
   return (
     <AnimatePresence mode="wait" initial={false}>
       <motion.div
@@ -115,6 +149,9 @@ function AnimatedRoutes() {
         initial="initial"
         animate="animate"
         exit="exit"
+        onAnimationStart={() => {
+          window.scrollTo(0, pos.current[location.pathname] ?? 0)
+        }}
       >
         <Routes location={location}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />

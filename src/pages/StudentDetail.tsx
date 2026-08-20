@@ -277,7 +277,7 @@ export function StudentDetail() {
             disabled={!student.phone}
             title={student.phone ? undefined : 'Add a phone number to send WhatsApp reminders'}
           >
-            <IconWhatsApp className="w-4.5 h-4.5" /> Remind
+            <IconWhatsApp className="w-4.5 h-4.5" /> Payment Remind
           </Button>
           <Button
             variant="secondary"
