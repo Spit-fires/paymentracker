@@ -417,7 +417,7 @@ export function Settings() {
         <Card className="!rounded-2xl p-4 space-y-3">
           <Field
             label="Fee reminder message"
-            hint="Sent when you press Remind from a student page."
+            hint="Sent when you press Payment Remind from a student page. {date} is today, {batch} is the student's batch."
           >
             <Textarea
               value={form.reminderMsg ?? defaultCenter().reminderMsg ?? ''}
@@ -428,7 +428,7 @@ export function Settings() {
           </Field>
           <Field
             label="Receipt message"
-            hint="Sent when sharing a receipt on WhatsApp. {link} becomes the Drive link."
+            hint="Sent when sharing a receipt on WhatsApp. {link} becomes the Drive link. {date} is the payment date, {batch} is the student's batch."
           >
             <Textarea
               value={form.receiptMsg ?? defaultCenter().receiptMsg ?? ''}

@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toPng as htmlToImageToPng } from 'html-to-image'
 import { domToPng } from 'modern-screenshot'
 import { useApp } from '../state/AppContext'
-import { receiptFileName, periodLabel, fillMessage } from '../lib/format'
+import { receiptFileName, periodLabel, fillMessage, fmtDateLong, fmtInvoiceNo } from '../lib/format'
 import { Button, PageHeader } from '../components/ui'
 import { ReceiptCard } from '../components/ReceiptCard'
 import { IconPrint, IconShare, IconDownload, IconWhatsApp } from '../components/Icons'
@@ -70,6 +70,8 @@ export function ReceiptView() {
     student: student.name,
     period: periodLabel(payment.period),
     center: center.name || defaultCenter().name,
+    date: fmtDateLong(payment.date),
+    batch: student.batch || '',
   }
   const fillLink = (link: string) => fillMessage(messageTemplate, { ...msgVars, link }).trim()
 
@@ -160,7 +162,7 @@ export function ReceiptView() {
             navigator.share({
               files: [file],
               text: fillLink(''),
-              title: `Receipt #${payment.receiptNo}`,
+              title: `Invoice ${fmtInvoiceNo(payment.date, payment.receiptNo)}`,
             }),
             8000,
             undefined,
@@ -188,10 +190,10 @@ export function ReceiptView() {
         canShare?: (d: { files: File[] }) => boolean
       }
       if (nav.canShare && nav.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: `Receipt #${payment.receiptNo}` })
+        await navigator.share({ files: [file], title: `Invoice ${fmtInvoiceNo(payment.date, payment.receiptNo)}` })
       } else if (navigator.share) {
         await navigator.share({
-          title: `Receipt #${payment.receiptNo}`,
+          title: `Invoice ${fmtInvoiceNo(payment.date, payment.receiptNo)}`,
           text: `${student.name} · ${payment.mode} · ${fileName}`,
         })
       } else {
@@ -225,7 +227,7 @@ export function ReceiptView() {
 
       <div className="no-print">
         <PageHeader
-          title={`Receipt #${String(payment.receiptNo).padStart(4, '0')}`}
+          title={`Invoice ${fmtInvoiceNo(payment.date, payment.receiptNo)}`}
           subtitle={`${student.name} · ${payment.mode}`}
           back
           onBack={() => (isNew ? navigate(`/student/${student.id}`) : navigate(-1))}

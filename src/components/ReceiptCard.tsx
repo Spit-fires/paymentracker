@@ -1,5 +1,5 @@
 import type { Payment, Student, Center } from '../types'
-import { fmtTaka, takaToWords, fmtDate, periodLabel } from '../lib/format'
+import { fmtTaka, takaToWords, fmtDate, periodLabel, fmtInvoiceNo } from '../lib/format'
 import { sanitizeHtml } from './RichEditor'
 
 interface Props {
@@ -83,10 +83,10 @@ export function ReceiptCard({ center, student, payment }: Props) {
         </div>
         <div style={{ textAlign: 'right' }}>
           <div style={{ fontSize: 9, letterSpacing: '0.22em', color: MUTED, fontWeight: 600 }}>
-            PAYMENT RECEIPT
+            INVOICE NO.
           </div>
-          <div style={{ fontSize: 26, fontWeight: 800, color: NAVY, marginTop: 2, letterSpacing: '0.02em' }}>
-            #{String(payment.receiptNo).padStart(4, '0')}
+          <div style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginTop: 2, letterSpacing: '0.02em' }}>
+            {fmtInvoiceNo(payment.date, payment.receiptNo)}
           </div>
           <div style={{ fontSize: 9.5, color: MUTED, marginTop: 2 }}>{fmtDate(payment.date)}</div>
         </div>

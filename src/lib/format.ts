@@ -94,6 +94,15 @@ export function receiptFileName(receiptNo: number, dateMs: number): string {
   return `${String(receiptNo).padStart(4, '0')}-${ymd}.png`
 }
 
+/** Invoice number: DDMMYY + UE + receiptNo (padded to 2). e.g. 230826UE35 */
+export function fmtInvoiceNo(dateMs: number, receiptNo: number): string {
+  const d = new Date(dateMs)
+  const dd = String(d.getDate()).padStart(2, '0')
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const yy = String(d.getFullYear() % 100).padStart(2, '0')
+  return `${dd}${mm}${yy}UE${String(receiptNo).padStart(2, '0')}`
+}
+
 export function newId(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`

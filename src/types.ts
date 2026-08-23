@@ -136,9 +136,9 @@ export interface Center {
   rules?: string
   /** rich-text payment rules as HTML - renders as বিশেষ নিয়মাবলী on receipts */
   rulesHtml?: string
-  /** WhatsApp fee-reminder template; tokens: {student} {period} {center} */
+  /** WhatsApp fee-reminder template; tokens: {student} {period} {center} {date} {batch} */
   reminderMsg?: string
-  /** WhatsApp receipt-share template; tokens: {student} {period} {center} {link} */
+  /** WhatsApp receipt-share template; tokens: {student} {period} {center} {link} {date} {batch} */
   receiptMsg?: string
   /** WhatsApp absent-student template; tokens: {student} {date} {batch} {center} */
   attendanceMsg?: string

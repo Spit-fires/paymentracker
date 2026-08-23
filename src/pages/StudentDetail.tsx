@@ -132,6 +132,8 @@ export function StudentDetail() {
     student: student.name,
     period: periodLabel(period),
     center: centerName,
+    date: fmtDateLong(Date.now()),
+    batch: student.batch || '',
   })
 
   // send the NEXT scheduled class for this student's batch - same lookup the
