@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toPng as htmlToImageToPng } from 'html-to-image'
 import { domToPng } from 'modern-screenshot'
 import { useApp } from '../state/AppContext'
-import { receiptFileName, periodLabel, fillMessage, fmtDateLong, fmtInvoiceNo } from '../lib/format'
+import { receiptFileName, periodLabel, fillMessage, fmtDateLong, fmtInvoiceNo, invoiceDailySeq } from '../lib/format'
 import { Button, PageHeader } from '../components/ui'
 import { ReceiptCard } from '../components/ReceiptCard'
 import { IconPrint, IconShare, IconDownload, IconWhatsApp } from '../components/Icons'
@@ -64,6 +64,7 @@ export function ReceiptView() {
   }
 
   const fileName = receiptFileName(payment.receiptNo, payment.date)
+  const dailySeq = payment.dailySeq ?? invoiceDailySeq(payment, payments)
 
   const messageTemplate = (center.receiptMsg || defaultCenter().receiptMsg || '').trim()
   const msgVars = {
@@ -162,7 +163,7 @@ export function ReceiptView() {
             navigator.share({
               files: [file],
               text: fillLink(''),
-              title: `Invoice ${fmtInvoiceNo(payment.date, payment.receiptNo)}`,
+              title: `Invoice ${fmtInvoiceNo(payment.date, dailySeq)}`,
             }),
             8000,
             undefined,
@@ -190,10 +191,10 @@ export function ReceiptView() {
         canShare?: (d: { files: File[] }) => boolean
       }
       if (nav.canShare && nav.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: `Invoice ${fmtInvoiceNo(payment.date, payment.receiptNo)}` })
+        await navigator.share({ files: [file], title: `Invoice ${fmtInvoiceNo(payment.date, dailySeq)}` })
       } else if (navigator.share) {
         await navigator.share({
-          title: `Invoice ${fmtInvoiceNo(payment.date, payment.receiptNo)}`,
+          title: `Invoice ${fmtInvoiceNo(payment.date, dailySeq)}`,
           text: `${student.name} · ${payment.mode} · ${fileName}`,
         })
       } else {
@@ -227,7 +228,7 @@ export function ReceiptView() {
 
       <div className="no-print">
         <PageHeader
-          title={`Invoice ${fmtInvoiceNo(payment.date, payment.receiptNo)}`}
+          title={`Invoice ${fmtInvoiceNo(payment.date, dailySeq)}`}
           subtitle={`${student.name} · ${payment.mode}`}
           back
           onBack={() => (isNew ? navigate(`/student/${student.id}`) : navigate(-1))}

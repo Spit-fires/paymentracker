@@ -1,6 +1,6 @@
 import { DriveClient } from './drive'
 import { db, getKV, setKV, queueOp, getStudents, getPayments, getPostings, getAttendance, getRoutines, K } from './db'
-import { fmtDate } from './format'
+import { fmtDate, dayKey } from './format'
 import { log } from './logs'
 import { postingLedger } from './ledger'
 import type {
@@ -627,6 +627,29 @@ export async function pull(): Promise<{
               }
               const curSeq = (await getKV<number>(K.RECEIPT_SEQ)) || 0
               if (maxNo > curSeq) await setKV(K.RECEIPT_SEQ, maxNo)
+            }
+            // per-day invoice suffix must be unique within each calendar day;
+            // missing values (old records) are backfilled, duplicates from
+            // concurrent offline devices are renumbered to the next free slot
+            const allActive = (await db.payments.toArray())
+              .filter((p) => !p.deletedAt)
+              .sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0))
+            const byDay = new Map<string, Set<number>>()
+            for (const p of allActive) {
+              const d = dayKey(new Date(p.date))
+              const set = byDay.get(d) || new Set<number>()
+              if (!byDay.has(d)) byDay.set(d, set)
+              let seq = p.dailySeq
+              if (seq == null || set.has(seq)) {
+                const old = seq
+                seq = 1
+                while (set.has(seq)) seq++
+                await db.payments.update(p.id, { dailySeq: seq })
+                if (!needPush.includes('payments')) needPush.push('payments')
+                if (old == null) log('sync', `Backfilled invoice dailySeq for ${d} → ${seq}`)
+                else log('sync', `Renumbered invoice dailySeq ${d} #${old} → #${seq} (duplicate)`)
+              }
+              set.add(seq)
             }
           })
           if (orphans.length) {

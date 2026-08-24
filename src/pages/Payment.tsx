@@ -9,7 +9,7 @@ import {
   autofillAmount,
   realAutofillAmount,
 } from '../lib/ledger'
-import { fmtTaka, takaToWords, periodNow, periodLabel, receiptFileName } from '../lib/format'
+import { fmtTaka, takaToWords, periodNow, periodLabel, receiptFileName, dayKey } from '../lib/format'
 import type { PaymentMode, Teacher } from '../types'
 import { Card, Button, PageHeader, Spinner, useBlobUrl } from '../components/ui'
 import { ReceiptCard } from '../components/ReceiptCard'
@@ -126,9 +126,18 @@ export function Payment() {
   const draftPayment = useMemo(() => {
     if (!student) return null
     const dateMs = new Date(receivedDate + 'T00:00:00').getTime() || Date.now()
+    const dailySeq = (() => {
+      if (existing?.dailySeq != null) return existing.dailySeq
+      const day = dayKey(new Date(existing ? existing.date : dateMs))
+      const sameDay = payments.filter((p) => !p.deletedAt && dayKey(new Date(p.date)) === day)
+      const maxDaily = sameDay.length ? Math.max(0, ...sameDay.map((x) => x.dailySeq ?? 0)) : 0
+      const missingOnDay = sameDay.filter((x) => x.dailySeq == null).length
+      return Math.max(maxDaily, missingOnDay) + 1
+    })()
     return {
       id: 'preview',
       receiptNo: existing ? existing.receiptNo : receiptSeq + 1,
+      dailySeq,
       studentId: student.id,
       amount: amountNum,
       due: dueNum,
@@ -138,7 +147,7 @@ export function Payment() {
       date: existing ? existing.date : dateMs,
       updatedAt: Date.now(),
     }
-  }, [student, existing, amountNum, dueNum, mode, receivedBy, selPeriod, receiptSeq, receivedDate])
+  }, [student, existing, amountNum, dueNum, mode, receivedBy, selPeriod, receiptSeq, receivedDate, payments])
 
   if (!student) {
     return (

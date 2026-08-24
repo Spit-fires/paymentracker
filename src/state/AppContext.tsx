@@ -31,7 +31,7 @@ import {
   setDriveToken,
   defaultCenter,
 } from '../lib/sync'
-import { newId, receiptFileName } from '../lib/format'
+import { newId, receiptFileName, dayKey } from '../lib/format'
 import { setToken, getToken, clearToken, tokenNeedsRefresh } from '../lib/token'
 import { log } from '../lib/logs'
 import { CLIENT_ID } from '../config'
@@ -183,6 +183,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const refreshData = useCallback(async () => {
     setStudents((await db.students.toArray()).filter((s) => !s.deletedAt))
+    // backfill per-day invoice sequence for old receipts that predate the field
+    {
+      const all = await db.payments.toArray()
+      const active = all.filter((p) => !p.deletedAt)
+      const missing = active.filter((p) => p.dailySeq == null)
+      if (missing.length) {
+        const byDay = new Map<string, Payment[]>()
+        for (const p of active) {
+          const d = dayKey(new Date(p.date))
+          const arr = byDay.get(d) || []
+          arr.push(p)
+          byDay.set(d, arr)
+        }
+        const toPut: Payment[] = []
+        for (const [, list] of byDay) {
+          list.sort((a, b) => a.receiptNo - b.receiptNo)
+          const used = new Set(list.filter((p) => p.dailySeq != null).map((p) => p.dailySeq!))
+          let next = used.size ? Math.max(...used) + 1 : 1
+          for (const p of list) {
+            if (p.dailySeq == null) {
+              while (used.has(next)) next++
+              p.dailySeq = next
+              used.add(next)
+              toPut.push(p)
+              next++
+            }
+          }
+        }
+        if (toPut.length) {
+          await db.payments.bulkPut(toPut)
+          await queueOp({ kind: 'pushJSON', file: 'payments' })
+        }
+      }
+    }
     setPayments((await db.payments.toArray()).filter((p) => !p.deletedAt))
     setPostings((await db.postings.toArray()).filter((p) => !p.deletedAt))
     setAttendances((await db.attendance.toArray()).filter((a) => !a.deletedAt))
@@ -568,9 +602,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await setKV(K.SEQ_RESERVED, { high: res.high, used: next })
       await setKV(K.RECEIPT_SEQ, next)
       setReceiptSeq(next)
+      // per-day invoice suffix - next number for this calendar day, never reused
+      const day = dayKey(new Date(input.date))
+      const sameDay = (await db.payments.toArray()).filter((x) => !x.deletedAt && dayKey(new Date(x.date)) === day)
+      const maxDaily = sameDay.length ? Math.max(0, ...sameDay.map((x) => x.dailySeq ?? 0)) : 0
+      // if old records on this day still lack dailySeq, count them as occupying slots
+      const missingOnDay = sameDay.filter((x) => x.dailySeq == null).length
+      const nextDaily = Math.max(maxDaily, missingOnDay) + 1
       const p: Payment = {
         id: newId(),
         receiptNo: next,
+        dailySeq: nextDaily,
         studentId: input.studentId,
         amount: input.amount,
         realAmount: input.realAmount,

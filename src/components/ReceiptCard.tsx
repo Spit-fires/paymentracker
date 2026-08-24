@@ -86,7 +86,7 @@ export function ReceiptCard({ center, student, payment }: Props) {
             INVOICE NO.
           </div>
           <div style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginTop: 2, letterSpacing: '0.02em' }}>
-            {fmtInvoiceNo(payment.date, payment.receiptNo)}
+            {fmtInvoiceNo(payment.date, payment.dailySeq ?? 1)}
           </div>
           <div style={{ fontSize: 9.5, color: MUTED, marginTop: 2 }}>{fmtDate(payment.date)}</div>
         </div>

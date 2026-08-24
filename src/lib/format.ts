@@ -94,13 +94,24 @@ export function receiptFileName(receiptNo: number, dateMs: number): string {
   return `${String(receiptNo).padStart(4, '0')}-${ymd}.png`
 }
 
-/** Invoice number: DDMMYY + UE + receiptNo (padded to 2). e.g. 230826UE35 */
-export function fmtInvoiceNo(dateMs: number, receiptNo: number): string {
+/** Invoice number: DDMMYY + UE + dailySeq (padded to 2, resets per day). e.g. 230826UE03 */
+export function fmtInvoiceNo(dateMs: number, dailySeq: number): string {
   const d = new Date(dateMs)
   const dd = String(d.getDate()).padStart(2, '0')
   const mm = String(d.getMonth() + 1).padStart(2, '0')
   const yy = String(d.getFullYear() % 100).padStart(2, '0')
-  return `${dd}${mm}${yy}UE${String(receiptNo).padStart(2, '0')}`
+  return `${dd}${mm}${yy}UE${String(dailySeq).padStart(2, '0')}`
+}
+
+/** Derive the invoice daily sequence for a payment, falling back to a
+ *  per-day count for old records that predate the dailySeq field. */
+export function invoiceDailySeq(payment: { date: number; receiptNo: number; dailySeq?: number }, all: { date: number; receiptNo: number; dailySeq?: number }[]): number {
+  if (payment.dailySeq != null) return payment.dailySeq
+  const day = dayKey(new Date(payment.date))
+  const sameDay = all.filter((p) => dayKey(new Date(p.date)) === day)
+  sameDay.sort((a, b) => a.receiptNo - b.receiptNo)
+  const idx = sameDay.findIndex((p) => p.receiptNo === payment.receiptNo)
+  return idx >= 0 ? idx + 1 : 1
 }
 
 export function newId(): string {

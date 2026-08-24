@@ -36,6 +36,8 @@ export interface ReceivedBy {
 export interface Payment {
   id: string
   receiptNo: number
+  /** per-day sequence for invoice number (DDMMYYUE##), resets each calendar day */
+  dailySeq?: number
   studentId: string
   /** slip amount - what is written on the printed receipt */
   amount: number
