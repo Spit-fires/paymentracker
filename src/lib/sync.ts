@@ -511,11 +511,17 @@ export async function pull(): Promise<{
                   if (!needPush.includes('students')) needPush.push('students')
                 }
                 const base = keepLocal ? cur : s
+                const newPhotoFileId = s.photoFileId || cur.photoFileId
+                const newFolderId = s.folderId || cur.folderId
+                // remote brought a new photo file -> old blob is stale; clear it so
+                // the UI refetches from Drive (no re-upload needed)
+                const photoBlob =
+                  newPhotoFileId !== cur.photoFileId ? undefined : cur.photoBlob
                 return {
                   ...base,
-                  photoBlob: cur.photoBlob,
-                  photoFileId: s.photoFileId || cur.photoFileId,
-                  folderId: s.folderId || cur.folderId,
+                  photoBlob,
+                  photoFileId: newPhotoFileId,
+                  folderId: newFolderId,
                   folderShared: s.folderShared || cur.folderShared,
                 }
               })

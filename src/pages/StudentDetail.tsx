@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useApp } from '../state/AppContext'
 import { studentPeriodBalance, studentBalanceFee, studentPeriodPaidAny } from '../lib/ledger'
@@ -44,9 +44,17 @@ export function StudentDetail() {
 
   const period = periodNow()
 
-  // lazy-load photo from Drive when missing
+  // lazy-load photo from Drive when missing or stale (fileId changed on
+  // another device). the sync layer clears the stale blob when photoFileId
+  // changes, so this refetches without any re-upload
+  const lastFetchedFileId = useRef<string | undefined>(undefined)
   useEffect(() => {
-    if (!student || student.photoBlob || !student.photoFileId) return
+    if (!student || !student.photoFileId) return
+    // already fetched this exact file
+    if (student.photoBlob && lastFetchedFileId.current === student.photoFileId) return
+    // if we have a blob but the fileId changed, the blob is stale (sync
+    // already cleared it for most cases, but handle the race where it didn't)
+    if (student.photoBlob && student.photoFileId === lastFetchedFileId.current) return
     let alive = true
     ;(async () => {
       const drive = await getKV(K.DRIVE)
@@ -60,6 +68,7 @@ export function StudentDetail() {
         )
         if (res.ok && alive) {
           const blob = await res.blob()
+          lastFetchedFileId.current = student.photoFileId
           // write straight to IndexedDB - no outbox ops, no re-upload
           await db.students.update(student.id, { photoBlob: blob })
           await refreshData()
@@ -72,7 +81,7 @@ export function StudentDetail() {
       alive = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [student?.id, student?.photoBlob, student?.photoFileId])
+  }, [student?.id, student?.photoFileId, student?.photoBlob])
 
   const history = useMemo(
     () =>

@@ -4,7 +4,8 @@ import { motion } from 'motion/react'
 import { useApp } from '../state/AppContext'
 import { studentPeriodPaidAny, studentPeriodBalance, studentBalanceFee } from '../lib/ledger'
 import { periodNow } from '../lib/format'
-import { K, getKV, setKV } from '../lib/db'
+import { K, getKV, setKV, db } from '../lib/db'
+import { getToken } from '../lib/token'
 import { Card, EmptyState, Modal, Button, useBlobUrl } from '../components/ui'
 import { StudentForm, type FormValue } from '../components/StudentForm'
 import { fadeUp } from '../components/anim'
@@ -35,7 +36,7 @@ function StudentAvatar({ s }: { s: { name: string; photoBlob?: Blob } }) {
 }
 
 export function Students() {
-  const { students, payments, online, addStudent, showToast } = useApp()
+  const { students, payments, online, addStudent, showToast, refreshData } = useApp()
   const [params, setParams] = useSearchParams()
 
   const q = params.get('q') || ''
@@ -135,6 +136,40 @@ export function Students() {
     return sorted
   }, [students, q, batchFilter, sort, showArchived, statusFilter, payments, period])
 
+  // fetch any missing profile pics for the currently visible list (download
+  // only - no re-upload). the sync layer clears the stale blob when
+  // photoFileId changes, so this also picks up updates from other devices
+  useEffect(() => {
+    const missing = filtered.filter((s) => s.photoFileId && !s.photoBlob).slice(0, 8)
+    if (!missing.length) return
+    let alive = true
+    ;(async () => {
+      const drive = await getKV(K.DRIVE)
+      if (!drive || !alive) return
+      const token = getToken()
+      if (!token) return
+      for (const s of missing) {
+        if (!alive) break
+        try {
+          const res = await fetch(`https://www.googleapis.com/drive/v3/files/${s.photoFileId}?alt=media`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          if (res.ok && alive) {
+            const blob = await res.blob()
+            await db.students.update(s.id, { photoBlob: blob })
+          }
+        } catch {
+          /* offline or file gone */
+        }
+      }
+      if (alive) await refreshData()
+    })()
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered])
+
   /** Payment status for this month: fully paid / partially paid / nothing paid. */
   const statusOf = (s: Student): 'paid' | 'partial' | 'due' => {
     const paid = studentPeriodBalance(payments, s.id, period)
@@ -149,38 +184,11 @@ export function Students() {
     due: 'bg-red-50 text-red-600 dark:bg-red-900/40 dark:text-red-300',
   }
 
-  // keep the last-opened student visible when coming back to the list
-  useEffect(() => {
-    const lastId = sessionStorage.getItem('pt-last-student')
-    if (!lastId) return
-    // only run when the list actually contains that student
-    if (!filtered.some((s) => s.id === lastId)) return
-    let raf = 0
-    let t = 0 as unknown as number
-    const tryScroll = () => {
-      const el = document.getElementById(`student-${lastId}`)
-      if (!el) return
-      const rect = el.getBoundingClientRect()
-      const isVisible = rect.top >= 80 && rect.bottom <= window.innerHeight - 20
-      if (!isVisible) el.scrollIntoView({ block: 'center', behavior: 'auto' })
-    }
-    // wait for the list to paint + images to settle; retry once if still off-screen
-    raf = requestAnimationFrame(() => {
-      tryScroll()
-      t = window.setTimeout(tryScroll, 350)
-    })
-    return () => {
-      cancelAnimationFrame(raf)
-      clearTimeout(t)
-    }
-  }, [filtered])
-
   const renderRow = (s: Student, i: number) => {
     const st = statusOf(s)
     return (
       <motion.div
         key={s.id}
-        id={`student-${s.id}`}
         variants={fadeUp}
         custom={i}
         initial="hidden"
@@ -189,7 +197,6 @@ export function Students() {
         <Link
           to={mode === 'record' ? `/payment/${s.id}` : `/student/${s.id}`}
           className="block"
-          onClick={() => sessionStorage.setItem('pt-last-student', s.id)}
         >
           <Card className="!rounded-xl p-3 flex items-center gap-3 active:scale-[0.99] transition">
             <StudentAvatar s={s} />
