@@ -167,21 +167,33 @@ function AnimatedRoutes() {
     }
   }, [location.pathname])
 
-  const restore = () => {
-    window.scrollTo(0, pos.current[location.pathname] ?? 0)
-  }
-
   // restore when the page mounts (this fires even on first load, where the
-  // enter animation is skipped), then re-apply once async content (photos…)
-  // has settled so the list doesn't drift. the timer is cancelled when we
-  // leave, so a late restore can never scroll the NEXT page.
+  // enter animation is skipped), then keep retrying until the page has
+  // grown tall enough and the scroll actually lands. this fixes the "middle
+  // of page" bug where Students was restored before its data arrived and the
+  // scroll clamped to the short placeholder height.
   useEffect(() => {
     clearTimeout(restoreTimer.current)
-    const settle = window.setTimeout(restore, 300)
-    restoreTimer.current = window.setTimeout(restore, 0)
+    const target = pos.current[location.pathname] ?? 0
+    if (target === 0) {
+      window.scrollTo(0, 0)
+      return
+    }
+    let tries = 0
+    const tick = () => {
+      window.scrollTo(0, target)
+      tries++
+      // content may still be loading (students, images) — retry while the
+      // document is still shorter than the target or the scroll didn't stick
+      const needRetry =
+        tries < 20 && (window.scrollY !== target || document.documentElement.scrollHeight < target + window.innerHeight + 200)
+      if (needRetry) restoreTimer.current = window.setTimeout(tick, 120) as unknown as number
+    }
+    restoreTimer.current = window.setTimeout(tick, 0) as unknown as number
+    const fallback = window.setTimeout(tick, 350) as unknown as number
     return () => {
       clearTimeout(restoreTimer.current)
-      clearTimeout(settle)
+      clearTimeout(fallback)
       restoreTimer.current = undefined
     }
   }, [location.pathname])

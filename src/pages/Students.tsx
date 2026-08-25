@@ -149,11 +149,38 @@ export function Students() {
     due: 'bg-red-50 text-red-600 dark:bg-red-900/40 dark:text-red-300',
   }
 
+  // keep the last-opened student visible when coming back to the list
+  useEffect(() => {
+    const lastId = sessionStorage.getItem('pt-last-student')
+    if (!lastId) return
+    // only run when the list actually contains that student
+    if (!filtered.some((s) => s.id === lastId)) return
+    let raf = 0
+    let t = 0 as unknown as number
+    const tryScroll = () => {
+      const el = document.getElementById(`student-${lastId}`)
+      if (!el) return
+      const rect = el.getBoundingClientRect()
+      const isVisible = rect.top >= 80 && rect.bottom <= window.innerHeight - 20
+      if (!isVisible) el.scrollIntoView({ block: 'center', behavior: 'auto' })
+    }
+    // wait for the list to paint + images to settle; retry once if still off-screen
+    raf = requestAnimationFrame(() => {
+      tryScroll()
+      t = window.setTimeout(tryScroll, 350)
+    })
+    return () => {
+      cancelAnimationFrame(raf)
+      clearTimeout(t)
+    }
+  }, [filtered])
+
   const renderRow = (s: Student, i: number) => {
     const st = statusOf(s)
     return (
       <motion.div
         key={s.id}
+        id={`student-${s.id}`}
         variants={fadeUp}
         custom={i}
         initial="hidden"
@@ -162,6 +189,7 @@ export function Students() {
         <Link
           to={mode === 'record' ? `/payment/${s.id}` : `/student/${s.id}`}
           className="block"
+          onClick={() => sessionStorage.setItem('pt-last-student', s.id)}
         >
           <Card className="!rounded-xl p-3 flex items-center gap-3 active:scale-[0.99] transition">
             <StudentAvatar s={s} />
