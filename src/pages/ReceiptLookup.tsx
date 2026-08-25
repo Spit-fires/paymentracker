@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../state/AppContext'
-import { fmtTaka, fmtDate, periodLabel } from '../lib/format'
+import { fmtTaka, fmtDate, periodLabel, fmtInvoiceNo, invoiceDailySeq } from '../lib/format'
 import { Card, EmptyState, PageHeader, Input } from '../components/ui'
 import { IconReceipt, IconArrow } from '../components/Icons'
 
@@ -14,15 +14,19 @@ export function ReceiptLookup() {
     const t = q.trim()
     if (!t) return []
     const num = t.replace(/\D/g, '')
+    const qLower = t.toLowerCase()
+    const qUpper = t.toUpperCase()
     const list = payments
       .filter((p) => {
+        const inv = fmtInvoiceNo(p.date, p.dailySeq ?? invoiceDailySeq(p, payments))
         if (num && String(p.receiptNo) === num) return true
         if (num && String(p.receiptNo).includes(num)) return true
+        if (inv.toLowerCase().includes(qLower) || inv.toUpperCase().includes(qUpper)) return true
         const s = students.find((x) => x.id === p.studentId)
-        if (s && s.name.toLowerCase().includes(t.toLowerCase())) return true
+        if (s && s.name.toLowerCase().includes(qLower)) return true
         return false
       })
-      .sort((a, b) => b.receiptNo - a.receiptNo)
+      .sort((a, b) => b.date - a.date || b.receiptNo - a.receiptNo)
       .slice(0, 20)
     return list
   }, [payments, students, q])
@@ -55,8 +59,8 @@ export function ReceiptLookup() {
               className="w-full text-left"
             >
               <Card className="!rounded-xl p-3.5 flex items-center gap-3 active:scale-[0.99] transition">
-                <div className="w-10 h-10 rounded-lg bg-[#e8f0f7] dark:bg-hover-dark grid place-items-center text-ink dark:text-accent-dark text-[12px] font-bold shrink-0">
-                  #{String(p.receiptNo).padStart(4, '0')}
+                <div className="w-10 h-10 rounded-lg bg-[#e8f0f7] dark:bg-hover-dark grid place-items-center text-ink dark:text-accent-dark text-[10px] font-bold shrink-0 px-1 text-center leading-tight">
+                  {fmtInvoiceNo(p.date, p.dailySeq ?? invoiceDailySeq(p, payments))}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[14px] font-bold text-ink dark:text-white truncate">

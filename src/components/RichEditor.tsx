@@ -18,7 +18,7 @@ const ALLOWED_TAGS = new Set([
   'SPAN',
   'FONT',
 ])
-const ALLOWED_STYLES = ['color', 'background-color', 'font-size', 'text-align', 'font-weight', 'font-style']
+const ALLOWED_STYLES = ['color', 'background-color', 'font-size', 'line-height', 'text-align', 'font-weight', 'font-style']
 
 /** Strip anything not produced by the editor toolbar - keeps html-to-image
  *  capture safe and prevents stray page CSS from leaking into the receipt. */
@@ -207,7 +207,7 @@ export function RichEditor({ value, onChange, placeholder }: Props) {
   }
 
   const setSize = (px: number) => {
-    wrapSelection('span', { style: `font-size:${px}px` })
+    wrapSelection('span', { style: `font-size:${px}px;line-height:1.4` })
   }
 
   const setColor = (c: string) => {
@@ -308,7 +308,7 @@ export function RichEditor({ value, onChange, placeholder }: Props) {
         onInput={emit}
         onBlur={emit}
         data-placeholder={placeholder}
-        className="rich-editor min-h-[96px] max-h-64 overflow-y-auto px-3 py-2.5 text-[14px] text-body dark:text-text-dark focus:outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-faint empty:before:pointer-events-none"
+        className="rich-editor min-h-[96px] max-h-64 overflow-y-auto px-3 py-2.5 text-[14px] leading-[1.45] text-body dark:text-text-dark focus:outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-faint empty:before:pointer-events-none"
       />
     </div>
   )

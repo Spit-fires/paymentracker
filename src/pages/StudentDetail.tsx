@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useApp } from '../state/AppContext'
 import { studentPeriodBalance, studentBalanceFee, studentPeriodPaidAny } from '../lib/ledger'
-import { fmtTaka, periodNow, periodLabel, fmtDate, fillMessage, todayKey, addDays, fmtWeekday, fmtDateLong } from '../lib/format'
+import { fmtTaka, periodNow, periodLabel, fmtDate, fillMessage, todayKey, addDays, fmtWeekday, fmtDateLong, fmtInvoiceNo, invoiceDailySeq } from '../lib/format'
 import { getKV, K, db } from '../lib/db'
 import { getToken } from '../lib/token'
 import { Card, Button, Modal, EmptyState, SectionLabel, PageHeader, useBlobUrl } from '../components/ui'
@@ -353,8 +353,8 @@ export function StudentDetail() {
           <Card key={p.id} className="!rounded-xl p-3.5">
             <div className="flex items-center gap-3">
               <Link to={`/receipt/${p.id}`} className="flex-1 min-w-0 flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-[#e8f0f7] dark:bg-hover-dark grid place-items-center text-ink dark:text-accent-dark text-[12px] font-bold shrink-0">
-                  #{String(p.receiptNo).padStart(4, '0')}
+                <div className="w-9 h-9 rounded-lg bg-[#e8f0f7] dark:bg-hover-dark grid place-items-center text-ink dark:text-accent-dark text-[10px] font-bold shrink-0 px-1 text-center leading-tight">
+                  {fmtInvoiceNo(p.date, p.dailySeq ?? invoiceDailySeq(p, payments))}
                 </div>
                 <div className="min-w-0">
                   <div className="text-[14px] font-bold text-ink dark:text-white tabular-nums">

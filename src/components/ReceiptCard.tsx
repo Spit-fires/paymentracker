@@ -73,7 +73,7 @@ export function ReceiptCard({ center, student, payment }: Props) {
                 fontSize: 9.5,
                 color: MUTED,
                 marginTop: 4,
-                lineHeight: 1.5,
+                lineHeight: 1.4,
               }}
               dangerouslySetInnerHTML={{
                 __html: sanitizeHtml(center.addressHtml || center.address || ''),
@@ -85,7 +85,7 @@ export function ReceiptCard({ center, student, payment }: Props) {
           <div style={{ fontSize: 9, letterSpacing: '0.22em', color: MUTED, fontWeight: 600 }}>
             INVOICE NO.
           </div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginTop: 2, letterSpacing: '0.02em' }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: NAVY, marginTop: 2, letterSpacing: '0.02em' }}>
             {fmtInvoiceNo(payment.date, payment.dailySeq ?? 1)}
           </div>
           <div style={{ fontSize: 9.5, color: MUTED, marginTop: 2 }}>{fmtDate(payment.date)}</div>
@@ -191,11 +191,11 @@ export function ReceiptCard({ center, student, payment }: Props) {
           </div>
           {center.rulesHtml?.trim() ? (
             <div
-              style={{ fontSize: 11, color: INK, lineHeight: 1.55 }}
+              style={{ fontSize: 11, color: INK, lineHeight: 1.4 }}
               dangerouslySetInnerHTML={{ __html: sanitizeHtml(center.rulesHtml) }}
             />
           ) : (
-            <div style={{ fontSize: 11, color: INK, whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>
+            <div style={{ fontSize: 11, color: INK, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>
               {center.rules}
             </div>
           )}

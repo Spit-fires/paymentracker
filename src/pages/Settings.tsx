@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useApp } from '../state/AppContext'
 import { db, setKV, queueOp, K, getKV } from '../lib/db'
 import { hashPin } from '../lib/pin'
-import { periodNow, periodLabel, fmtDate } from '../lib/format'
+import { periodNow, periodLabel, fmtDate, fmtInvoiceNo, invoiceDailySeq } from '../lib/format'
 import { defaultCenter, exportToSheet } from '../lib/sync'
 import { openExternal } from '../lib/phone'
 import { getLogs, clearLogs, onLogsChange, type LogEntry } from '../lib/logs'
@@ -202,7 +202,7 @@ export function Settings() {
       if (!allMonths && p.period !== period) continue
       const s = students.find((x) => x.id === p.studentId)
       rows.push({
-        'Receipt No': p.receiptNo,
+        'Invoice No': fmtInvoiceNo(p.date, p.dailySeq ?? invoiceDailySeq(p, payments)),
         Date: new Date(p.date).toISOString().slice(0, 10),
         Student: s?.name || '',
         Batch: s?.batch || '',

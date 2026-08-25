@@ -9,7 +9,7 @@ import {
   autofillAmount,
   realAutofillAmount,
 } from '../lib/ledger'
-import { fmtTaka, takaToWords, periodNow, periodLabel, receiptFileName, dayKey } from '../lib/format'
+import { fmtTaka, takaToWords, periodNow, periodLabel, receiptFileName, dayKey, fmtInvoiceNo, invoiceDailySeq } from '../lib/format'
 import type { PaymentMode, Teacher } from '../types'
 import { Card, Button, PageHeader, Spinner, useBlobUrl } from '../components/ui'
 import { ReceiptCard } from '../components/ReceiptCard'
@@ -195,7 +195,7 @@ export function Payment() {
           period: selPeriod,
           pngBlob: blob,
         })
-        showToast(`Receipt #${String(existing.receiptNo).padStart(4, '0')} updated`, 'ok')
+        showToast(`Invoice ${fmtInvoiceNo(existing.date, existing.dailySeq ?? invoiceDailySeq(existing, payments))} updated`, 'ok')
         navigate(`/receipt/${existing.id}`)
       } else {
         const payment = await addPayment({
@@ -210,7 +210,7 @@ export function Payment() {
           date: new Date(receivedDate + 'T00:00:00').getTime() || Date.now(),
           pngBlob: blob,
         })
-        showToast(`Receipt #${String(payment.receiptNo).padStart(4, '0')} created`, 'ok')
+        showToast(`Invoice ${fmtInvoiceNo(payment.date, payment.dailySeq ?? invoiceDailySeq(payment, [...payments, payment]))} created`, 'ok')
         navigate(`/receipt/${payment.id}?new=1`)
       }
     } catch (e) {
@@ -474,12 +474,12 @@ export function Payment() {
           <IconReceipt className="w-4 h-4 shrink-0 mt-0.5" />
           {existing ? (
             <span>
-              Receipt #{String(existing.receiptNo).padStart(4, '0')} will be{' '}
+              Invoice {fmtInvoiceNo(existing.date, existing.dailySeq ?? invoiceDailySeq(existing, payments))} will be{' '}
               <b className="text-teal">updated</b>, keeping its original number and date.
             </span>
           ) : (
             <span>
-              Receipt #{String(receiptSeq + 1).padStart(4, '0')} · {receiptFileName(receiptSeq + 1, Date.now())}{' '}
+              Invoice {fmtInvoiceNo(new Date(receivedDate + 'T00:00:00').getTime() || Date.now(), draftPayment?.dailySeq ?? 1)} · {receiptFileName(receiptSeq + 1, Date.now())}{' '}
               will be saved to this student's Drive folder.
             </span>
           )}
