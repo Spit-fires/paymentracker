@@ -59,7 +59,7 @@ export function ReceiptLookup() {
               className="w-full text-left"
             >
               <Card className="!rounded-xl p-3.5 flex items-center gap-3 active:scale-[0.99] transition">
-                <div className="w-10 h-10 rounded-lg bg-[#e8f0f7] dark:bg-hover-dark grid place-items-center text-ink dark:text-accent-dark text-[10px] font-bold shrink-0 px-1 text-center leading-tight">
+                <div className="min-w-[78px] h-10 rounded-lg bg-[#e8f0f7] dark:bg-hover-dark grid place-items-center text-ink dark:text-accent-dark text-[10px] font-bold shrink-0 px-2 text-center leading-none whitespace-nowrap">
                   {fmtInvoiceNo(p.date, p.dailySeq ?? invoiceDailySeq(p, payments))}
                 </div>
                 <div className="flex-1 min-w-0">

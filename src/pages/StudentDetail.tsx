@@ -353,7 +353,7 @@ export function StudentDetail() {
           <Card key={p.id} className="!rounded-xl p-3.5">
             <div className="flex items-center gap-3">
               <Link to={`/receipt/${p.id}`} className="flex-1 min-w-0 flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-[#e8f0f7] dark:bg-hover-dark grid place-items-center text-ink dark:text-accent-dark text-[10px] font-bold shrink-0 px-1 text-center leading-tight">
+                <div className="min-w-[74px] h-9 rounded-lg bg-[#e8f0f7] dark:bg-hover-dark grid place-items-center text-ink dark:text-accent-dark text-[10px] font-bold shrink-0 px-2 text-center leading-none whitespace-nowrap">
                   {fmtInvoiceNo(p.date, p.dailySeq ?? invoiceDailySeq(p, payments))}
                 </div>
                 <div className="min-w-0">
