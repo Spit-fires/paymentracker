@@ -1,6 +1,6 @@
-import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { HashRouter, Routes, Route, Navigate, useLocation, useNavigationType } from 'react-router-dom'
 import { motion, AnimatePresence } from 'motion/react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AppProvider, useApp } from './state/AppContext'
 import { Layout } from './components/Layout'
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -117,14 +117,16 @@ function loadScroll(): Record<string, number> {
 
 function AnimatedRoutes() {
   const location = useLocation()
-  // per-route scroll positions, persisted to sessionStorage so a refresh
-  // (or app restart) lands back where the list was scrolled
+  const navType = useNavigationType()
   const pos = useRef<Record<string, number>>(loadScroll())
   const prevPath = useRef(location.pathname)
-  const restoreTimer = useRef<number | undefined>(undefined)
 
-  // when a route change starts, the old page is still on screen during its
-  // exit animation - snapshot its scroll under the path we're leaving
+  // use the browser's manual mode so it doesn't fight us
+  useEffect(() => {
+    if ('scrollRestoration' in window.history) window.history.scrollRestoration = 'manual'
+  }, [])
+
+  // snapshot the leaving page's scroll (still on screen during exit animation)
   useEffect(() => {
     prevPath.current = location.pathname
     return () => {
@@ -132,71 +134,42 @@ function AnimatedRoutes() {
     }
   }, [location.pathname])
 
-  // keep the map fresh and persisted three ways: debounced scroll writes,
-  // pagehide (refresh / tab close), visibility-hidden (tab switch / OS kill)
+  // standard persistence: save on scroll (rAF) + on pagehide/refresh
   useEffect(() => {
     let raf = 0
-    let saveTimer = 0
-    const persist = () => {
-      pos.current[location.pathname] = window.scrollY
-      try {
-        sessionStorage.setItem(SCROLL_KEY, JSON.stringify(pos.current))
-      } catch {
-        /* storage full or blocked - the in-memory map still works */
-      }
-    }
     const onScroll = () => {
       cancelAnimationFrame(raf)
       raf = requestAnimationFrame(() => {
-        clearTimeout(saveTimer)
-        saveTimer = window.setTimeout(persist, 250)
+        pos.current[location.pathname] = window.scrollY
       })
     }
-    const onVisibility = () => {
-      if (document.visibilityState === 'hidden') persist()
+    const persist = () => {
+      try {
+        sessionStorage.setItem(SCROLL_KEY, JSON.stringify(pos.current))
+      } catch {
+        /* ignore */
+      }
     }
     window.addEventListener('scroll', onScroll, { passive: true })
-    document.addEventListener('visibilitychange', onVisibility)
     window.addEventListener('pagehide', persist)
     return () => {
       cancelAnimationFrame(raf)
-      clearTimeout(saveTimer)
       window.removeEventListener('scroll', onScroll)
-      document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('pagehide', persist)
+      persist()
     }
   }, [location.pathname])
 
-  // restore when the page mounts (this fires even on first load, where the
-  // enter animation is skipped), then keep retrying until the page has
-  // grown tall enough and the scroll actually lands. this fixes the "middle
-  // of page" bug where Students was restored before its data arrived and the
-  // scroll clamped to the short placeholder height.
-  useEffect(() => {
-    clearTimeout(restoreTimer.current)
-    const target = pos.current[location.pathname] ?? 0
-    if (target === 0) {
-      window.scrollTo(0, 0)
-      return
-    }
-    let tries = 0
-    const tick = () => {
-      window.scrollTo(0, target)
-      tries++
-      // content may still be loading (students, images) — retry while the
-      // document is still shorter than the target or the scroll didn't stick
-      const needRetry =
-        tries < 20 && (window.scrollY !== target || document.documentElement.scrollHeight < target + window.innerHeight + 200)
-      if (needRetry) restoreTimer.current = window.setTimeout(tick, 120) as unknown as number
-    }
-    restoreTimer.current = window.setTimeout(tick, 0) as unknown as number
-    const fallback = window.setTimeout(tick, 350) as unknown as number
-    return () => {
-      clearTimeout(restoreTimer.current)
-      clearTimeout(fallback)
-      restoreTimer.current = undefined
-    }
-  }, [location.pathname])
+  // standard restore: one rAF after the new page mounts. for a PUSH we go to
+  // top (no saved pos), for a POP we go back to where we were. no polling,
+  // no jitter - the list's data is already in memory (Dexie) so height is
+  // stable by the next frame
+  useLayoutEffect(() => {
+    const saved = pos.current[location.pathname]
+    const target = saved ?? (navType === 'POP' ? undefined : 0)
+    if (target == null) return
+    requestAnimationFrame(() => window.scrollTo(0, target))
+  }, [location.pathname, navType])
 
   return (
     <AnimatePresence mode="wait" initial={false}>
