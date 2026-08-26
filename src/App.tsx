@@ -160,15 +160,34 @@ function AnimatedRoutes() {
     }
   }, [location.pathname])
 
-  // standard restore: one rAF after the new page mounts. for a PUSH we go to
-  // top (no saved pos), for a POP we go back to where we were. no polling,
-  // no jitter - the list's data is already in memory (Dexie) so height is
-  // stable by the next frame
+  // standard restore: POP restores saved position, PUSH goes to top.
+  // waits for content height (Dexie students load async) before the single
+  // scroll so it doesn't clamp to the short placeholder and land in the
+  // middle. no repeated scrolls -> no jitter
   useLayoutEffect(() => {
-    const saved = pos.current[location.pathname]
-    const target = saved ?? (navType === 'POP' ? undefined : 0)
-    if (target == null) return
-    requestAnimationFrame(() => window.scrollTo(0, target))
+    const isPop = navType === 'POP'
+    const target = isPop ? (pos.current[location.pathname] ?? 0) : 0
+    if (target === 0) {
+      window.scrollTo(0, 0)
+      return
+    }
+    let raf = 0
+    let timer = 0 as unknown as number
+    let tries = 0
+    const tick = () => {
+      const tallEnough = document.documentElement.scrollHeight >= target + window.innerHeight - 80
+      if (tallEnough || tries >= 15) {
+        window.scrollTo(0, target)
+        return
+      }
+      tries++
+      timer = window.setTimeout(tick, 100) as unknown as number
+    }
+    raf = requestAnimationFrame(tick)
+    return () => {
+      cancelAnimationFrame(raf)
+      clearTimeout(timer)
+    }
   }, [location.pathname, navType])
 
   return (
