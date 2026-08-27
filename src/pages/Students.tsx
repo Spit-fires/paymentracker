@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Link, useNavigationType, useSearchParams } from 'react-router-dom'
 import { motion } from 'motion/react'
 import { useApp } from '../state/AppContext'
 import { studentPeriodPaidAny, studentPeriodBalance, studentBalanceFee } from '../lib/ledger'
@@ -20,6 +20,11 @@ import {
 type SortKey = 'name' | 'batch' | 'recent'
 const SORT_LABELS: Record<SortKey, string> = { name: 'Name', batch: 'Batch', recent: 'Recently added' }
 
+// Module-level: survives unmount/remount across AnimatePresence transitions.
+// Saved when Students unmounts (navigating to a student detail page).
+// Restored when Students mounts back via browser back (POP).
+let savedScrollY = 0
+
 function StudentAvatar({ s }: { s: { name: string; photoBlob?: Blob } }) {
   const url = useBlobUrl(s.photoBlob)
   if (url) return <img src={url} alt="" className="w-11 h-11 rounded-full object-cover shrink-0" />
@@ -38,6 +43,25 @@ function StudentAvatar({ s }: { s: { name: string; photoBlob?: Blob } }) {
 export function Students() {
   const { students, payments, online, addStudent, showToast, refreshData } = useApp()
   const [params, setParams] = useSearchParams()
+  const navType = useNavigationType()
+
+  // --- Scroll restore for back-button navigation ---
+  // Save scroll position when Students unmounts (navigating to student detail).
+  useEffect(() => {
+    return () => { savedScrollY = window.scrollY }
+  }, [])
+
+  // Restore scroll position when navigating BACK to Students (POP).
+  // useLayoutEffect fires synchronously after DOM commit but before paint,
+  // so the user never sees a flash. Only fires once on mount.
+  const didRestore = useRef(false)
+  useLayoutEffect(() => {
+    if (didRestore.current) return
+    didRestore.current = true
+    if (navType !== 'POP' || savedScrollY <= 0) return
+    window.scrollTo(0, savedScrollY)
+    savedScrollY = 0
+  }, [navType])
 
   const q = params.get('q') || ''
   const mode = params.get('mode')

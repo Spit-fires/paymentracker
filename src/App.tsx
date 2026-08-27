@@ -161,7 +161,11 @@ function AnimatedRoutes() {
   }, [location.pathname])
 
   // POP restores saved position, PUSH goes to top.
+  // Skip /students — it handles its own restore inside the component
+  // (useLayoutEffect in AnimatedRoutes fires before AnimatePresence swaps
+  // content, so it scrolls the exiting page, not the entering one).
   useLayoutEffect(() => {
+    if (location.pathname === '/students') return
     const isPop = navType === 'POP'
     const target = isPop ? (pos.current[location.pathname] ?? 0) : 0
     window.scrollTo(0, target)
