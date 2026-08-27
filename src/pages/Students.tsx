@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Link, useNavigationType, useSearchParams } from 'react-router-dom'
 import { motion } from 'motion/react'
 import { useApp } from '../state/AppContext'
 import { studentPeriodPaidAny, studentPeriodBalance, studentBalanceFee } from '../lib/ledger'
@@ -171,12 +171,21 @@ export function Students() {
   }, [filtered])
 
   // --- Students list scroll lock (mobile) - restore where you left off when
-  // coming back from a detail page. Uses a single rAF + timeout after the
-  // filtered list has painted, so it doesn't jitter or clamp to the
-  // placeholder height. Saved synchronously on row click for mobile.
+  // coming back from a detail page. useLayoutEffect fires synchronously after
+  // DOM commit (before browser paint), beating mobile browsers' own
+  // scroll-restoration which fires on the next frame. Only restores on POP
+  // (back button) — PUSH navigations start at top. Saved on row click + on
+  // unmount so the value is always fresh.
+  const navType = useNavigationType()
   const didRestoreScroll = useRef(false)
-  useEffect(() => {
-    if (didRestoreScroll.current || filtered.length === 0) return
+  useLayoutEffect(() => {
+    if (navType !== 'POP' || didRestoreScroll.current || filtered.length === 0) {
+      if (navType !== 'POP') {
+        window.scrollTo(0, 0)
+        didRestoreScroll.current = true
+      }
+      return
+    }
     const raw = sessionStorage.getItem('pt-students-scroll')
     if (!raw) {
       didRestoreScroll.current = true
@@ -187,20 +196,24 @@ export function Students() {
       didRestoreScroll.current = true
       return
     }
-    let raf = 0
-    let timer = 0 as unknown as number
-    // wait for the list to paint (images, etc.) then single scroll
-    raf = requestAnimationFrame(() => {
-      timer = window.setTimeout(() => {
-        window.scrollTo(0, y)
-        didRestoreScroll.current = true
-      }, 90) as unknown as number
+    window.scrollTo(0, y)
+    didRestoreScroll.current = true
+  }, [filtered, navType])
+
+  // Also try a second attempt after the list fully paints (images, avatars,
+  // etc. may have shifted height). Single attempt, no loop. POP only.
+  useEffect(() => {
+    if (navType !== 'POP' || didRestoreScroll.current) return
+    const raw = sessionStorage.getItem('pt-students-scroll')
+    if (!raw) return
+    const y = parseInt(raw, 10)
+    if (!Number.isFinite(y) || y <= 0) return
+    const raf = requestAnimationFrame(() => {
+      window.scrollTo(0, y)
+      didRestoreScroll.current = true
     })
-    return () => {
-      cancelAnimationFrame(raf)
-      clearTimeout(timer)
-    }
-  }, [filtered])
+    return () => cancelAnimationFrame(raf)
+  }, [filtered, navType])
 
   useEffect(() => {
     const save = () => sessionStorage.setItem('pt-students-scroll', String(window.scrollY))
