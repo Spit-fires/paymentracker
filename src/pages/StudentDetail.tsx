@@ -122,6 +122,7 @@ export function StudentDetail() {
         phone: v.phone,
         phone2: v.phone2,
         batch: v.batch,
+        school: v.school.trim() || undefined,
         defaultFee: v.defaultFee ? Number(v.defaultFee) : 0,
         realPayment: v.realPayment.trim() ? Number(v.realPayment) : undefined,
         commission: v.commission.trim() ? Number(v.commission) : undefined,
@@ -203,7 +204,7 @@ export function StudentDetail() {
     <div>
       <PageHeader
         title="Student"
-        subtitle={student.batch || 'No batch'}
+        subtitle={`${student.batch || 'No batch'}${student.school ? ` · ${student.school}` : ''}`}
         back
         onBack={() => navigate(-1)}
         right={
@@ -240,6 +241,11 @@ export function StudentDetail() {
             <div className="text-[13px] text-muted dark:text-muted-dark truncate">
               {[student.phone, student.phone2].filter(Boolean).join(' · ') || 'no phone set'}
             </div>
+            {student.school && (
+              <div className="text-[11.5px] font-semibold text-ink/70 dark:text-white/70 mt-1">
+                {student.school}
+              </div>
+            )}
           </div>
         </div>
 

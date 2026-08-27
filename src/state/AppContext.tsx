@@ -47,6 +47,7 @@ export interface NewStudentInput {
   phone?: string
   phone2?: string
   batch: string
+  school?: string
   defaultFee: number
   realPayment?: number
   commission?: number
@@ -494,6 +495,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         phone: input.phone?.trim(),
         phone2: input.phone2?.trim(),
         batch: input.batch.trim() || 'General',
+        school: input.school?.trim() || undefined,
         defaultFee: input.defaultFee,
         realPayment: input.realPayment,
         commission: input.commission,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { motion } from 'motion/react'
 import { useApp } from '../state/AppContext'
@@ -170,6 +170,61 @@ export function Students() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtered])
 
+  // --- Students list scroll lock (mobile) - restore where you left off when
+  // coming back from a detail page. stored per session, single restore after
+  // the list has actually rendered so it doesn't clamp to the placeholder
+  const didRestoreScroll = useRef(false)
+  useEffect(() => {
+    if (didRestoreScroll.current || filtered.length === 0) return
+    const raw = sessionStorage.getItem('pt-students-scroll')
+    if (!raw) {
+      didRestoreScroll.current = true
+      return
+    }
+    const y = parseInt(raw, 10)
+    if (!Number.isFinite(y) || y === 0) {
+      didRestoreScroll.current = true
+      return
+    }
+    let raf = 0
+    let timer = 0 as unknown as number
+    let tries = 0
+    const tryRestore = () => {
+      if (document.documentElement.scrollHeight >= y + 120 || tries >= 20) {
+        window.scrollTo(0, y)
+        didRestoreScroll.current = true
+        return
+      }
+      tries++
+      timer = window.setTimeout(tryRestore, 100) as unknown as number
+    }
+    raf = requestAnimationFrame(tryRestore)
+    return () => {
+      cancelAnimationFrame(raf)
+      clearTimeout(timer)
+    }
+  }, [filtered])
+
+  useEffect(() => {
+    const save = () => sessionStorage.setItem('pt-students-scroll', String(window.scrollY))
+    let raf = 0
+    const onScroll = () => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(save)
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('pagehide', save)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') save()
+    })
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('pagehide', save)
+      save()
+    }
+  }, [])
+
   /** Payment status for this month: fully paid / partially paid / nothing paid. */
   const statusOf = (s: Student): 'paid' | 'partial' | 'due' => {
     const paid = studentPeriodBalance(payments, s.id, period)
@@ -209,8 +264,9 @@ export function Students() {
                   </span>
                 )}
               </div>
-              <div className="text-[12px] text-muted dark:text-muted-dark">
+              <div className="text-[12px] text-muted dark:text-muted-dark truncate">
                 {s.batch || 'No batch'}
+                {s.school ? ` · ${s.school}` : ''}
               </div>
             </div>
             <div className={`text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0 ${CHIP[st]}`}>
@@ -232,6 +288,7 @@ export function Students() {
         phone: v.phone,
         phone2: v.phone2,
         batch: v.batch,
+        school: v.school.trim() || undefined,
         defaultFee: v.defaultFee ? Number(v.defaultFee) : 0,
         realPayment: v.realPayment.trim() ? Number(v.realPayment) : undefined,
         commission: v.commission.trim() ? Number(v.commission) : undefined,

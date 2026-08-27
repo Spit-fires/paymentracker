@@ -1,6 +1,7 @@
 import type { Payment, Student, Center } from '../types'
 import { fmtTaka, takaToWords, fmtDate, periodLabel, fmtInvoiceNo } from '../lib/format'
 import { sanitizeHtml } from './RichEditor'
+import { useBlobUrl } from './ui'
 
 interface Props {
   center: Center
@@ -25,6 +26,7 @@ export function ReceiptCard({ center, student, payment }: Props) {
   const receivedBy = payment.receivedBy
   const showPaid = payment.amount > 0 && (center.paidImage || PAID_STAMP)
   const paidSrc = center.paidImage || PAID_STAMP
+  const photoUrl = useBlobUrl(student.photoBlob)
 
   return (
     <div
@@ -96,19 +98,38 @@ export function ReceiptCard({ center, student, payment }: Props) {
       <div style={{ height: 2, background: `linear-gradient(90deg, ${GOLD}, ${NAVY} 60%)`, margin: '14px 0' }} />
 
       {/* Student details */}
-      <div style={{ display: 'grid', gridTemplateColumns: '96px 1fr', rowGap: 7, fontSize: 12.5 }}>
-        {[
-          ['Student', student.name],
-          ['Batch / Class', student.batch || '-'],
-          ['Payment mode', payment.mode],
-          ['For the month', periodLabel(payment.period)],
-          ['Date received', fmtDate(payment.date)],
-        ].map(([k, v]) => (
-          <div key={k} style={{ display: 'contents' }}>
-            <div style={{ color: MUTED }}>{k}</div>
-            <div style={{ fontWeight: 600 }}>{v}</div>
+      <div style={{ position: 'relative' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '96px 1fr', rowGap: 7, fontSize: 12.5, paddingRight: photoUrl ? 60 : 0 }}>
+          {[
+            ['Student', student.name],
+            ['Batch / Class', student.batch || '-'],
+            ['Payment mode', payment.mode],
+            ['For the month', periodLabel(payment.period)],
+            ['Date received', fmtDate(payment.date)],
+          ].map(([k, v]) => (
+            <div key={k} style={{ display: 'contents' }}>
+              <div style={{ color: MUTED }}>{k}</div>
+              <div style={{ fontWeight: 600 }}>{v}</div>
+            </div>
+          ))}
+        </div>
+        {photoUrl && (
+          <div
+            style={{
+              position: 'absolute',
+              right: 0,
+              top: 0,
+              width: 48,
+              height: 48,
+              border: `1px solid ${LINE}`,
+              borderRadius: 4,
+              overflow: 'hidden',
+              background: '#fff',
+            }}
+          >
+            <img src={photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
-        ))}
+        )}
       </div>
 
       {/* Amount panel */}

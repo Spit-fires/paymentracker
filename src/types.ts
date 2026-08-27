@@ -9,6 +9,8 @@ export interface Student {
   /** extra number, used for calls (primary phone defaults to WhatsApp) */
   phone2?: string
   batch: string
+  /** school dropdown - SSAC/TGS/RUMC/MC/Other (free text when Other); empty = not set */
+  school?: string
   defaultFee: number
   /** the student's true monthly fee - teacher-only bookkeeping, never printed
    *  on the receipt; blank = same as defaultFee */

@@ -7,6 +7,7 @@ export interface FormValue {
   phone: string
   phone2: string
   batch: string
+  school: string
   defaultFee: string
   realPayment: string
   commission: string
@@ -14,12 +15,15 @@ export interface FormValue {
   photo: Blob | null
 }
 
+const SCHOOLS = ['SSAC', 'TGS', 'RUMC', 'MC'] as const
+
 export function initialForm(s?: Student): FormValue {
   return {
     name: s?.name || '',
     phone: s?.phone ?? '+880',
     phone2: s?.phone2 ?? '+880',
     batch: s?.batch || '',
+    school: s?.school || '',
     defaultFee: s?.defaultFee ? String(s.defaultFee) : '',
     realPayment: s?.realPayment ? String(s.realPayment) : '',
     commission: s?.commission ? String(s.commission) : '',
@@ -43,6 +47,10 @@ export function StudentForm({
 }) {
   const [f, setF] = useState<FormValue>(initialForm(initial))
   const [newBatch, setNewBatch] = useState('')
+  const [isOtherSchool, setIsOtherSchool] = useState(() => {
+    const s = initial?.school || ''
+    return !!s && !SCHOOLS.includes(s as typeof SCHOOLS[number])
+  })
   const [err, setErr] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const previewUrl = useRef<string | null>(null)
@@ -190,6 +198,40 @@ export function StudentForm({
           <Input value={f.batch} onChange={(e) => set('batch', e.target.value)} placeholder="Batch 2026" />
         </Field>
       )}
+
+      <Field label="School">
+        <select
+          value={isOtherSchool ? 'Other' : f.school}
+          onChange={(e) => {
+            const v = e.target.value
+            if (v === 'Other') {
+              setIsOtherSchool(true)
+              // keep typed value if it was already free text, otherwise clear
+              if (SCHOOLS.includes(f.school as typeof SCHOOLS[number])) set('school', '')
+            } else {
+              setIsOtherSchool(false)
+              set('school', v)
+            }
+          }}
+          className="w-full rounded-xl bg-white dark:bg-card-dark border border-line dark:border-line-dark px-3 py-2.5 text-[14px] text-body dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-teal/25"
+        >
+          <option value="">Select school (optional)</option>
+          {SCHOOLS.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+          <option value="Other">Other</option>
+        </select>
+        {isOtherSchool && (
+          <Input
+            className="mt-2"
+            value={SCHOOLS.includes(f.school as typeof SCHOOLS[number]) ? '' : f.school}
+            onChange={(e) => set('school', e.target.value)}
+            placeholder="Type school name"
+          />
+        )}
+      </Field>
 
       <div className="w-1/2">
         <Field label="Default fee (৳)">
