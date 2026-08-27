@@ -115,6 +115,20 @@ function loadScroll(): Record<string, number> {
   }
 }
 
+function getScrollY(): number {
+  return window.scrollY || window.pageYOffset || document.documentElement.scrollTop || (document.body as unknown as { scrollTop: number })?.scrollTop || 0
+}
+function setScrollY(y: number): void {
+  window.scrollTo(0, y)
+  // some mobile browsers keep scroll on documentElement/body, not window
+  try {
+    document.documentElement.scrollTop = y
+    ;(document.body as unknown as { scrollTop: number }).scrollTop = y
+  } catch {
+    /* ignore */
+  }
+}
+
 function AnimatedRoutes() {
   const location = useLocation()
   const navType = useNavigationType()
@@ -127,21 +141,22 @@ function AnimatedRoutes() {
   }, [])
 
   // snapshot the leaving page's scroll (still on screen during exit animation)
+  // NOTE: cleanup fires AFTER the PUSH scrollTo(0,0), so getY() would be 0
+  // and overwrite the correct value — only save if we have a non-zero value.
   useEffect(() => {
     prevPath.current = location.pathname
     return () => {
-      pos.current[prevPath.current] = window.scrollY
+      const y = getScrollY()
+      if (y > 0) pos.current[prevPath.current] = y
     }
   }, [location.pathname])
 
-  // standard persistence: save on scroll (rAF) + on pagehide/refresh
+  // standard persistence: save on scroll + on pagehide/refresh
+  // listen on both window and document — some mobile browsers fire only on one.
+  // Save synchronously (no rAF) so the value is fresh when navigation starts.
   useEffect(() => {
-    let raf = 0
     const onScroll = () => {
-      cancelAnimationFrame(raf)
-      raf = requestAnimationFrame(() => {
-        pos.current[location.pathname] = window.scrollY
-      })
+      pos.current[location.pathname] = getScrollY()
     }
     const persist = () => {
       try {
@@ -150,12 +165,15 @@ function AnimatedRoutes() {
         /* ignore */
       }
     }
-    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('scroll', onScroll, { passive: true, capture: true })
+    document.addEventListener('scroll', onScroll, { passive: true, capture: true } as unknown as AddEventListenerOptions)
     window.addEventListener('pagehide', persist)
+    window.addEventListener('beforeunload', persist)
     return () => {
-      cancelAnimationFrame(raf)
-      window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('scroll', onScroll, true)
+      document.removeEventListener('scroll', onScroll, true)
       window.removeEventListener('pagehide', persist)
+      window.removeEventListener('beforeunload', persist)
       persist()
     }
   }, [location.pathname])
@@ -168,7 +186,7 @@ function AnimatedRoutes() {
     if (location.pathname === '/students') return
     const isPop = navType === 'POP'
     const target = isPop ? (pos.current[location.pathname] ?? 0) : 0
-    window.scrollTo(0, target)
+    setScrollY(target)
   }, [location.pathname, navType])
 
   return (

@@ -24,6 +24,16 @@ const SORT_LABELS: Record<SortKey, string> = { name: 'Name', batch: 'Batch', rec
 // Saved when Students unmounts (navigating to a student detail page).
 // Restored when Students mounts back via browser back (POP).
 let savedScrollY = 0
+function getY(): number {
+  return window.scrollY || window.pageYOffset || document.documentElement.scrollTop || (document.body as unknown as { scrollTop: number })?.scrollTop || 0
+}
+function setY(y: number): void {
+  window.scrollTo(0, y)
+  try {
+    document.documentElement.scrollTop = y
+    ;(document.body as unknown as { scrollTop: number }).scrollTop = y
+  } catch { /* ignore */ }
+}
 
 function StudentAvatar({ s }: { s: { name: string; photoBlob?: Blob } }) {
   const url = useBlobUrl(s.photoBlob)
@@ -46,9 +56,11 @@ export function Students() {
   const navType = useNavigationType()
 
   // --- Scroll restore for back-button navigation ---
-  // Save scroll position when Students unmounts (navigating to student detail).
+  // Save on unmount is too late (App's PUSH scrollTo(0,0) already ran),
+  // so also save synchronously on row click before navigation starts.
+  // Keep unmount as fallback for other exits (e.g. tabs).
   useEffect(() => {
-    return () => { savedScrollY = window.scrollY }
+    return () => { savedScrollY = getY() || savedScrollY }
   }, [])
 
   // Restore scroll position when navigating BACK to Students (POP).
@@ -59,7 +71,7 @@ export function Students() {
     if (didRestore.current) return
     didRestore.current = true
     if (navType !== 'POP' || savedScrollY <= 0) return
-    window.scrollTo(0, savedScrollY)
+    setY(savedScrollY)
     savedScrollY = 0
   }, [navType])
 
@@ -221,6 +233,7 @@ export function Students() {
         <Link
           to={mode === 'record' ? `/payment/${s.id}` : `/student/${s.id}`}
           className="block"
+          onClick={() => { savedScrollY = getY() }}
         >
           <Card className="!rounded-xl p-3 flex items-center gap-3 active:scale-[0.99] transition">
             <StudentAvatar s={s} />
