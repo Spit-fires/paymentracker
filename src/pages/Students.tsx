@@ -171,8 +171,9 @@ export function Students() {
   }, [filtered])
 
   // --- Students list scroll lock (mobile) - restore where you left off when
-  // coming back from a detail page. stored per session, single restore after
-  // the list has actually rendered so it doesn't clamp to the placeholder
+  // coming back from a detail page. Uses a single rAF + timeout after the
+  // filtered list has painted, so it doesn't jitter or clamp to the
+  // placeholder height. Saved synchronously on row click for mobile.
   const didRestoreScroll = useRef(false)
   useEffect(() => {
     if (didRestoreScroll.current || filtered.length === 0) return
@@ -182,23 +183,19 @@ export function Students() {
       return
     }
     const y = parseInt(raw, 10)
-    if (!Number.isFinite(y) || y === 0) {
+    if (!Number.isFinite(y) || y <= 0) {
       didRestoreScroll.current = true
       return
     }
     let raf = 0
     let timer = 0 as unknown as number
-    let tries = 0
-    const tryRestore = () => {
-      if (document.documentElement.scrollHeight >= y + 120 || tries >= 20) {
+    // wait for the list to paint (images, etc.) then single scroll
+    raf = requestAnimationFrame(() => {
+      timer = window.setTimeout(() => {
         window.scrollTo(0, y)
         didRestoreScroll.current = true
-        return
-      }
-      tries++
-      timer = window.setTimeout(tryRestore, 100) as unknown as number
-    }
-    raf = requestAnimationFrame(tryRestore)
+      }, 90) as unknown as number
+    })
     return () => {
       cancelAnimationFrame(raf)
       clearTimeout(timer)
@@ -252,6 +249,7 @@ export function Students() {
         <Link
           to={mode === 'record' ? `/payment/${s.id}` : `/student/${s.id}`}
           className="block"
+          onClick={() => sessionStorage.setItem('pt-students-scroll', String(window.scrollY))}
         >
           <Card className="!rounded-xl p-3 flex items-center gap-3 active:scale-[0.99] transition">
             <StudentAvatar s={s} />
