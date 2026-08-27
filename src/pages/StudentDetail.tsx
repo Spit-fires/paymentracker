@@ -123,6 +123,7 @@ export function StudentDetail() {
         phone2: v.phone2,
         batch: v.batch,
         school: v.school.trim() || undefined,
+        ssacId: v.school.trim() === 'SSAC' ? v.ssacId.trim() || undefined : undefined,
         defaultFee: v.defaultFee ? Number(v.defaultFee) : 0,
         realPayment: v.realPayment.trim() ? Number(v.realPayment) : undefined,
         commission: v.commission.trim() ? Number(v.commission) : undefined,
@@ -204,7 +205,7 @@ export function StudentDetail() {
     <div>
       <PageHeader
         title="Student"
-        subtitle={`${student.batch || 'No batch'}${student.school ? ` · ${student.school}` : ''}`}
+        subtitle={`${student.batch || 'No batch'}${student.school ? ` · ${student.school}` : ''}${student.school === 'SSAC' && student.ssacId ? ` · ${student.ssacId}` : ''}`}
         back
         onBack={() => navigate(-1)}
         right={
@@ -244,6 +245,7 @@ export function StudentDetail() {
             {student.school && (
               <div className="text-[11.5px] font-semibold text-ink/70 dark:text-white/70 mt-1">
                 {student.school}
+                {student.school === 'SSAC' && student.ssacId ? ` · ${student.ssacId}` : ''}
               </div>
             )}
           </div>

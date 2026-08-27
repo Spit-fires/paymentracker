@@ -8,6 +8,7 @@ export interface FormValue {
   phone2: string
   batch: string
   school: string
+  ssacId: string
   defaultFee: string
   realPayment: string
   commission: string
@@ -24,6 +25,7 @@ export function initialForm(s?: Student): FormValue {
     phone2: s?.phone2 ?? '+880',
     batch: s?.batch || '',
     school: s?.school || '',
+    ssacId: s?.ssacId || '',
     defaultFee: s?.defaultFee ? String(s.defaultFee) : '',
     realPayment: s?.realPayment ? String(s.realPayment) : '',
     commission: s?.commission ? String(s.commission) : '',
@@ -208,9 +210,11 @@ export function StudentForm({
               setIsOtherSchool(true)
               // keep typed value if it was already free text, otherwise clear
               if (SCHOOLS.includes(f.school as typeof SCHOOLS[number])) set('school', '')
+              set('ssacId', '')
             } else {
               setIsOtherSchool(false)
               set('school', v)
+              if (v !== 'SSAC') set('ssacId', '')
             }
           }}
           className="w-full rounded-xl bg-white dark:bg-card-dark border border-line dark:border-line-dark px-3 py-2.5 text-[14px] text-body dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-teal/25"
@@ -227,11 +231,24 @@ export function StudentForm({
           <Input
             className="mt-2"
             value={SCHOOLS.includes(f.school as typeof SCHOOLS[number]) ? '' : f.school}
-            onChange={(e) => set('school', e.target.value)}
+            onChange={(e) => {
+              set('school', e.target.value)
+              set('ssacId', '')
+            }}
             placeholder="Type school name"
           />
         )}
       </Field>
+
+      {f.school === 'SSAC' && (
+        <Field label="SSAC ID">
+          <Input
+            value={f.ssacId}
+            onChange={(e) => set('ssacId', e.target.value)}
+            placeholder="e.g. SSAC-2024-0012"
+          />
+        </Field>
+      )}
 
       <div className="w-1/2">
         <Field label="Default fee (৳)">

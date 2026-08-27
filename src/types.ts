@@ -11,6 +11,8 @@ export interface Student {
   batch: string
   /** school dropdown - SSAC/TGS/RUMC/MC/Other (free text when Other); empty = not set */
   school?: string
+  /** SSAC student ID - only when school === 'SSAC'; empty = not set */
+  ssacId?: string
   defaultFee: number
   /** the student's true monthly fee - teacher-only bookkeeping, never printed
    *  on the receipt; blank = same as defaultFee */

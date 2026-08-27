@@ -48,6 +48,7 @@ export interface NewStudentInput {
   phone2?: string
   batch: string
   school?: string
+  ssacId?: string
   defaultFee: number
   realPayment?: number
   commission?: number
@@ -489,13 +490,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addStudent = useCallback(
     async (input: NewStudentInput): Promise<Student> => {
       const now = Date.now()
+      const school = input.school?.trim() || undefined
+      const ssacId = school === 'SSAC' ? input.ssacId?.trim() || undefined : undefined
       const s: Student = {
         id: newId(),
         name: input.name.trim(),
         phone: input.phone?.trim(),
         phone2: input.phone2?.trim(),
         batch: input.batch.trim() || 'General',
-        school: input.school?.trim() || undefined,
+        school,
+        ssacId,
         defaultFee: input.defaultFee,
         realPayment: input.realPayment,
         commission: input.commission,

@@ -249,6 +249,7 @@ export function Students() {
               <div className="text-[12px] text-muted dark:text-muted-dark truncate">
                 {s.batch || 'No batch'}
                 {s.school ? ` · ${s.school}` : ''}
+                {s.school === 'SSAC' && s.ssacId ? ` · ${s.ssacId}` : ''}
               </div>
             </div>
             <div className={`text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0 ${CHIP[st]}`}>
@@ -271,6 +272,7 @@ export function Students() {
         phone2: v.phone2,
         batch: v.batch,
         school: v.school.trim() || undefined,
+        ssacId: v.school.trim() === 'SSAC' ? v.ssacId.trim() || undefined : undefined,
         defaultFee: v.defaultFee ? Number(v.defaultFee) : 0,
         realPayment: v.realPayment.trim() ? Number(v.realPayment) : undefined,
         commission: v.commission.trim() ? Number(v.commission) : undefined,
