@@ -160,18 +160,11 @@ function AnimatedRoutes() {
     }
   }, [location.pathname])
 
-  // standard restore for all pages except Students (which handles its own
-  // restore after its filtered list has rendered). PUSH -> top, POP -> saved.
-  // single scroll, no polling loop for other pages.
+  // POP restores saved position, PUSH goes to top.
   useLayoutEffect(() => {
-    if (location.pathname === '/students') return
     const isPop = navType === 'POP'
     const target = isPop ? (pos.current[location.pathname] ?? 0) : 0
-    if (target === 0) {
-      window.scrollTo(0, 0)
-      return
-    }
-    requestAnimationFrame(() => window.scrollTo(0, target))
+    window.scrollTo(0, target)
   }, [location.pathname, navType])
 
   return (

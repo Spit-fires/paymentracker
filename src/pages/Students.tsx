@@ -1,5 +1,5 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigationType, useSearchParams } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { motion } from 'motion/react'
 import { useApp } from '../state/AppContext'
 import { studentPeriodPaidAny, studentPeriodBalance, studentBalanceFee } from '../lib/ledger'
@@ -170,71 +170,6 @@ export function Students() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtered])
 
-  // --- Students list scroll lock (mobile) - restore where you left off when
-  // coming back from a detail page. useLayoutEffect fires synchronously after
-  // DOM commit (before browser paint), beating mobile browsers' own
-  // scroll-restoration which fires on the next frame. Only restores on POP
-  // (back button) — PUSH navigations start at top. Saved on row click + on
-  // unmount so the value is always fresh.
-  const navType = useNavigationType()
-  const didRestoreScroll = useRef(false)
-  useLayoutEffect(() => {
-    if (navType !== 'POP' || didRestoreScroll.current || filtered.length === 0) {
-      if (navType !== 'POP') {
-        window.scrollTo(0, 0)
-        didRestoreScroll.current = true
-      }
-      return
-    }
-    const raw = sessionStorage.getItem('pt-students-scroll')
-    if (!raw) {
-      didRestoreScroll.current = true
-      return
-    }
-    const y = parseInt(raw, 10)
-    if (!Number.isFinite(y) || y <= 0) {
-      didRestoreScroll.current = true
-      return
-    }
-    window.scrollTo(0, y)
-    didRestoreScroll.current = true
-  }, [filtered, navType])
-
-  // Also try a second attempt after the list fully paints (images, avatars,
-  // etc. may have shifted height). Single attempt, no loop. POP only.
-  useEffect(() => {
-    if (navType !== 'POP' || didRestoreScroll.current) return
-    const raw = sessionStorage.getItem('pt-students-scroll')
-    if (!raw) return
-    const y = parseInt(raw, 10)
-    if (!Number.isFinite(y) || y <= 0) return
-    const raf = requestAnimationFrame(() => {
-      window.scrollTo(0, y)
-      didRestoreScroll.current = true
-    })
-    return () => cancelAnimationFrame(raf)
-  }, [filtered, navType])
-
-  useEffect(() => {
-    const save = () => sessionStorage.setItem('pt-students-scroll', String(window.scrollY))
-    let raf = 0
-    const onScroll = () => {
-      cancelAnimationFrame(raf)
-      raf = requestAnimationFrame(save)
-    }
-    window.addEventListener('scroll', onScroll, { passive: true })
-    window.addEventListener('pagehide', save)
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') save()
-    })
-    return () => {
-      cancelAnimationFrame(raf)
-      window.removeEventListener('scroll', onScroll)
-      window.removeEventListener('pagehide', save)
-      save()
-    }
-  }, [])
-
   /** Payment status for this month: fully paid / partially paid / nothing paid. */
   const statusOf = (s: Student): 'paid' | 'partial' | 'due' => {
     const paid = studentPeriodBalance(payments, s.id, period)
@@ -262,7 +197,6 @@ export function Students() {
         <Link
           to={mode === 'record' ? `/payment/${s.id}` : `/student/${s.id}`}
           className="block"
-          onClick={() => sessionStorage.setItem('pt-students-scroll', String(window.scrollY))}
         >
           <Card className="!rounded-xl p-3 flex items-center gap-3 active:scale-[0.99] transition">
             <StudentAvatar s={s} />
