@@ -98,8 +98,8 @@ export function ReceiptCard({ center, student, payment }: Props) {
       <div style={{ height: 2, background: `linear-gradient(90deg, ${GOLD}, ${NAVY} 60%)`, margin: '14px 0' }} />
 
       {/* Student details */}
-      <div style={{ position: 'relative', minHeight: photoUrl ? 56 : undefined }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '96px 1fr', rowGap: 7, fontSize: 12.5, paddingRight: photoUrl ? 70 : 0 }}>
+      <div style={{ position: 'relative', minHeight: photoUrl ? 72 : undefined }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '96px 1fr', rowGap: 7, fontSize: 12.5, paddingRight: photoUrl ? 74 : 0 }}>
           {[
             ['Student', student.name],
             ['Batch / Class', student.batch || '-'],
@@ -120,15 +120,15 @@ export function ReceiptCard({ center, student, payment }: Props) {
               right: 0,
               top: '50%',
               transform: 'translateY(-50%)',
-              width: 56,
-              height: 56,
+              width: 58,
+              height: 72,
               border: `1px solid ${LINE}`,
-              borderRadius: 6,
+              borderRadius: 4,
               overflow: 'hidden',
               background: '#fff',
             }}
           >
-            <img src={photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <img src={photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top center' }} />
           </div>
         )}
       </div>

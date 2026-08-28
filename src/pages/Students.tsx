@@ -140,6 +140,10 @@ export function Students() {
     () => Array.from(new Set(students.map((s) => s.batch))).filter(Boolean).sort(),
     [students],
   )
+  const schools = useMemo(
+    () => Array.from(new Set(students.map((s) => s.school).filter(Boolean) as string[])).filter((s) => s !== 'SSAC').sort(),
+    [students],
+  )
 
   const filtered = useMemo(() => {
     let list = students.filter((s) => (showArchived ? true : !s.archived))
@@ -445,6 +449,7 @@ export function Students() {
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add student">
         <StudentForm
           batches={batches}
+          schools={schools}
           submitLabel={adding ? 'Adding…' : 'Add student'}
           onSubmit={(v) => void onAdd(v)}
           onCancel={() => setAddOpen(false)}

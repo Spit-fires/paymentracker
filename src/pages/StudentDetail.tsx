@@ -407,6 +407,7 @@ export function StudentDetail() {
         <StudentForm
           initial={student}
           batches={Array.from(new Set(students.map((s) => s.batch))).filter(Boolean).sort()}
+          schools={Array.from(new Set(students.map((s) => s.school).filter(Boolean) as string[])).filter((s) => s !== 'SSAC').sort()}
           submitLabel={busy ? 'Saving…' : 'Save changes'}
           onSubmit={(v) => void onEdit(v)}
           onCancel={() => setEditOpen(false)}

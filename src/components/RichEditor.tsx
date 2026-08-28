@@ -1,27 +1,28 @@
-import { useEffect, useRef, type MouseEvent } from 'react'
+// Modern battle-tested rich text via Lexical (Meta). Headless, performant, mobile-perfect.
+// No images/links — just bold/italic/underline/strike, lists, align, clear.
+// Fits constraints: fixed toolbar, max-h, no receipt growth.
+
+import { useEffect, useState } from 'react'
+import { LexicalComposer } from '@lexical/react/LexicalComposer'
+import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin'
+import { ContentEditable } from '@lexical/react/LexicalContentEditable'
+import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin'
+import { ListPlugin } from '@lexical/react/LexicalListPlugin'
+import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin'
+import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
+import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary'
+import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html'
+import { $getRoot, $getSelection } from 'lexical'
+import { ListNode, ListItemNode, INSERT_ORDERED_LIST_COMMAND, INSERT_UNORDERED_LIST_COMMAND, REMOVE_LIST_COMMAND } from '@lexical/list'
+import { HeadingNode, QuoteNode } from '@lexical/rich-text'
+import { FORMAT_TEXT_COMMAND, FORMAT_ELEMENT_COMMAND, UNDO_COMMAND, REDO_COMMAND, type LexicalEditor } from 'lexical'
+import { mergeRegister } from '@lexical/utils'
 import { cx } from './ui'
 
-const ALLOWED_TAGS = new Set([
-  'P',
-  'DIV',
-  'BR',
-  'B',
-  'STRONG',
-  'I',
-  'EM',
-  'U',
-  'S',
-  'STRIKE',
-  'UL',
-  'OL',
-  'LI',
-  'SPAN',
-  'FONT',
-])
+// Keep sanitize for receipt capture — Lexical HTML is already clean, but we still strip.
+// Must stay exported for ReceiptCard.
+const ALLOWED_TAGS = new Set(['P', 'DIV', 'BR', 'B', 'STRONG', 'I', 'EM', 'U', 'S', 'STRIKE', 'UL', 'OL', 'LI', 'SPAN', 'H1', 'H2', 'H3'])
 const ALLOWED_STYLES = ['color', 'background-color', 'font-size', 'line-height', 'text-align', 'font-weight', 'font-style']
-
-/** Strip anything not produced by the editor toolbar - keeps html-to-image
- *  capture safe and prevents stray page CSS from leaking into the receipt. */
 export function sanitizeHtml(html: string): string {
   if (!html.trim()) return ''
   try {
@@ -41,22 +42,15 @@ export function sanitizeHtml(html: string): string {
             for (const decl of style.split(';')) {
               const [prop, ...rest] = decl.split(':')
               const p = prop?.trim().toLowerCase()
-              if (p && ALLOWED_STYLES.includes(p) && rest.join(':').trim()) {
-                keep.push(`${p}:${rest.join(':').trim()}`)
-              }
+              if (p && ALLOWED_STYLES.includes(p) && rest.join(':').trim()) keep.push(`${p}:${rest.join(':').trim()}`)
             }
             if (keep.length) el.setAttribute('style', keep.join(';'))
             else el.removeAttribute('style')
           }
-          for (const a of Array.from(el.attributes)) {
-            if (a.name !== 'style') el.removeAttribute(a.name)
-          }
+          for (const a of Array.from(el.attributes)) if (a.name !== 'style') el.removeAttribute(a.name)
           walk(el)
-        } else if (k.nodeType === Node.COMMENT_NODE) {
-          k.parentNode?.removeChild(k)
-        } else {
-          walk(k)
-        }
+        } else if (k.nodeType === Node.COMMENT_NODE) k.parentNode?.removeChild(k)
+        else walk(k)
       }
     }
     walk(doc.body)
@@ -66,24 +60,131 @@ export function sanitizeHtml(html: string): string {
   }
 }
 
-const COLORS = [
-  { label: 'Auto', value: 'inherit' },
-  { label: 'Black', value: '#1c2936' },
-  { label: 'Navy', value: '#12314f' },
-  { label: 'Red', value: '#b23b3b' },
-  { label: 'Green', value: '#15803d' },
-  { label: 'Gold', value: '#b98a2f' },
-  { label: 'Teal', value: '#0d9488' },
-]
+function onError(error: Error) {
+  console.error(error)
+}
 
-const SIZES = [12, 14, 16, 18, 20, 24]
+const theme = {
+  paragraph: 'lexical-paragraph',
+  text: {
+    bold: 'font-bold',
+    italic: 'italic',
+    underline: 'underline',
+    strikethrough: 'line-through',
+  },
+  list: {
+    nested: { listitem: 'ml-6' },
+    ol: 'list-decimal ml-6',
+    ul: 'list-disc ml-6',
+    listitem: 'lexical-listitem',
+  },
+  heading: {
+    h1: 'text-[20px] font-bold',
+    h2: 'text-[18px] font-bold',
+    h3: 'text-[16px] font-bold',
+  },
+}
 
-/** Snapshot of a DOM selection range (node refs stay valid across commands). */
-type SavedRange = {
-  sc: Node
-  so: number
-  ec: Node
-  eo: number
+// Toolbar — fixed, no layout shift, tap target 32px, mobile-safe
+function Toolbar() {
+  const [editor] = useLexicalComposerContext()
+  const [isBold, setIsBold] = useState(false)
+  const [isItalic, setIsItalic] = useState(false)
+  const [isUnderline, setIsUnderline] = useState(false)
+  const [isStrike, setIsStrike] = useState(false)
+
+  useEffect(() => {
+    return mergeRegister(
+      editor.registerUpdateListener(({ editorState }) => {
+        editorState.read(() => {
+          const sel = $getSelection()
+          if (sel && (sel as unknown as { hasFormat?: (t: string) => boolean }).hasFormat) {
+            // @ts-expect-error hasFormat exists on RangeSelection
+            setIsBold(sel.hasFormat('bold'))
+            // @ts-expect-error
+            setIsItalic(sel.hasFormat('italic'))
+            // @ts-expect-error
+            setIsUnderline(sel.hasFormat('underline'))
+            // @ts-expect-error
+            setIsStrike(sel.hasFormat('strikethrough'))
+          }
+        })
+      }),
+    )
+  }, [editor])
+
+  const btn = (active: boolean, onClick: () => void, label: string, title: string) => (
+    <button
+      key={title}
+      type="button"
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onClick}
+      title={title}
+      className={cx(
+        'min-w-8 h-8 px-1.5 rounded-lg text-[12.5px] font-bold grid place-items-center transition active:scale-95 select-none',
+        active ? 'bg-ink/10 dark:bg-accent-dark/20 text-ink dark:text-accent-dark' : 'text-body/70 dark:text-muted-dark hover:bg-black/5 dark:hover:bg-white/10',
+      )}
+    >
+      {label}
+    </button>
+  )
+
+  return (
+    <div className="flex flex-wrap gap-0.5 items-center bg-cream dark:bg-input-dark px-1.5 py-1 border-b border-line dark:border-line-dark">
+      {btn(isBold, () => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'bold'), 'B', 'Bold')}
+      {btn(isItalic, () => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'italic'), 'I', 'Italic')}
+      {btn(isUnderline, () => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'underline'), 'U', 'Underline')}
+      {btn(isStrike, () => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'strikethrough'), 'S', 'Strikethrough')}
+      <span className="w-px h-5 bg-line dark:bg-line-dark mx-1" />
+      {btn(false, () => editor.dispatchCommand(UNDO_COMMAND, undefined), '↺', 'Undo')}
+      {btn(false, () => editor.dispatchCommand(REDO_COMMAND, undefined), '↻', 'Redo')}
+      <span className="w-px h-5 bg-line dark:bg-line-dark mx-1" />
+      {btn(false, () => editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, 'left'), '⇤', 'Align left')}
+      {btn(false, () => editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, 'center'), '⇹', 'Align center')}
+      {btn(false, () => editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, 'right'), '⇥', 'Align right')}
+      <span className="w-px h-5 bg-line dark:bg-line-dark mx-1" />
+      {btn(false, () => editor.dispatchCommand(INSERT_UNORDERED_LIST_COMMAND, undefined), '•≡', 'Bullet list')}
+      {btn(false, () => editor.dispatchCommand(INSERT_ORDERED_LIST_COMMAND, undefined), '1≡', 'Numbered list')}
+      {btn(false, () => editor.dispatchCommand(REMOVE_LIST_COMMAND, undefined), '≡×', 'Remove list')}
+      <span className="w-px h-5 bg-line dark:bg-line-dark mx-1" />
+      {btn(false, () => {
+        editor.update(() => {
+          const sel = $getSelection()
+          if (sel) {
+            // @ts-expect-error clear format
+            if (sel.hasFormat) {
+              editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'bold')
+              editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'italic')
+              editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'underline')
+              editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'strikethrough')
+            }
+          }
+        })
+      }, '⌫', 'Clear')}
+    </div>
+  )
+}
+
+// Sync editor content from `value` (HTML) when it changes externally and editor not focused
+function HtmlSync({ value }: { value?: string }) {
+  const [editor] = useLexicalComposerContext()
+  useEffect(() => {
+    const html = value || ''
+    // avoid clobbering focused editor
+    const active = document.activeElement
+    const rootEl = editor.getRootElement()
+    if (rootEl && active && rootEl.contains(active)) return
+    editor.update(() => {
+      const root = $getRoot()
+      root.clear()
+      if (!html.trim()) return
+      const parser = new DOMParser()
+      const dom = parser.parseFromString(html, 'text/html')
+      const nodes = $generateNodesFromDOM(editor, dom)
+      root.append(...nodes)
+    })
+  }, [editor, value])
+  return null
 }
 
 interface Props {
@@ -93,223 +194,41 @@ interface Props {
 }
 
 export function RichEditor({ value, onChange, placeholder }: Props) {
-  const ref = useRef<HTMLDivElement>(null)
-  const last = useRef('')
-  // the fix: toolbar clicks (especially the <select>s) destroy the browser
-  // selection, so every command restores the last in-editor range first.
-  // that is what lets you bold AND color AND resize the same selection.
-  const saved = useRef<SavedRange | null>(null)
-  // element the current pointer gesture STARTED on (captured at pointerdown).
-  // a tap on the text can be re-dispatched to a toolbar button when the
-  // layout shifts mid-tap (mobile keyboard opening scrolls the toolbar under
-  // the finger) - commands only run when the gesture began on that button.
-  const origin = useRef<HTMLElement | null>(null)
-
-  // seed the editor from the store; never clobber a focused document
-  useEffect(() => {
-    const el = ref.current
-    if (!el || document.activeElement === el) return
-    const v = value || ''
-    if (last.current !== v) {
-      last.current = v
-      el.innerHTML = v
-    }
-  }, [value])
-
-  // remember the current non-collapsed selection while it lives in the editor
-  const capture = () => {
-    const el = ref.current
-    if (!el) return
-    const sel = window.getSelection()
-    if (!sel || sel.rangeCount === 0) {
-      saved.current = null
-      return
-    }
-    const r = sel.getRangeAt(0)
-    if (r.collapsed || !el.contains(r.commonAncestorContainer)) {
-      saved.current = null
-      return
-    }
-    saved.current = { sc: r.startContainer, so: r.startOffset, ec: r.endContainer, eo: r.endOffset }
+  const initialConfig = {
+    namespace: 'pt-rich',
+    theme,
+    onError,
+    nodes: [ListNode, ListItemNode, HeadingNode, QuoteNode],
   }
 
-  useEffect(() => {
-    document.addEventListener('selectionchange', capture)
-    return () => document.removeEventListener('selectionchange', capture)
-  }, [])
-
-  // put the caret back where it was before the toolbar stole the selection
-  const restore = () => {
-    const el = ref.current
-    if (!el) return
-    el.focus()
-    const s = saved.current
-    if (!s) return
-    const sel = window.getSelection()
-    if (!sel) return
-    if (!el.contains(s.sc) || !el.contains(s.ec)) {
-      saved.current = null
-      return
-    }
-    const r = document.createRange()
-    r.setStart(s.sc, s.so)
-    r.setEnd(s.ec, s.eo)
-    sel.removeAllRanges()
-    sel.addRange(r)
+  const handleChange = (editorState: unknown, editor: LexicalEditor) => {
+    editorState as { read: (fn: () => void) => void }
+    let html = ''
+    let text = ''
+    // @ts-expect-error editorState has read
+    editorState.read(() => {
+      html = $generateHtmlFromNodes(editor)
+      text = $getRoot().getTextContent()
+    })
+    onChange(html, text)
   }
-
-  const emit = () => {
-    const el = ref.current
-    if (!el) return
-    last.current = el.innerHTML
-    onChange(el.innerHTML, el.innerText)
-  }
-
-  // only run a command when the pointer gesture genuinely started on this
-  // button - rerouted clicks (layout shift mid-tap) must not format text
-  // that was only meant to be clicked. keyboard activation (detail 0) and
-  // browsers without pointer events (origin null) are always allowed.
-  const guarded =
-    (fn: () => void) =>
-    (e: MouseEvent<HTMLButtonElement>) => {
-      if (e.detail === 0) return fn()
-      const btn = e.currentTarget
-      const o = origin.current
-      if (!o || btn.contains(o)) fn()
-    }
-
-  const run = (cmd: string, value?: string) => {
-    restore()
-    document.execCommand('styleWithCSS', false, 'true')
-    document.execCommand(cmd, false, value)
-    capture()
-    emit()
-  }
-
-  const wrapSelection = (tag: string, attrs: Record<string, string>) => {
-    restore()
-    const sel = window.getSelection()
-    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return
-    const range = sel.getRangeAt(0)
-    // wrap the selection in a new element without touching any marks that
-    // are already applied - inner <b>/<span> markup is cloned as-is
-    const span = document.createElement(tag)
-    for (const [k, v] of Object.entries(attrs)) span.setAttribute(k, v)
-    span.appendChild(range.cloneContents())
-    range.deleteContents()
-    range.insertNode(span)
-    sel.removeAllRanges()
-    const r = document.createRange()
-    r.selectNodeContents(span)
-    sel.addRange(r)
-    capture()
-    emit()
-  }
-
-  const setSize = (px: number) => {
-    wrapSelection('span', { style: `font-size:${px}px;line-height:1.4` })
-  }
-
-  const setColor = (c: string) => {
-    if (c === 'inherit') {
-      // strip inline color styles from the selection
-      restore()
-      const sel = window.getSelection()
-      if (sel && sel.rangeCount && !sel.isCollapsed) {
-        const range = sel.getRangeAt(0)
-        for (const el of Array.from(range.cloneContents().querySelectorAll('span'))) {
-          if (el.style.color) el.style.color = ''
-          if (!el.getAttribute('style')) el.removeAttribute('style')
-        }
-        emit()
-      }
-      return
-    }
-    run('foreColor', c)
-  }
-
-  const btn = (active: boolean, onClick: () => void, label: string, title: string) => (
-    <button
-      key={title}
-      type="button"
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={guarded(onClick)}
-      title={title}
-      className={cx(
-        'min-w-8 h-8 px-1.5 rounded-lg text-[12.5px] font-bold grid place-items-center transition active:scale-95 select-none',
-        active
-          ? 'bg-ink/10 dark:bg-accent-dark/20 text-ink dark:text-accent-dark'
-          : 'text-body/70 dark:text-muted-dark hover:bg-black/5 dark:hover:bg-white/10',
-      )}
-    >
-      {label}
-    </button>
-  )
 
   return (
-    <div
-      className="rounded-xl border border-line dark:border-line-dark overflow-hidden"
-      onPointerDownCapture={(e) => {
-        origin.current = e.target as HTMLElement
-      }}
-    >
-      <div className="flex flex-wrap gap-0.5 items-center bg-cream dark:bg-input-dark px-1.5 py-1 border-b border-line dark:border-line-dark">
-        {btn(false, () => run('bold'), 'B', 'Bold')}
-        {btn(false, () => run('italic'), 'I', 'Italic')}
-        {btn(false, () => run('underline'), 'U', 'Underline')}
-        {btn(false, () => run('strikeThrough'), 'S', 'Strikethrough')}
-        <span className="w-px h-5 bg-line dark:bg-line-dark mx-1" />
-        <select
-          onMouseDown={(e) => e.stopPropagation()}
-          onChange={(e) => setSize(Number(e.target.value))}
-          defaultValue=""
-          className="h-8 rounded-lg bg-white dark:bg-card-dark border border-line dark:border-line-dark px-1 text-[12px] font-semibold text-body dark:text-text-dark"
-          title="Font size"
-        >
-          <option value="" disabled>
-            Size
-          </option>
-          {SIZES.map((s) => (
-            <option key={s} value={s}>
-              {s}px
-            </option>
-          ))}
-        </select>
-        <span className="w-px h-5 bg-line dark:bg-line-dark mx-1" />
-        <select
-          onMouseDown={(e) => e.stopPropagation()}
-          onChange={(e) => setColor(e.target.value)}
-          defaultValue=""
-          className="h-8 rounded-lg bg-white dark:bg-card-dark border border-line dark:border-line-dark px-1 text-[12px] font-semibold text-body dark:text-text-dark"
-          title="Text color"
-        >
-          <option value="" disabled>
-            Color
-          </option>
-          {COLORS.map((c) => (
-            <option key={c.label} value={c.value}>
-              {c.label}
-            </option>
-          ))}
-        </select>
-        <span className="w-px h-5 bg-line dark:bg-line-dark mx-1" />
-        {btn(false, () => run('justifyLeft'), '⇤', 'Align left')}
-        {btn(false, () => run('justifyCenter'), '⇹', 'Align center')}
-        {btn(false, () => run('justifyRight'), '⇥', 'Align right')}
-        <span className="w-px h-5 bg-line dark:bg-line-dark mx-1" />
-        {btn(false, () => run('insertUnorderedList'), '•≡', 'Bullet list')}
-        {btn(false, () => run('insertOrderedList'), '1≡', 'Numbered list')}
-        {btn(false, () => run('removeFormat'), '⌫', 'Clear formatting')}
-      </div>
-      <div
-        ref={ref}
-        contentEditable
-        suppressContentEditableWarning
-        onInput={emit}
-        onBlur={emit}
-        data-placeholder={placeholder}
-        className="rich-editor min-h-[96px] max-h-64 overflow-y-auto px-3 py-2.5 text-[14px] leading-[1.45] text-body dark:text-text-dark focus:outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-faint empty:before:pointer-events-none"
-      />
+    <div className="rounded-xl border border-line dark:border-line-dark overflow-hidden">
+      <LexicalComposer initialConfig={initialConfig}>
+        <Toolbar />
+        <div className="relative">
+          <RichTextPlugin
+            contentEditable={<ContentEditable className="min-h-[96px] max-h-64 overflow-y-auto px-3 py-2.5 text-[14px] leading-[1.45] text-body dark:text-text-dark focus:outline-none" />}
+            placeholder={<div className="absolute top-2.5 left-3 text-[14px] text-faint pointer-events-none select-none">{placeholder || 'Type something...'}</div>}
+            ErrorBoundary={LexicalErrorBoundary}
+          />
+          <HistoryPlugin />
+          <ListPlugin />
+          <OnChangePlugin onChange={handleChange} />
+          <HtmlSync value={value} />
+        </div>
+      </LexicalComposer>
     </div>
   )
 }

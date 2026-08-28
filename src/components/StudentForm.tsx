@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Student } from '../types'
 import { Field, Input, Textarea, Button } from './ui'
 
@@ -16,7 +16,7 @@ export interface FormValue {
   photo: Blob | null
 }
 
-const SCHOOLS = ['SSAC', 'TGS', 'RUMC', 'MC'] as const
+const SCHOOLS = ['SSAC'] as const
 
 export function initialForm(s?: Student): FormValue {
   return {
@@ -40,18 +40,28 @@ export function StudentForm({
   onSubmit,
   onCancel,
   batches = [],
+  schools = [],
 }: {
   initial?: Student
   submitLabel?: string
   onSubmit: (v: FormValue) => void
   onCancel?: () => void
   batches?: string[]
+  schools?: string[]
 }) {
-  const [f, setF] = useState<FormValue>(initialForm(initial))
+  const allSchools = useMemo(() => {
+    // SSAC is always first, then dynamic schools sorted (excluding SSAC duplicates)
+    const dyn = schools.filter((s) => s !== 'SSAC')
+    return [...SCHOOLS, ...dyn] as string[]
+  }, [schools])
+
+  const isKnownSchool = (s: string) => allSchools.includes(s)
+
+  const [f, setF] = useState<FormValue>(() => initialForm(initial))
   const [newBatch, setNewBatch] = useState('')
   const [isOtherSchool, setIsOtherSchool] = useState(() => {
     const s = initial?.school || ''
-    return !!s && !SCHOOLS.includes(s as typeof SCHOOLS[number])
+    return !!s && !(SCHOOLS as readonly string[]).includes(s) && !schools.includes(s)
   })
   const [err, setErr] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
@@ -65,6 +75,27 @@ export function StudentForm({
       if (previewUrl.current) URL.revokeObjectURL(previewUrl.current)
     }
   }, [])
+
+  // keep form in sync when editing a different student (Modal reuses instance)
+  useEffect(() => {
+    setF(initialForm(initial))
+    const s = initial?.school || ''
+    const known = [...SCHOOLS, ...schools].includes(s)
+    setIsOtherSchool(!!s && !known)
+    setErr('')
+    setNewBatch('')
+    // reset photo preview when initial changes
+    if (previewUrl.current) {
+      URL.revokeObjectURL(previewUrl.current)
+      previewUrl.current = null
+    }
+    if (initial?.photoBlob) {
+      previewUrl.current = URL.createObjectURL(initial.photoBlob)
+      setPreview(previewUrl.current)
+    } else {
+      setPreview(null)
+    }
+  }, [initial?.id])
 
   const set = <K extends keyof FormValue>(k: K, v: FormValue[K]) => setF((p) => ({ ...p, [k]: v }))
 
@@ -209,7 +240,7 @@ export function StudentForm({
             if (v === 'Other') {
               setIsOtherSchool(true)
               // keep typed value if it was already free text, otherwise clear
-              if (SCHOOLS.includes(f.school as typeof SCHOOLS[number])) set('school', '')
+              if (isKnownSchool(f.school)) set('school', '')
               set('ssacId', '')
             } else {
               setIsOtherSchool(false)
@@ -220,7 +251,7 @@ export function StudentForm({
           className="w-full rounded-xl bg-white dark:bg-card-dark border border-line dark:border-line-dark px-3 py-2.5 text-[14px] text-body dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-teal/25"
         >
           <option value="">Select school (optional)</option>
-          {SCHOOLS.map((s) => (
+          {allSchools.map((s) => (
             <option key={s} value={s}>
               {s}
             </option>
@@ -230,7 +261,7 @@ export function StudentForm({
         {isOtherSchool && (
           <Input
             className="mt-2"
-            value={SCHOOLS.includes(f.school as typeof SCHOOLS[number]) ? '' : f.school}
+            value={isKnownSchool(f.school) ? '' : f.school}
             onChange={(e) => {
               set('school', e.target.value)
               set('ssacId', '')
