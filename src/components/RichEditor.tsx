@@ -122,23 +122,11 @@ function Toolbar() {
     )
   }, [editor])
 
-  const btn = (active: boolean, onClick: () => void, label: string, title: string) => (
-    <button
-      key={title}
-      type="button"
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={onClick}
-      title={title}
-      className={cx(
-        'min-w-8 h-8 px-1.5 rounded-lg text-[12.5px] font-bold grid place-items-center transition active:scale-95 select-none',
-        active ? 'bg-ink/10 dark:bg-accent-dark/20 text-ink dark:text-accent-dark' : 'text-body/70 dark:text-muted-dark hover:bg-black/5 dark:hover:bg-white/10',
-      )}
-    >
-      {label}
-    </button>
-  )
+  const baseBtn = 'min-w-8 h-8 px-1.5 rounded-lg text-[12.5px] font-bold grid place-items-center transition active:scale-95 select-none border border-transparent'
+  const activeCls = 'bg-ink/10 dark:bg-accent-dark/20 text-ink dark:text-accent-dark border-ink/10'
+  const idleCls = 'text-body/70 dark:text-muted-dark hover:bg-black/5 dark:hover:bg-white/10'
 
-  const setColor = (value: string) => {
+  const doColor = (value: string) => {
     editor.update(() => {
       const sel = $getSelection()
       if ($isRangeSelection(sel)) {
@@ -147,7 +135,7 @@ function Toolbar() {
       }
     })
   }
-  const setSize = (value: string) => {
+  const doSize = (value: string) => {
     editor.update(() => {
       const sel = $getSelection()
       if ($isRangeSelection(sel)) {
@@ -158,70 +146,33 @@ function Toolbar() {
   }
 
   return (
-    <div className="flex flex-wrap gap-0.5 items-center bg-cream dark:bg-input-dark px-1.5 py-1 border-b border-line dark:border-line-dark">
-      {btn(isBold, () => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'bold'), 'B', 'Bold')}
-      {btn(isItalic, () => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'italic'), 'I', 'Italic')}
-      {btn(isUnderline, () => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'underline'), 'U', 'Underline')}
-      {btn(isStrike, () => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'strikethrough'), 'S', 'Strikethrough')}
-      <span className="w-px h-5 bg-line dark:bg-line-dark mx-1" />
-      <select
+    <div className="flex flex-wrap gap-1 items-center bg-cream dark:bg-input-dark px-1.5 py-1.5 border-b border-line dark:border-line-dark">
+      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'bold')} title="Bold" className={cx(baseBtn, isBold ? activeCls : idleCls)}>B</button>
+      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'italic')} title="Italic" className={cx(baseBtn, isItalic ? activeCls : idleCls)}>I</button>
+      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'underline')} title="Underline" className={cx(baseBtn, isUnderline ? activeCls : idleCls)}>U</button>
+      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'strikethrough')} title="Strikethrough" className={cx(baseBtn, isStrike ? activeCls : idleCls)}>S</button>
+
+      <span className="w-px h-6 bg-line dark:bg-line-dark mx-1" />
+      <select onMouseDown={(e) => e.stopPropagation()} onChange={(e) => { const v = e.target.value; if (v) doSize(v); e.currentTarget.value = '' }} defaultValue="" className="h-8 rounded-lg bg-white dark:bg-card-dark border border-line dark:border-line-dark px-2 text-[12px] font-semibold text-body dark:text-text-dark" title="Font size"><option value="" disabled>Size</option>{SIZES.map((s) => (<option key={s} value={String(s)}>{s}px</option>))}</select>
+      <select onMouseDown={(e) => e.stopPropagation()} onChange={(e) => { const v = e.target.value; doColor(v); e.currentTarget.value = '' }} defaultValue="" className="h-8 rounded-lg bg-white dark:bg-card-dark border border-line dark:border-line-dark px-2 text-[12px] font-semibold text-body dark:text-text-dark" title="Text color"><option value="" disabled>Color</option>{COLORS.map((c) => (<option key={c.label} value={c.value}>{c.label}</option>))}</select>
+
+      <span className="w-px h-6 bg-line dark:bg-line-dark mx-1" />
+      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => editor.dispatchCommand(INSERT_UNORDERED_LIST_COMMAND, undefined)} title="Bullet list" className={cx(baseBtn, idleCls)}>•≡</button>
+      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => editor.dispatchCommand(INSERT_ORDERED_LIST_COMMAND, undefined)} title="Numbered list" className={cx(baseBtn, idleCls)}>1≡</button>
+      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => editor.dispatchCommand(REMOVE_LIST_COMMAND, undefined)} title="Remove list" className={cx(baseBtn, idleCls)}>≡×</button>
+
+      <span className="w-px h-6 bg-line dark:bg-line-dark mx-1" />
+      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => editor.dispatchCommand(UNDO_COMMAND, undefined)} title="Undo" className={cx(baseBtn, idleCls)}>↺</button>
+      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => editor.dispatchCommand(REDO_COMMAND, undefined)} title="Redo" className={cx(baseBtn, idleCls)}>↻</button>
+      <button
+        type="button"
         onMouseDown={(e) => e.preventDefault()}
-        onChange={(e) => {
-          const v = e.target.value
-          if (v) setSize(v)
-          e.target.selectedIndex = 0
-        }}
-        defaultValue=""
-        className="h-8 rounded-lg bg-white dark:bg-card-dark border border-line dark:border-line-dark px-1 text-[12px] font-semibold text-body dark:text-text-dark"
-        title="Font size"
+        onClick={() => editor.update(() => { const sel = $getSelection(); if ($isRangeSelection(sel)) { $patchStyleText(sel, { color: null, 'font-size': null } as unknown as Record<string, string | null>); sel.format = 0 } })}
+        title="Clear"
+        className={cx(baseBtn, idleCls)}
       >
-        <option value="" disabled>
-          Size
-        </option>
-        {SIZES.map((s) => (
-          <option key={s} value={s}>
-            {s}px
-          </option>
-        ))}
-      </select>
-      <select
-        onMouseDown={(e) => e.preventDefault()}
-        onChange={(e) => {
-          const v = e.target.value
-          setColor(v)
-          e.target.selectedIndex = 0
-        }}
-        defaultValue=""
-        className="h-8 rounded-lg bg-white dark:bg-card-dark border border-line dark:border-line-dark px-1 text-[12px] font-semibold text-body dark:text-text-dark"
-        title="Text color"
-      >
-        <option value="" disabled>
-          Color
-        </option>
-        {COLORS.map((c) => (
-          <option key={c.label} value={c.value}>
-            {c.label}
-          </option>
-        ))}
-      </select>
-      <span className="w-px h-5 bg-line dark:bg-line-dark mx-1" />
-      {btn(false, () => editor.dispatchCommand(INSERT_UNORDERED_LIST_COMMAND, undefined), '•≡', 'Bullet list')}
-      {btn(false, () => editor.dispatchCommand(INSERT_ORDERED_LIST_COMMAND, undefined), '1≡', 'Numbered list')}
-      {btn(false, () => editor.dispatchCommand(REMOVE_LIST_COMMAND, undefined), '≡×', 'Remove list')}
-      <span className="w-px h-5 bg-line dark:bg-line-dark mx-1" />
-      {btn(false, () => editor.dispatchCommand(UNDO_COMMAND, undefined), '↺', 'Undo')}
-      {btn(false, () => editor.dispatchCommand(REDO_COMMAND, undefined), '↻', 'Redo')}
-      <span className="w-px h-5 bg-line dark:bg-line-dark mx-1" />
-      {btn(false, () => {
-        editor.update(() => {
-          const sel = $getSelection()
-          if ($isRangeSelection(sel)) {
-            // clear inline styles + formats
-            $patchStyleText(sel, { color: null, 'font-size': null } as unknown as Record<string, string | null>)
-            sel.format = 0
-          }
-        })
-      }, '⌫', 'Clear')}
+        ⌫
+      </button>
     </div>
   )
 }
