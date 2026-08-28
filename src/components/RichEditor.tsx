@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, type MouseEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type MouseEvent } from 'react'
 import { cx } from './ui'
 
 const ALLOWED_TAGS = new Set([
@@ -18,48 +18,51 @@ const ALLOWED_TAGS = new Set([
   'SPAN',
   'FONT',
 ])
-const ALLOWED_STYLES = ['color', 'background-color', 'font-size', 'text-align', 'font-weight', 'font-style']
+const REMOVE_WITH_CONTENT = new Set(['SCRIPT', 'STYLE', 'TEMPLATE', 'IFRAME', 'OBJECT', 'EMBED', 'SVG', 'MATH'])
+const ALLOWED_STYLES = new Set(['color', 'font-size', 'font-weight', 'font-style', 'text-decoration-line'])
 
-/** Strip anything not produced by the editor toolbar - keeps html-to-image
- *  capture safe and prevents stray page CSS from leaking into the receipt. */
+function cleanStyle(style: string): string {
+  const probe = document.createElement('span')
+  probe.setAttribute('style', style)
+
+  return Array.from(ALLOWED_STYLES)
+    .map((property) => {
+      const value = probe.style.getPropertyValue(property).trim()
+      return value ? `${property}:${value}` : ''
+    })
+    .filter(Boolean)
+    .join(';')
+}
+
+/** Keep receipt markup predictable and safe, including pasted HTML from other apps. */
 export function sanitizeHtml(html: string): string {
   if (!html.trim()) return ''
+
   try {
     const doc = new DOMParser().parseFromString(html, 'text/html')
-    const walk = (n: Node): void => {
-      const kids = Array.from(n.childNodes)
-      for (const k of kids) {
-        if (k.nodeType === Node.ELEMENT_NODE) {
-          const el = k as HTMLElement
-          if (!ALLOWED_TAGS.has(el.tagName)) {
-            el.replaceWith(...Array.from(el.childNodes))
-            continue
-          }
-          const style = el.getAttribute('style')
-          if (style) {
-            const keep: string[] = []
-            for (const decl of style.split(';')) {
-              const [prop, ...rest] = decl.split(':')
-              const p = prop?.trim().toLowerCase()
-              if (p && ALLOWED_STYLES.includes(p) && rest.join(':').trim()) {
-                keep.push(`${p}:${rest.join(':').trim()}`)
-              }
-            }
-            if (keep.length) el.setAttribute('style', keep.join(';'))
-            else el.removeAttribute('style')
-          }
-          for (const a of Array.from(el.attributes)) {
-            if (a.name !== 'style') el.removeAttribute(a.name)
-          }
-          walk(el)
-        } else if (k.nodeType === Node.COMMENT_NODE) {
-          k.parentNode?.removeChild(k)
-        } else {
-          walk(k)
-        }
+    const visit = (node: Node) => {
+      for (const child of Array.from(node.childNodes)) visit(child)
+
+      if (node.nodeType !== Node.ELEMENT_NODE) return
+      const element = node as HTMLElement
+
+      if (REMOVE_WITH_CONTENT.has(element.tagName)) {
+        element.remove()
+        return
       }
+
+      if (!ALLOWED_TAGS.has(element.tagName)) {
+        element.replaceWith(...Array.from(element.childNodes))
+        return
+      }
+
+      const style = element.getAttribute('style')
+      const cleanedStyle = style ? cleanStyle(style) : ''
+      for (const attribute of Array.from(element.attributes)) element.removeAttribute(attribute.name)
+      if (cleanedStyle) element.setAttribute('style', cleanedStyle)
     }
-    walk(doc.body)
+
+    for (const child of Array.from(doc.body.childNodes)) visit(child)
     return doc.body.innerHTML
   } catch {
     return ''
@@ -67,7 +70,7 @@ export function sanitizeHtml(html: string): string {
 }
 
 const COLORS = [
-  { label: 'Auto', value: 'inherit' },
+  { label: 'Default', value: 'inherit' },
   { label: 'Black', value: '#1c2936' },
   { label: 'Navy', value: '#12314f' },
   { label: 'Red', value: '#b23b3b' },
@@ -78,12 +81,28 @@ const COLORS = [
 
 const SIZES = [12, 14, 16, 18, 20, 24]
 
-/** Snapshot of a DOM selection range (node refs stay valid across commands). */
+function plainTextHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\r?\n/g, '<br>')
+}
+
 type SavedRange = {
-  sc: Node
-  so: number
-  ec: Node
-  eo: number
+  startContainer: Node
+  startOffset: number
+  endContainer: Node
+  endOffset: number
+}
+
+type ActiveFormats = {
+  bold: boolean
+  italic: boolean
+  underline: boolean
+  strike: boolean
+  bullet: boolean
+  ordered: boolean
 }
 
 interface Props {
@@ -92,154 +111,184 @@ interface Props {
   placeholder?: string
 }
 
-export function RichEditor({ value, onChange, placeholder }: Props) {
-  const ref = useRef<HTMLDivElement>(null)
-  const last = useRef('')
-  // the fix: toolbar clicks (especially the <select>s) destroy the browser
-  // selection, so every command restores the last in-editor range first.
-  // that is what lets you bold AND color AND resize the same selection.
-  const saved = useRef<SavedRange | null>(null)
-  // element the current pointer gesture STARTED on (captured at pointerdown).
-  // a tap on the text can be re-dispatched to a toolbar button when the
-  // layout shifts mid-tap (mobile keyboard opening scrolls the toolbar under
-  // the finger) - commands only run when the gesture began on that button.
-  const origin = useRef<HTMLElement | null>(null)
+const emptyFormats: ActiveFormats = {
+  bold: false,
+  italic: false,
+  underline: false,
+  strike: false,
+  bullet: false,
+  ordered: false,
+}
 
-  // seed the editor from the store; never clobber a focused document
+export function RichEditor({ value, onChange, placeholder }: Props) {
+  const editorRef = useRef<HTMLDivElement>(null)
+  const lastHtml = useRef('')
+  const savedRange = useRef<SavedRange | null>(null)
+  const [active, setActive] = useState<ActiveFormats>(emptyFormats)
+  const [isEmpty, setIsEmpty] = useState(!(value || '').trim())
+
+  const captureSelection = useCallback(() => {
+    const editor = editorRef.current
+    const selection = window.getSelection()
+    if (!editor || !selection?.rangeCount) return
+
+    const range = selection.getRangeAt(0)
+    if (!editor.contains(range.commonAncestorContainer)) return
+
+    savedRange.current = {
+      startContainer: range.startContainer,
+      startOffset: range.startOffset,
+      endContainer: range.endContainer,
+      endOffset: range.endOffset,
+    }
+  }, [])
+
+  const refreshActiveFormats = useCallback(() => {
+    const editor = editorRef.current
+    const selection = window.getSelection()
+    if (!editor || !selection?.rangeCount || !editor.contains(selection.getRangeAt(0).commonAncestorContainer)) return
+
+    setActive({
+      bold: document.queryCommandState('bold'),
+      italic: document.queryCommandState('italic'),
+      underline: document.queryCommandState('underline'),
+      strike: document.queryCommandState('strikeThrough'),
+      bullet: document.queryCommandState('insertUnorderedList'),
+      ordered: document.queryCommandState('insertOrderedList'),
+    })
+  }, [])
+
+  const rememberSelection = useCallback(() => {
+    captureSelection()
+    refreshActiveFormats()
+  }, [captureSelection, refreshActiveFormats])
+
+  const restoreSelection = useCallback(() => {
+    const editor = editorRef.current
+    if (!editor) return false
+
+    editor.focus({ preventScroll: true })
+    const saved = savedRange.current
+    const selection = window.getSelection()
+    if (!selection) return false
+
+    if (saved && editor.contains(saved.startContainer) && editor.contains(saved.endContainer)) {
+      const range = document.createRange()
+      range.setStart(saved.startContainer, saved.startOffset)
+      range.setEnd(saved.endContainer, saved.endOffset)
+      selection.removeAllRanges()
+      selection.addRange(range)
+      return true
+    }
+
+    const range = document.createRange()
+    range.selectNodeContents(editor)
+    range.collapse(false)
+    selection.removeAllRanges()
+    selection.addRange(range)
+    return true
+  }, [])
+
+  const emit = useCallback(
+    (normalise = false) => {
+      const editor = editorRef.current
+      if (!editor) return
+
+      const html = normalise ? sanitizeHtml(editor.innerHTML) : editor.innerHTML
+      if (normalise && html !== editor.innerHTML) editor.innerHTML = html
+      const text = editor.innerText.replace(/\u00a0/g, ' ').trim()
+      const output = text ? html : ''
+
+      lastHtml.current = output
+      setIsEmpty(!text)
+      onChange(output, text)
+    },
+    [onChange],
+  )
+
   useEffect(() => {
-    const el = ref.current
-    if (!el || document.activeElement === el) return
-    const v = value || ''
-    if (last.current !== v) {
-      last.current = v
-      el.innerHTML = v
+    const editor = editorRef.current
+    if (!editor || document.activeElement === editor) return
+
+    const incoming = sanitizeHtml(value || '')
+    if (lastHtml.current !== incoming) {
+      lastHtml.current = incoming
+      editor.innerHTML = incoming
+      setIsEmpty(!editor.innerText.trim())
     }
   }, [value])
 
-  // remember the current non-collapsed selection while it lives in the editor
-  const capture = () => {
-    const el = ref.current
-    if (!el) return
-    const sel = window.getSelection()
-    if (!sel || sel.rangeCount === 0) {
-      saved.current = null
-      return
-    }
-    const r = sel.getRangeAt(0)
-    if (r.collapsed || !el.contains(r.commonAncestorContainer)) {
-      saved.current = null
-      return
-    }
-    saved.current = { sc: r.startContainer, so: r.startOffset, ec: r.endContainer, eo: r.endOffset }
-  }
-
   useEffect(() => {
-    document.addEventListener('selectionchange', capture)
-    return () => document.removeEventListener('selectionchange', capture)
-  }, [])
+    const onSelectionChange = () => rememberSelection()
+    document.addEventListener('selectionchange', onSelectionChange)
+    return () => document.removeEventListener('selectionchange', onSelectionChange)
+  }, [rememberSelection])
 
-  // put the caret back where it was before the toolbar stole the selection
-  const restore = () => {
-    const el = ref.current
-    if (!el) return
-    el.focus()
-    const s = saved.current
-    if (!s) return
-    const sel = window.getSelection()
-    if (!sel) return
-    if (!el.contains(s.sc) || !el.contains(s.ec)) {
-      saved.current = null
-      return
-    }
-    const r = document.createRange()
-    r.setStart(s.sc, s.so)
-    r.setEnd(s.ec, s.eo)
-    sel.removeAllRanges()
-    sel.addRange(r)
-  }
-
-  const emit = () => {
-    const el = ref.current
-    if (!el) return
-    last.current = el.innerHTML
-    onChange(el.innerHTML, el.innerText)
-  }
-
-  // only run a command when the pointer gesture genuinely started on this
-  // button - rerouted clicks (layout shift mid-tap) must not format text
-  // that was only meant to be clicked. keyboard activation (detail 0) and
-  // browsers without pointer events (origin null) are always allowed.
-  const guarded =
-    (fn: () => void) =>
-    (e: MouseEvent<HTMLButtonElement>) => {
-      if (e.detail === 0) return fn()
-      const btn = e.currentTarget
-      const o = origin.current
-      if (!o || btn.contains(o)) fn()
-    }
-
-  const run = (cmd: string, value?: string) => {
-    restore()
+  const runCommand = (command: string, commandValue?: string) => {
+    if (!restoreSelection()) return
     document.execCommand('styleWithCSS', false, 'true')
-    document.execCommand(cmd, false, value)
-    capture()
+    document.execCommand(command, false, commandValue)
+    rememberSelection()
     emit()
   }
 
-  const wrapSelection = (tag: string, attrs: Record<string, string>) => {
-    restore()
-    const sel = window.getSelection()
-    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return
-    const range = sel.getRangeAt(0)
-    // wrap the selection in a new element without touching any marks that
-    // are already applied - inner <b>/<span> markup is cloned as-is
-    const span = document.createElement(tag)
-    for (const [k, v] of Object.entries(attrs)) span.setAttribute(k, v)
-    span.appendChild(range.cloneContents())
-    range.deleteContents()
+  const applySize = (size: number) => {
+    if (!restoreSelection()) return
+    const selection = window.getSelection()
+    if (!selection?.rangeCount || selection.isCollapsed) return
+
+    const range = selection.getRangeAt(0)
+    const span = document.createElement('span')
+    span.style.fontSize = `${size}px`
+    span.append(range.extractContents())
     range.insertNode(span)
-    sel.removeAllRanges()
-    const r = document.createRange()
-    r.selectNodeContents(span)
-    sel.addRange(r)
-    capture()
+
+    const nextRange = document.createRange()
+    nextRange.selectNodeContents(span)
+    selection.removeAllRanges()
+    selection.addRange(nextRange)
+    rememberSelection()
     emit()
   }
 
-  const setSize = (px: number) => {
-    wrapSelection('span', { style: `font-size:${px}px` })
+  const insertPlainText = (text: string) => {
+    if (!text) return
+
+    restoreSelection()
+    document.execCommand('insertHTML', false, plainTextHtml(text))
+    rememberSelection()
+    emit()
   }
 
-  const setColor = (c: string) => {
-    if (c === 'inherit') {
-      // strip inline color styles from the selection
-      restore()
-      const sel = window.getSelection()
-      if (sel && sel.rangeCount && !sel.isCollapsed) {
-        const range = sel.getRangeAt(0)
-        for (const el of Array.from(range.cloneContents().querySelectorAll('span'))) {
-          if (el.style.color) el.style.color = ''
-          if (!el.getAttribute('style')) el.removeAttribute('style')
-        }
-        emit()
-      }
-      return
-    }
-    run('foreColor', c)
+  const pastePlainText = (event: ClipboardEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    insertPlainText(event.clipboardData.getData('text/plain'))
   }
 
-  const btn = (active: boolean, onClick: () => void, label: string, title: string) => (
+  const dropPlainText = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    insertPlainText(event.dataTransfer.getData('text/plain'))
+  }
+
+  const toolbarMouseDown = (event: MouseEvent<HTMLElement>) => {
+    rememberSelection()
+    if (event.currentTarget.tagName === 'BUTTON') event.preventDefault()
+  }
+
+  const button = (label: string, title: string, pressed: boolean, onClick: () => void, className?: string) => (
     <button
-      key={title}
       type="button"
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={guarded(onClick)}
       title={title}
+      aria-label={title}
+      aria-pressed={pressed}
+      onMouseDown={toolbarMouseDown}
+      onClick={onClick}
       className={cx(
-        'min-w-8 h-8 px-1.5 rounded-lg text-[12.5px] font-bold grid place-items-center transition active:scale-95 select-none',
-        active
-          ? 'bg-ink/10 dark:bg-accent-dark/20 text-ink dark:text-accent-dark'
-          : 'text-body/70 dark:text-muted-dark hover:bg-black/5 dark:hover:bg-white/10',
+        'h-8 min-w-8 px-1.5 rounded-md grid place-items-center text-[12.5px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/50',
+        pressed
+          ? 'bg-ink text-white dark:bg-ink-soft'
+          : 'text-body dark:text-text-dark hover:bg-ink/10 dark:hover:bg-white/10',
+        className,
       )}
     >
       {label}
@@ -247,69 +296,92 @@ export function RichEditor({ value, onChange, placeholder }: Props) {
   )
 
   return (
-    <div
-      className="rounded-xl border border-line dark:border-line-dark overflow-hidden"
-      onPointerDownCapture={(e) => {
-        origin.current = e.target as HTMLElement
-      }}
-    >
-      <div className="flex flex-wrap gap-0.5 items-center bg-cream dark:bg-input-dark px-1.5 py-1 border-b border-line dark:border-line-dark">
-        {btn(false, () => run('bold'), 'B', 'Bold')}
-        {btn(false, () => run('italic'), 'I', 'Italic')}
-        {btn(false, () => run('underline'), 'U', 'Underline')}
-        {btn(false, () => run('strikeThrough'), 'S', 'Strikethrough')}
-        <span className="w-px h-5 bg-line dark:bg-line-dark mx-1" />
+    <div className="overflow-hidden rounded-xl border border-line bg-white dark:border-line-dark dark:bg-card-dark">
+      <div
+        className="flex flex-wrap items-center gap-x-1 gap-y-0.5 border-b border-line bg-cream px-1.5 py-1.5 dark:border-line-dark dark:bg-input-dark"
+        aria-label="Text formatting"
+      >
+        <div className="flex items-center">
+          {button('B', 'Bold', active.bold, () => runCommand('bold'))}
+          {button('I', 'Italic', active.italic, () => runCommand('italic'), 'italic')}
+          {button('U', 'Underline', active.underline, () => runCommand('underline'), 'underline')}
+          {button('S', 'Strikethrough', active.strike, () => runCommand('strikeThrough'), 'line-through')}
+        </div>
+        <span className="h-5 w-px bg-line dark:bg-line-dark" aria-hidden="true" />
         <select
-          onMouseDown={(e) => e.stopPropagation()}
-          onChange={(e) => setSize(Number(e.target.value))}
           defaultValue=""
-          className="h-8 rounded-lg bg-white dark:bg-card-dark border border-line dark:border-line-dark px-1 text-[12px] font-semibold text-body dark:text-text-dark"
-          title="Font size"
+          onMouseDown={toolbarMouseDown}
+          onChange={(event) => {
+            applySize(Number(event.target.value))
+            event.target.value = ''
+          }}
+          className="h-8 rounded-md border border-line bg-white px-1.5 text-[12px] font-semibold text-body focus:outline-none focus:ring-2 focus:ring-teal/30 dark:border-line-dark dark:bg-card-dark dark:text-text-dark"
+          aria-label="Font size"
         >
           <option value="" disabled>
             Size
           </option>
-          {SIZES.map((s) => (
-            <option key={s} value={s}>
-              {s}px
+          {SIZES.map((size) => (
+            <option key={size} value={size}>
+              {size}px
             </option>
           ))}
         </select>
-        <span className="w-px h-5 bg-line dark:bg-line-dark mx-1" />
         <select
-          onMouseDown={(e) => e.stopPropagation()}
-          onChange={(e) => setColor(e.target.value)}
           defaultValue=""
-          className="h-8 rounded-lg bg-white dark:bg-card-dark border border-line dark:border-line-dark px-1 text-[12px] font-semibold text-body dark:text-text-dark"
-          title="Text color"
+          onMouseDown={toolbarMouseDown}
+          onChange={(event) => {
+            runCommand('foreColor', event.target.value)
+            event.target.value = ''
+          }}
+          className="h-8 rounded-md border border-line bg-white px-1.5 text-[12px] font-semibold text-body focus:outline-none focus:ring-2 focus:ring-teal/30 dark:border-line-dark dark:bg-card-dark dark:text-text-dark"
+          aria-label="Text color"
         >
           <option value="" disabled>
             Color
           </option>
-          {COLORS.map((c) => (
-            <option key={c.label} value={c.value}>
-              {c.label}
+          {COLORS.map((color) => (
+            <option key={color.label} value={color.value}>
+              {color.label}
             </option>
           ))}
         </select>
-        <span className="w-px h-5 bg-line dark:bg-line-dark mx-1" />
-        {btn(false, () => run('justifyLeft'), '⇤', 'Align left')}
-        {btn(false, () => run('justifyCenter'), '⇹', 'Align center')}
-        {btn(false, () => run('justifyRight'), '⇥', 'Align right')}
-        <span className="w-px h-5 bg-line dark:bg-line-dark mx-1" />
-        {btn(false, () => run('insertUnorderedList'), '•≡', 'Bullet list')}
-        {btn(false, () => run('insertOrderedList'), '1≡', 'Numbered list')}
-        {btn(false, () => run('removeFormat'), '⌫', 'Clear formatting')}
+        <span className="h-5 w-px bg-line dark:bg-line-dark" aria-hidden="true" />
+        <div className="flex items-center">
+          {button('UL', 'Bullet list', active.bullet, () => runCommand('insertUnorderedList'), 'text-[10px]')}
+          {button('OL', 'Numbered list', active.ordered, () => runCommand('insertOrderedList'), 'text-[10px]')}
+          {button('Tx', 'Clear inline formatting', false, () => runCommand('removeFormat'), 'text-[10px]')}
+        </div>
+        <span className="h-5 w-px bg-line dark:bg-line-dark" aria-hidden="true" />
+        <div className="flex items-center">
+          {button('↶', 'Undo', false, () => runCommand('undo'), 'text-[17px] font-normal')}
+          {button('↷', 'Redo', false, () => runCommand('redo'), 'text-[17px] font-normal')}
+        </div>
       </div>
-      <div
-        ref={ref}
-        contentEditable
-        suppressContentEditableWarning
-        onInput={emit}
-        onBlur={emit}
-        data-placeholder={placeholder}
-        className="rich-editor min-h-[96px] max-h-64 overflow-y-auto px-3 py-2.5 text-[14px] text-body dark:text-text-dark focus:outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-faint empty:before:pointer-events-none"
-      />
+      <div className="relative">
+        {isEmpty && placeholder && (
+          <div className="pointer-events-none absolute inset-x-3 top-2.5 text-[14px] leading-normal text-faint dark:text-muted-dark">
+            {placeholder}
+          </div>
+        )}
+        <div
+          ref={editorRef}
+          contentEditable
+          suppressContentEditableWarning
+          role="textbox"
+          aria-multiline="true"
+          aria-label={placeholder || 'Rich text editor'}
+          spellCheck
+          onFocus={rememberSelection}
+          onKeyUp={rememberSelection}
+          onMouseUp={rememberSelection}
+          onInput={() => emit()}
+          onBlur={() => emit(true)}
+          onPaste={pastePlainText}
+          onDrop={dropPlainText}
+          className="min-h-28 max-h-64 overflow-y-auto px-3 py-2.5 text-[14px] leading-[1.5] text-body outline-none empty:before:content-none dark:text-text-dark [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-1.5 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-6"
+        />
+      </div>
     </div>
   )
 }
