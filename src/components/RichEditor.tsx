@@ -66,22 +66,26 @@ export function RichEditor({ value, onChange, placeholder }: Props) {
     editorEl.style.overflowY = 'auto'
     container.appendChild(editorEl)
 
+    // register size as style (12px etc.) so dropdown shows correctly, not "Normal Normal"
+    const Size = Quill.import('attributors/style/size') as { whitelist: string[] }
+    Size.whitelist = ['12px', '14px', '16px', '18px', '20px', '24px']
+    Quill.register(Size as unknown as never, true)
+
     const quill = new Quill(editorEl, {
       theme: 'snow',
       placeholder: placeholder || 'Type something...',
       modules: {
         toolbar: {
           container: [
-            [{ header: [false, 1, 2, 3] }],
             ['bold', 'italic', 'underline', 'strike'],
-            [{ color: [] }, { size: ['12px', '14px', '16px', '18px', '20px', '24px', false] }],
+            [{ color: [] }, { size: Size.whitelist }],
             [{ list: 'ordered' }, { list: 'bullet' }],
             ['clean'],
           ],
         },
         history: { delay: 500, maxStack: 100, userOnly: true },
       },
-      formats: ['header', 'bold', 'italic', 'underline', 'strike', 'color', 'size', 'list', 'align'],
+      formats: ['bold', 'italic', 'underline', 'strike', 'color', 'size', 'list'],
     })
 
     // seed from value
