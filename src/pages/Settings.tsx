@@ -70,6 +70,7 @@ export function Settings() {
   const [tPhone, setTPhone] = useState('')
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [logsOpen, setLogsOpen] = useState(false)
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'))
   const fileRef = useRef<HTMLInputElement>(null)
   const logoRef = useRef<HTMLInputElement>(null)
   const paidRef = useRef<HTMLInputElement>(null)
@@ -347,26 +348,33 @@ export function Settings() {
             <Input value={form.tagline} onChange={(e) => setForm({ ...form, tagline: e.target.value })} />
           </Field>
           <div className="grid grid-cols-1 gap-3">
-            <Field
-              label="Address & phone"
-              hint="Multi-line - use the toolbar for bold, colors and alignment. Shown on every receipt."
-            >
+            <div className="space-y-1.5">
+              <div className="text-[13px] font-semibold text-body/80 dark:text-muted-dark">Address &amp; phone</div>
               <RichEditor
+                label="Address and phone"
                 value={form.addressHtml || ''}
                 onChange={(html, text) =>
                   setForm((p) => ({ ...p, addressHtml: html || undefined, address: text || '' }))
                 }
                 placeholder={'e.g. House 12, Road 5, Dhanmondi, Dhaka\n+880 1234 567890'}
               />
-            </Field>
+              <div className="text-[12px] text-muted dark:text-muted-dark/80">
+                Multi-line, bold, color and size formatting. Shown on every receipt.
+              </div>
+            </div>
           </div>
-          <Field label="বিশেষ নিয়মাবলী" hint="Shown at the bottom of every receipt - use the toolbar for bold, colors, sizes and alignment">
+          <div className="space-y-1.5">
+            <div className="text-[13px] font-semibold text-body/80 dark:text-muted-dark">বিশেষ নিয়মাবলী</div>
             <RichEditor
+              label="বিশেষ নিয়মাবলী"
               value={form.rulesHtml || ''}
               onChange={(html, text) => setForm((p) => ({ ...p, rulesHtml: html || undefined, rules: text || undefined }))}
               placeholder="যেমন: প্রতি মাসে ফি নির্ধারিত সময়ে পরিশোধ করতে হবে। দেরি করলে জরিমানা প্রযোজ্য হবে।"
             />
-          </Field>
+            <div className="text-[12px] text-muted dark:text-muted-dark/80">
+              Shown at the bottom of every receipt.
+            </div>
+          </div>
           {/* PAID stamp image */}
           <div className="flex items-center gap-4">
             <button
@@ -562,15 +570,17 @@ export function Settings() {
           </div>
           <button
             onClick={async () => {
-              const dark = !document.documentElement.classList.contains('dark')
-              await setTheme(dark ? 'dark' : 'light')
+              const nextTheme = !isDark
+              setIsDark(nextTheme)
+              await setTheme(nextTheme ? 'dark' : 'light')
             }}
-            className="relative w-12 h-7 rounded-full transition bg-line dark:bg-ink-soft shrink-0"
+            className="relative w-12 h-11 rounded-full transition bg-line dark:bg-ink-soft shrink-0"
             aria-label="Toggle dark mode"
+            aria-pressed={isDark}
           >
             <span
-              className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow transition-all ${
-                document.documentElement.classList.contains('dark') ? 'left-[22px]' : 'left-0.5'
+              className={`absolute top-1 w-9 h-9 rounded-full bg-white shadow transition-all ${
+                isDark ? 'left-2' : 'left-1'
               }`}
             >
               <IconMoon className="w-3.5 h-3.5 text-ink absolute inset-0 m-auto" />

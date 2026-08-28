@@ -109,6 +109,7 @@ interface Props {
   value?: string
   onChange: (html: string, text: string) => void
   placeholder?: string
+  label?: string
 }
 
 const emptyFormats: ActiveFormats = {
@@ -120,7 +121,7 @@ const emptyFormats: ActiveFormats = {
   ordered: false,
 }
 
-export function RichEditor({ value, onChange, placeholder }: Props) {
+export function RichEditor({ value, onChange, placeholder, label }: Props) {
   const editorRef = useRef<HTMLDivElement>(null)
   const lastHtml = useRef('')
   const savedRange = useRef<SavedRange | null>(null)
@@ -218,28 +219,21 @@ export function RichEditor({ value, onChange, placeholder }: Props) {
     }
   }, [value])
 
-  useEffect(() => {
-    const onSelectionChange = () => rememberSelection()
-    document.addEventListener('selectionchange', onSelectionChange)
-    return () => document.removeEventListener('selectionchange', onSelectionChange)
-  }, [rememberSelection])
-
   const runCommand = (command: string, commandValue?: string) => {
     if (!restoreSelection()) return
-    document.execCommand('styleWithCSS', false, 'true')
     document.execCommand(command, false, commandValue)
     rememberSelection()
     emit()
   }
 
-  const applySize = (size: number) => {
+  const applyInlineStyle = (property: 'color' | 'fontSize', value: string) => {
     if (!restoreSelection()) return
     const selection = window.getSelection()
     if (!selection?.rangeCount || selection.isCollapsed) return
 
     const range = selection.getRangeAt(0)
     const span = document.createElement('span')
-    span.style.fontSize = `${size}px`
+    span.style[property] = value
     span.append(range.extractContents())
     range.insertNode(span)
 
@@ -250,6 +244,8 @@ export function RichEditor({ value, onChange, placeholder }: Props) {
     rememberSelection()
     emit()
   }
+
+  const applySize = (size: number) => applyInlineStyle('fontSize', `${size}px`)
 
   const insertPlainText = (text: string) => {
     if (!text) return
@@ -270,9 +266,13 @@ export function RichEditor({ value, onChange, placeholder }: Props) {
     insertPlainText(event.dataTransfer.getData('text/plain'))
   }
 
-  const toolbarMouseDown = (event: MouseEvent<HTMLElement>) => {
+  const rememberToolbarSelection = () => {
     rememberSelection()
-    if (event.currentTarget.tagName === 'BUTTON') event.preventDefault()
+  }
+
+  const preventButtonFocus = (event: MouseEvent<HTMLButtonElement>) => {
+    rememberSelection()
+    event.preventDefault()
   }
 
   const button = (label: string, title: string, pressed: boolean, onClick: () => void, className?: string) => (
@@ -281,10 +281,11 @@ export function RichEditor({ value, onChange, placeholder }: Props) {
       title={title}
       aria-label={title}
       aria-pressed={pressed}
-      onMouseDown={toolbarMouseDown}
+      onPointerDown={rememberToolbarSelection}
+      onMouseDown={preventButtonFocus}
       onClick={onClick}
       className={cx(
-        'h-8 min-w-8 px-1.5 rounded-md grid place-items-center text-[12.5px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/50',
+        'h-10 min-w-10 px-1.5 rounded-md grid place-items-center text-[12.5px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/50',
         pressed
           ? 'bg-ink text-white dark:bg-ink-soft'
           : 'text-body dark:text-text-dark hover:bg-ink/10 dark:hover:bg-white/10',
@@ -298,7 +299,7 @@ export function RichEditor({ value, onChange, placeholder }: Props) {
   return (
     <div className="overflow-hidden rounded-xl border border-line bg-white dark:border-line-dark dark:bg-card-dark">
       <div
-        className="flex flex-wrap items-center gap-x-1 gap-y-0.5 border-b border-line bg-cream px-1.5 py-1.5 dark:border-line-dark dark:bg-input-dark"
+        className="flex flex-wrap items-center gap-1 border-b border-line bg-cream px-2 py-2 dark:border-line-dark dark:bg-input-dark"
         aria-label="Text formatting"
       >
         <div className="flex items-center">
@@ -310,12 +311,12 @@ export function RichEditor({ value, onChange, placeholder }: Props) {
         <span className="h-5 w-px bg-line dark:bg-line-dark" aria-hidden="true" />
         <select
           defaultValue=""
-          onMouseDown={toolbarMouseDown}
+          onPointerDown={rememberToolbarSelection}
           onChange={(event) => {
             applySize(Number(event.target.value))
             event.target.value = ''
           }}
-          className="h-8 rounded-md border border-line bg-white px-1.5 text-[12px] font-semibold text-body focus:outline-none focus:ring-2 focus:ring-teal/30 dark:border-line-dark dark:bg-card-dark dark:text-text-dark"
+          className="h-10 rounded-md border border-line bg-white px-2 text-[12px] font-semibold text-body focus:outline-none focus:ring-2 focus:ring-teal/30 dark:border-line-dark dark:bg-card-dark dark:text-text-dark"
           aria-label="Font size"
         >
           <option value="" disabled>
@@ -329,12 +330,12 @@ export function RichEditor({ value, onChange, placeholder }: Props) {
         </select>
         <select
           defaultValue=""
-          onMouseDown={toolbarMouseDown}
+          onPointerDown={rememberToolbarSelection}
           onChange={(event) => {
-            runCommand('foreColor', event.target.value)
+            applyInlineStyle('color', event.target.value)
             event.target.value = ''
           }}
-          className="h-8 rounded-md border border-line bg-white px-1.5 text-[12px] font-semibold text-body focus:outline-none focus:ring-2 focus:ring-teal/30 dark:border-line-dark dark:bg-card-dark dark:text-text-dark"
+          className="h-10 rounded-md border border-line bg-white px-2 text-[12px] font-semibold text-body focus:outline-none focus:ring-2 focus:ring-teal/30 dark:border-line-dark dark:bg-card-dark dark:text-text-dark"
           aria-label="Text color"
         >
           <option value="" disabled>
@@ -354,8 +355,8 @@ export function RichEditor({ value, onChange, placeholder }: Props) {
         </div>
         <span className="h-5 w-px bg-line dark:bg-line-dark" aria-hidden="true" />
         <div className="flex items-center">
-          {button('↶', 'Undo', false, () => runCommand('undo'), 'text-[17px] font-normal')}
-          {button('↷', 'Redo', false, () => runCommand('redo'), 'text-[17px] font-normal')}
+          {button('Undo', 'Undo', false, () => runCommand('undo'), 'text-[10px]')}
+          {button('Redo', 'Redo', false, () => runCommand('redo'), 'text-[10px]')}
         </div>
       </div>
       <div className="relative">
@@ -370,11 +371,12 @@ export function RichEditor({ value, onChange, placeholder }: Props) {
           suppressContentEditableWarning
           role="textbox"
           aria-multiline="true"
-          aria-label={placeholder || 'Rich text editor'}
+          aria-label={label || placeholder || 'Rich text editor'}
           spellCheck
           onFocus={rememberSelection}
           onKeyUp={rememberSelection}
-          onMouseUp={rememberSelection}
+          onPointerUp={rememberSelection}
+          onSelect={rememberSelection}
           onInput={() => emit()}
           onBlur={() => emit(true)}
           onPaste={pastePlainText}
