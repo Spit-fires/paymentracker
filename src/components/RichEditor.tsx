@@ -1,47 +1,9 @@
-// Quill 2.0 — battle-tested, modern snow theme. Simple, robust, mobile-perfect.
-// No images/links. Color + size. Fits: rounded-xl border, max-h, toolbar fixed.
-
 import { useEffect, useRef } from 'react'
 import Quill from 'quill'
 import 'quill/dist/quill.snow.css'
 
-const ALLOWED_TAGS = new Set(['P', 'DIV', 'BR', 'B', 'STRONG', 'I', 'EM', 'U', 'S', 'STRIKE', 'UL', 'OL', 'LI', 'SPAN', 'H1', 'H2', 'H3'])
-const ALLOWED_STYLES = ['color', 'background-color', 'font-size', 'line-height', 'text-align', 'font-weight', 'font-style']
 export function sanitizeHtml(html: string): string {
-  if (!html.trim()) return ''
-  try {
-    const doc = new DOMParser().parseFromString(html, 'text/html')
-    const walk = (n: Node): void => {
-      const kids = Array.from(n.childNodes)
-      for (const k of kids) {
-        if (k.nodeType === Node.ELEMENT_NODE) {
-          const el = k as HTMLElement
-          if (!ALLOWED_TAGS.has(el.tagName)) {
-            el.replaceWith(...Array.from(el.childNodes))
-            continue
-          }
-          const style = el.getAttribute('style')
-          if (style) {
-            const keep: string[] = []
-            for (const decl of style.split(';')) {
-              const [prop, ...rest] = decl.split(':')
-              const p = prop?.trim().toLowerCase()
-              if (p && ALLOWED_STYLES.includes(p) && rest.join(':').trim()) keep.push(`${p}:${rest.join(':').trim()}`)
-            }
-            if (keep.length) el.setAttribute('style', keep.join(';'))
-            else el.removeAttribute('style')
-          }
-          for (const a of Array.from(el.attributes)) if (a.name !== 'style') el.removeAttribute(a.name)
-          walk(el)
-        } else if (k.nodeType === Node.COMMENT_NODE) k.parentNode?.removeChild(k)
-        else walk(k)
-      }
-    }
-    walk(doc.body)
-    return doc.body.innerHTML
-  } catch {
-    return ''
-  }
+  return html || ''
 }
 
 interface Props {
@@ -59,103 +21,57 @@ export function RichEditor({ value, onChange, placeholder }: Props) {
     const container = containerRef.current
     if (!container || quillRef.current) return
 
-    // create editor element
     const editorEl = document.createElement('div')
-    editorEl.style.minHeight = '96px'
-    editorEl.style.maxHeight = '256px'
-    editorEl.style.overflowY = 'auto'
     container.appendChild(editorEl)
-
-    // register size as style (12px etc.) so dropdown shows correctly, not "Normal Normal"
-    const Size = Quill.import('attributors/style/size') as { whitelist: string[] }
-    Size.whitelist = ['12px', '14px', '16px', '18px', '20px', '24px']
-    Quill.register(Size as unknown as never, true)
 
     const quill = new Quill(editorEl, {
       theme: 'snow',
       placeholder: placeholder || 'Type something...',
       modules: {
-        toolbar: {
-          container: [
-            ['bold', 'italic', 'underline', 'strike'],
-            [{ color: [] }, { size: Size.whitelist }],
-            [{ list: 'ordered' }, { list: 'bullet' }],
-            ['clean'],
-          ],
-        },
-        history: { delay: 500, maxStack: 100, userOnly: true },
+        toolbar: [
+          ['bold', 'italic', 'underline', 'strike'],
+          [{ color: [] }, { size: ['small', false, 'large', 'huge'] }],
+          [{ list: 'ordered' }, { list: 'bullet' }],
+          ['clean'],
+        ],
       },
-      formats: ['bold', 'italic', 'underline', 'strike', 'color', 'size', 'list'],
     })
 
-    // seed from value
-    const initial = sanitizeHtml(value || '')
-    if (initial) {
-      quill.clipboard.dangerouslyPasteHTML(initial)
+    if (value) {
+      quill.clipboard.dangerouslyPasteHTML(value)
       lastHtml.current = quill.root.innerHTML
     }
 
-    // emit on change
     quill.on('text-change', () => {
       const html = quill.root.innerHTML
-      // Quill leaves <p><br></p> for empty
       const isEmpty = html === '<p><br></p>' || !quill.getText().trim()
-      const outHtml = isEmpty ? '' : html
-      if (outHtml !== lastHtml.current) {
-        lastHtml.current = outHtml
-        onChange(outHtml, quill.getText())
+      const out = isEmpty ? '' : html
+      if (out !== lastHtml.current) {
+        lastHtml.current = out
+        onChange(out, quill.getText())
       }
     })
 
     quillRef.current = quill
 
-    // ensure toolbar doesn't steal focus quirks on mobile
-    const toolbar = container.querySelector('.ql-toolbar') as HTMLElement | null
-    if (toolbar) {
-      toolbar.addEventListener('mousedown', (e) => e.preventDefault())
-    }
-
     return () => {
-      // cleanup
-      try {
-        quill.off('text-change', () => {})
-      } catch {}
       quillRef.current = null
       container.innerHTML = ''
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // sync external value changes (e.g. switching student) — overwrite cleanly
   useEffect(() => {
     const quill = quillRef.current
     if (!quill) return
-    const next = sanitizeHtml(value || '')
-    const current = quill.root.innerHTML
-    // avoid loop: only overwrite if external value differs from last emitted
-    if (next !== lastHtml.current && next !== current) {
-      const sel = quill.getSelection()
-      const isFocused = document.activeElement && quill.root.contains(document.activeElement)
-      if (isFocused) return
+    const next = value || ''
+    if (next !== lastHtml.current && next !== quill.root.innerHTML) {
+      if (document.activeElement && quill.root.contains(document.activeElement)) return
       lastHtml.current = next
-      if (!next) {
-        quill.setText('')
-      } else {
-        quill.clipboard.dangerouslyPasteHTML(next)
-      }
-      // move cursor to end
-      if (sel) quill.setSelection(quill.getLength(), 0)
+      if (!next) quill.setText('')
+      else quill.clipboard.dangerouslyPasteHTML(next)
     }
   }, [value])
-
-  // update placeholder if it changes
-  useEffect(() => {
-    const quill = quillRef.current
-    if (quill && placeholder) {
-      const el = quill.root as HTMLElement
-      el.setAttribute('data-placeholder', placeholder)
-    }
-  }, [placeholder])
 
   return (
     <div
