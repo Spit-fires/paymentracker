@@ -250,13 +250,13 @@ export function StudentForm({
           }}
           className="w-full rounded-xl bg-white dark:bg-card-dark border border-line dark:border-line-dark px-3 py-2.5 text-[14px] text-body dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-teal/25"
         >
-          <option value="">Select school (optional)</option>
+          <option value="">None — no school</option>
           {allSchools.map((s) => (
             <option key={s} value={s}>
               {s}
             </option>
           ))}
-          <option value="Other">Other</option>
+          <option value="Other">Other — new school</option>
         </select>
         {isOtherSchool && (
           <Input
