@@ -123,10 +123,12 @@ const emptyFormats: ActiveFormats = {
 
 export function RichEditor({ value, onChange, placeholder, label }: Props) {
   const editorRef = useRef<HTMLDivElement>(null)
+  const toolbarRef = useRef<HTMLDivElement>(null)
   const lastHtml = useRef('')
   const savedRange = useRef<SavedRange | null>(null)
   const [active, setActive] = useState<ActiveFormats>(emptyFormats)
   const [isEmpty, setIsEmpty] = useState(!(value || '').trim())
+  const [openMenu, setOpenMenu] = useState<'size' | 'color' | null>(null)
 
   const captureSelection = useCallback(() => {
     const editor = editorRef.current
@@ -219,6 +221,24 @@ export function RichEditor({ value, onChange, placeholder, label }: Props) {
     }
   }, [value])
 
+  useEffect(() => {
+    if (!openMenu) return
+
+    const closeMenu = (event: PointerEvent) => {
+      if (!toolbarRef.current?.contains(event.target as Node)) setOpenMenu(null)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpenMenu(null)
+    }
+
+    document.addEventListener('pointerdown', closeMenu)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeMenu)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [openMenu])
+
   const runCommand = (command: string, commandValue?: string) => {
     if (!restoreSelection()) return
     document.execCommand(command, false, commandValue)
@@ -246,6 +266,14 @@ export function RichEditor({ value, onChange, placeholder, label }: Props) {
   }
 
   const applySize = (size: number) => applyInlineStyle('fontSize', `${size}px`)
+
+  const applyColor = (color: string) => {
+    if (!restoreSelection()) return
+    document.execCommand('styleWithCSS', false, 'true')
+    document.execCommand('foreColor', false, color)
+    rememberSelection()
+    emit()
+  }
 
   const insertPlainText = (text: string) => {
     if (!text) return
@@ -296,9 +324,29 @@ export function RichEditor({ value, onChange, placeholder, label }: Props) {
     </button>
   )
 
+  const menuButton = (menu: 'size' | 'color', title: string, children: string) => (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      aria-haspopup="listbox"
+      aria-expanded={openMenu === menu}
+      onPointerDown={rememberToolbarSelection}
+      onMouseDown={preventButtonFocus}
+      onClick={() => setOpenMenu((current) => (current === menu ? null : menu))}
+      className={cx(
+        'h-10 min-w-10 rounded-md border border-line bg-white px-2 text-[12px] font-semibold text-body transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/50 dark:border-line-dark dark:bg-card-dark dark:text-text-dark',
+        openMenu === menu && 'border-ink bg-ink/10 dark:border-ink-soft dark:bg-ink-soft/20',
+      )}
+    >
+      {children}
+    </button>
+  )
+
   return (
     <div className="overflow-hidden rounded-xl border border-line bg-white dark:border-line-dark dark:bg-card-dark">
       <div
+        ref={toolbarRef}
         className="flex flex-wrap items-center gap-1 border-b border-line bg-cream px-2 py-2 dark:border-line-dark dark:bg-input-dark"
         aria-label="Text formatting"
       >
@@ -309,44 +357,67 @@ export function RichEditor({ value, onChange, placeholder, label }: Props) {
           {button('S', 'Strikethrough', active.strike, () => runCommand('strikeThrough'), 'line-through')}
         </div>
         <span className="h-5 w-px bg-line dark:bg-line-dark" aria-hidden="true" />
-        <select
-          defaultValue=""
-          onPointerDown={rememberToolbarSelection}
-          onChange={(event) => {
-            applySize(Number(event.target.value))
-            event.target.value = ''
-          }}
-          className="h-10 rounded-md border border-line bg-white px-2 text-[12px] font-semibold text-body focus:outline-none focus:ring-2 focus:ring-teal/30 dark:border-line-dark dark:bg-card-dark dark:text-text-dark"
-          aria-label="Font size"
-        >
-          <option value="" disabled>
-            Size
-          </option>
-          {SIZES.map((size) => (
-            <option key={size} value={size}>
-              {size}px
-            </option>
-          ))}
-        </select>
-        <select
-          defaultValue=""
-          onPointerDown={rememberToolbarSelection}
-          onChange={(event) => {
-            applyInlineStyle('color', event.target.value)
-            event.target.value = ''
-          }}
-          className="h-10 rounded-md border border-line bg-white px-2 text-[12px] font-semibold text-body focus:outline-none focus:ring-2 focus:ring-teal/30 dark:border-line-dark dark:bg-card-dark dark:text-text-dark"
-          aria-label="Text color"
-        >
-          <option value="" disabled>
-            Color
-          </option>
-          {COLORS.map((color) => (
-            <option key={color.label} value={color.value}>
-              {color.label}
-            </option>
-          ))}
-        </select>
+        <div className="relative">
+          {menuButton('size', 'Font size', 'Size')}
+          {openMenu === 'size' && (
+            <div
+              role="listbox"
+              aria-label="Font size"
+              className="absolute left-0 top-[calc(100%+6px)] z-10 grid min-w-28 grid-cols-2 gap-1 rounded-lg border border-line bg-white p-1.5 shadow-[0_4px_8px_rgba(18,49,79,0.12)] dark:border-line-dark dark:bg-card-dark"
+            >
+              {SIZES.map((size) => (
+                <button
+                  key={size}
+                  type="button"
+                  role="option"
+                  aria-selected="false"
+                  onPointerDown={rememberToolbarSelection}
+                  onMouseDown={preventButtonFocus}
+                  onClick={() => {
+                    applySize(size)
+                    setOpenMenu(null)
+                  }}
+                  className="h-9 rounded-md px-2 text-[12px] font-semibold text-body hover:bg-ink/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/50 dark:text-text-dark dark:hover:bg-white/10"
+                >
+                  {size}px
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="relative">
+          {menuButton('color', 'Text color', 'Color')}
+          {openMenu === 'color' && (
+            <div
+              role="listbox"
+              aria-label="Text color"
+              className="absolute left-0 top-[calc(100%+6px)] z-10 grid min-w-36 grid-cols-2 gap-1 rounded-lg border border-line bg-white p-1.5 shadow-[0_4px_8px_rgba(18,49,79,0.12)] dark:border-line-dark dark:bg-card-dark"
+            >
+              {COLORS.map((color) => (
+                <button
+                  key={color.label}
+                  type="button"
+                  role="option"
+                  aria-selected="false"
+                  onPointerDown={rememberToolbarSelection}
+                  onMouseDown={preventButtonFocus}
+                  onClick={() => {
+                    applyColor(color.value)
+                    setOpenMenu(null)
+                  }}
+                  className="flex h-9 items-center gap-2 rounded-md px-2 text-left text-[12px] font-semibold text-body hover:bg-ink/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/50 dark:text-text-dark dark:hover:bg-white/10"
+                >
+                  <span
+                    className="h-3 w-3 rounded-full border border-black/15 dark:border-white/20"
+                    style={{ backgroundColor: color.value === 'inherit' ? 'currentColor' : color.value }}
+                    aria-hidden="true"
+                  />
+                  {color.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <span className="h-5 w-px bg-line dark:bg-line-dark" aria-hidden="true" />
         <div className="flex items-center">
           {button('UL', 'Bullet list', active.bullet, () => runCommand('insertUnorderedList'), 'text-[10px]')}
