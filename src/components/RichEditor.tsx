@@ -254,7 +254,15 @@ export function RichEditor({ value, onChange, placeholder, label }: Props) {
     const range = selection.getRangeAt(0)
     const span = document.createElement('span')
     span.style[property] = value
-    span.append(range.extractContents())
+    const fragment = range.extractContents()
+    const cssProperty = property === 'fontSize' ? 'font-size' : 'color'
+    for (const element of Array.from(fragment.querySelectorAll<HTMLElement>('*'))) {
+      element.style.removeProperty(cssProperty)
+      if (property === 'color') element.removeAttribute('color')
+      if (property === 'fontSize') element.removeAttribute('size')
+      if (!element.getAttribute('style')) element.removeAttribute('style')
+    }
+    span.append(fragment)
     range.insertNode(span)
 
     const nextRange = document.createRange()
@@ -266,14 +274,6 @@ export function RichEditor({ value, onChange, placeholder, label }: Props) {
   }
 
   const applySize = (size: number) => applyInlineStyle('fontSize', `${size}px`)
-
-  const applyColor = (color: string) => {
-    if (!restoreSelection()) return
-    document.execCommand('styleWithCSS', false, 'true')
-    document.execCommand('foreColor', false, color)
-    rememberSelection()
-    emit()
-  }
 
   const insertPlainText = (text: string) => {
     if (!text) return
@@ -402,7 +402,7 @@ export function RichEditor({ value, onChange, placeholder, label }: Props) {
                   onPointerDown={rememberToolbarSelection}
                   onMouseDown={preventButtonFocus}
                   onClick={() => {
-                    applyColor(color.value)
+                    applyInlineStyle('color', color.value)
                     setOpenMenu(null)
                   }}
                   className="flex h-9 items-center gap-2 rounded-md px-2 text-left text-[12px] font-semibold text-body hover:bg-ink/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/50 dark:text-text-dark dark:hover:bg-white/10"
