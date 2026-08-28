@@ -76,7 +76,7 @@ export function RichEditor({ value, onChange, placeholder }: Props) {
   return (
     <div
       ref={containerRef}
-      className="rounded-xl border border-line dark:border-line-dark overflow-hidden bg-white dark:bg-card-dark [&_.ql-toolbar]:!bg-cream [&_.ql-toolbar]:dark:!bg-input-dark [&_.ql-toolbar]:!border-line [&_.ql-toolbar]:dark:!border-line-dark [&_.ql-toolbar]:!border-t-0 [&_.ql-toolbar]:!border-x-0 [&_.ql-container]:!border-0 [&_.ql-editor]:!min-h-[96px] [&_.ql-editor]:!max-h-64 [&_.ql-editor]:!overflow-y-auto [&_.ql-editor]:!px-3 [&_.ql-editor]:!py-2.5 [&_.ql-editor]:!text-[14px] [&_.ql-editor]:!leading-[1.45]"
+      className="rounded-xl border border-line dark:border-line-dark bg-white dark:bg-card-dark overflow-visible [&_.ql-toolbar]:!bg-cream [&_.ql-toolbar]:dark:!bg-input-dark [&_.ql-toolbar]:!border-line [&_.ql-toolbar]:dark:!border-line-dark [&_.ql-toolbar]:!border-t-0 [&_.ql-toolbar]:!border-x-0 [&_.ql-toolbar]:!rounded-t-xl [&_.ql-container]:!border-0 [&_.ql-container]:!rounded-b-xl [&_.ql-editor]:!min-h-[96px] [&_.ql-editor]:!max-h-64 [&_.ql-editor]:!overflow-y-auto [&_.ql-editor]:!px-3 [&_.ql-editor]:!py-2.5 [&_.ql-editor]:!text-[14px] [&_.ql-editor]:!leading-[1.45] [&_.ql-picker-options]:!z-20"
     />
   )
 }
