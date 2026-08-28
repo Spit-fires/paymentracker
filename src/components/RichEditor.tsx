@@ -12,12 +12,24 @@ import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary'
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html'
-import { $getRoot, $getSelection } from 'lexical'
+import { $getRoot, $getSelection, $isRangeSelection } from 'lexical'
+import { $patchStyleText } from '@lexical/selection'
 import { ListNode, ListItemNode, INSERT_ORDERED_LIST_COMMAND, INSERT_UNORDERED_LIST_COMMAND, REMOVE_LIST_COMMAND } from '@lexical/list'
 import { HeadingNode, QuoteNode } from '@lexical/rich-text'
-import { FORMAT_TEXT_COMMAND, FORMAT_ELEMENT_COMMAND, UNDO_COMMAND, REDO_COMMAND, type LexicalEditor } from 'lexical'
+import { FORMAT_TEXT_COMMAND, UNDO_COMMAND, REDO_COMMAND, type LexicalEditor } from 'lexical'
 import { mergeRegister } from '@lexical/utils'
 import { cx } from './ui'
+
+const COLORS = [
+  { label: 'Auto', value: '' },
+  { label: 'Black', value: '#1c2936' },
+  { label: 'Navy', value: '#12314f' },
+  { label: 'Red', value: '#b23b3b' },
+  { label: 'Green', value: '#15803d' },
+  { label: 'Gold', value: '#b98a2f' },
+  { label: 'Teal', value: '#0d9488' },
+]
+const SIZES = [12, 14, 16, 18, 20, 24]
 
 // Keep sanitize for receipt capture — Lexical HTML is already clean, but we still strip.
 // Must stay exported for ReceiptCard.
@@ -86,6 +98,7 @@ const theme = {
 }
 
 // Toolbar — fixed, no layout shift, tap target 32px, mobile-safe
+// No alignment — color + size instead. Lexical style patch for perfect control.
 function Toolbar() {
   const [editor] = useLexicalComposerContext()
   const [isBold, setIsBold] = useState(false)
@@ -98,14 +111,10 @@ function Toolbar() {
       editor.registerUpdateListener(({ editorState }) => {
         editorState.read(() => {
           const sel = $getSelection()
-          if (sel && (sel as unknown as { hasFormat?: (t: string) => boolean }).hasFormat) {
-            // @ts-expect-error hasFormat exists on RangeSelection
+          if (sel && $isRangeSelection(sel)) {
             setIsBold(sel.hasFormat('bold'))
-            // @ts-expect-error
             setIsItalic(sel.hasFormat('italic'))
-            // @ts-expect-error
             setIsUnderline(sel.hasFormat('underline'))
-            // @ts-expect-error
             setIsStrike(sel.hasFormat('strikethrough'))
           }
         })
@@ -129,6 +138,25 @@ function Toolbar() {
     </button>
   )
 
+  const setColor = (value: string) => {
+    editor.update(() => {
+      const sel = $getSelection()
+      if ($isRangeSelection(sel)) {
+        if (value) $patchStyleText(sel, { color: value })
+        else $patchStyleText(sel, { color: null } as unknown as { color: string })
+      }
+    })
+  }
+  const setSize = (value: string) => {
+    editor.update(() => {
+      const sel = $getSelection()
+      if ($isRangeSelection(sel)) {
+        if (value) $patchStyleText(sel, { 'font-size': `${value}px` })
+        else $patchStyleText(sel, { 'font-size': null } as unknown as { 'font-size': string })
+      }
+    })
+  }
+
   return (
     <div className="flex flex-wrap gap-0.5 items-center bg-cream dark:bg-input-dark px-1.5 py-1 border-b border-line dark:border-line-dark">
       {btn(isBold, () => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'bold'), 'B', 'Bold')}
@@ -136,28 +164,61 @@ function Toolbar() {
       {btn(isUnderline, () => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'underline'), 'U', 'Underline')}
       {btn(isStrike, () => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'strikethrough'), 'S', 'Strikethrough')}
       <span className="w-px h-5 bg-line dark:bg-line-dark mx-1" />
-      {btn(false, () => editor.dispatchCommand(UNDO_COMMAND, undefined), '↺', 'Undo')}
-      {btn(false, () => editor.dispatchCommand(REDO_COMMAND, undefined), '↻', 'Redo')}
-      <span className="w-px h-5 bg-line dark:bg-line-dark mx-1" />
-      {btn(false, () => editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, 'left'), '⇤', 'Align left')}
-      {btn(false, () => editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, 'center'), '⇹', 'Align center')}
-      {btn(false, () => editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, 'right'), '⇥', 'Align right')}
+      <select
+        onMouseDown={(e) => e.preventDefault()}
+        onChange={(e) => {
+          const v = e.target.value
+          if (v) setSize(v)
+          e.target.selectedIndex = 0
+        }}
+        defaultValue=""
+        className="h-8 rounded-lg bg-white dark:bg-card-dark border border-line dark:border-line-dark px-1 text-[12px] font-semibold text-body dark:text-text-dark"
+        title="Font size"
+      >
+        <option value="" disabled>
+          Size
+        </option>
+        {SIZES.map((s) => (
+          <option key={s} value={s}>
+            {s}px
+          </option>
+        ))}
+      </select>
+      <select
+        onMouseDown={(e) => e.preventDefault()}
+        onChange={(e) => {
+          const v = e.target.value
+          setColor(v)
+          e.target.selectedIndex = 0
+        }}
+        defaultValue=""
+        className="h-8 rounded-lg bg-white dark:bg-card-dark border border-line dark:border-line-dark px-1 text-[12px] font-semibold text-body dark:text-text-dark"
+        title="Text color"
+      >
+        <option value="" disabled>
+          Color
+        </option>
+        {COLORS.map((c) => (
+          <option key={c.label} value={c.value}>
+            {c.label}
+          </option>
+        ))}
+      </select>
       <span className="w-px h-5 bg-line dark:bg-line-dark mx-1" />
       {btn(false, () => editor.dispatchCommand(INSERT_UNORDERED_LIST_COMMAND, undefined), '•≡', 'Bullet list')}
       {btn(false, () => editor.dispatchCommand(INSERT_ORDERED_LIST_COMMAND, undefined), '1≡', 'Numbered list')}
       {btn(false, () => editor.dispatchCommand(REMOVE_LIST_COMMAND, undefined), '≡×', 'Remove list')}
       <span className="w-px h-5 bg-line dark:bg-line-dark mx-1" />
+      {btn(false, () => editor.dispatchCommand(UNDO_COMMAND, undefined), '↺', 'Undo')}
+      {btn(false, () => editor.dispatchCommand(REDO_COMMAND, undefined), '↻', 'Redo')}
+      <span className="w-px h-5 bg-line dark:bg-line-dark mx-1" />
       {btn(false, () => {
         editor.update(() => {
           const sel = $getSelection()
-          if (sel) {
-            // @ts-expect-error clear format
-            if (sel.hasFormat) {
-              editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'bold')
-              editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'italic')
-              editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'underline')
-              editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'strikethrough')
-            }
+          if ($isRangeSelection(sel)) {
+            // clear inline styles + formats
+            $patchStyleText(sel, { color: null, 'font-size': null } as unknown as Record<string, string | null>)
+            sel.format = 0
           }
         })
       }, '⌫', 'Clear')}
