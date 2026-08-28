@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef } from 'react'
+﻿import { useEffect, useRef, type MouseEvent } from 'react'
 import { cx } from './ui'
 
 const ALLOWED_TAGS = new Set([
@@ -99,6 +99,11 @@ export function RichEditor({ value, onChange, placeholder }: Props) {
   // selection, so every command restores the last in-editor range first.
   // that is what lets you bold AND color AND resize the same selection.
   const saved = useRef<SavedRange | null>(null)
+  // element the current pointer gesture STARTED on (captured at pointerdown).
+  // a tap on the text can be re-dispatched to a toolbar button when the
+  // layout shifts mid-tap (mobile keyboard opening scrolls the toolbar under
+  // the finger) - commands only run when the gesture began on that button.
+  const origin = useRef<HTMLElement | null>(null)
 
   // seed the editor from the store; never clobber a focused document
   useEffect(() => {
@@ -139,14 +144,11 @@ export function RichEditor({ value, onChange, placeholder }: Props) {
     if (!el) return
     el.focus()
     const s = saved.current
+    if (!s) return
     const sel = window.getSelection()
     if (!sel) return
-    if (!s || !el.contains(s.sc) || !el.contains(s.ec)) {
-      sel.removeAllRanges()
-      const r = document.createRange()
-      r.selectNodeContents(el)
-      r.collapse(false)
-      sel.addRange(r)
+    if (!el.contains(s.sc) || !el.contains(s.ec)) {
+      saved.current = null
       return
     }
     const r = document.createRange()
@@ -162,6 +164,19 @@ export function RichEditor({ value, onChange, placeholder }: Props) {
     last.current = el.innerHTML
     onChange(el.innerHTML, el.innerText)
   }
+
+  // only run a command when the pointer gesture genuinely started on this
+  // button - rerouted clicks (layout shift mid-tap) must not format text
+  // that was only meant to be clicked. keyboard activation (detail 0) and
+  // browsers without pointer events (origin null) are always allowed.
+  const guarded =
+    (fn: () => void) =>
+    (e: MouseEvent<HTMLButtonElement>) => {
+      if (e.detail === 0) return fn()
+      const btn = e.currentTarget
+      const o = origin.current
+      if (!o || btn.contains(o)) fn()
+    }
 
   const run = (cmd: string, value?: string) => {
     restore()
@@ -218,7 +233,7 @@ export function RichEditor({ value, onChange, placeholder }: Props) {
       key={title}
       type="button"
       onMouseDown={(e) => e.preventDefault()}
-      onClick={onClick}
+      onClick={guarded(onClick)}
       title={title}
       className={cx(
         'min-w-8 h-8 px-1.5 rounded-lg text-[12.5px] font-bold grid place-items-center transition active:scale-95 select-none',
@@ -232,7 +247,12 @@ export function RichEditor({ value, onChange, placeholder }: Props) {
   )
 
   return (
-    <div className="rounded-xl border border-line dark:border-line-dark overflow-hidden">
+    <div
+      className="rounded-xl border border-line dark:border-line-dark overflow-hidden"
+      onPointerDownCapture={(e) => {
+        origin.current = e.target as HTMLElement
+      }}
+    >
       <div className="flex flex-wrap gap-0.5 items-center bg-cream dark:bg-input-dark px-1.5 py-1 border-b border-line dark:border-line-dark">
         {btn(false, () => run('bold'), 'B', 'Bold')}
         {btn(false, () => run('italic'), 'I', 'Italic')}
@@ -273,13 +293,13 @@ export function RichEditor({ value, onChange, placeholder }: Props) {
           ))}
         </select>
         <span className="w-px h-5 bg-line dark:bg-line-dark mx-1" />
-        {btn(false, () => run('justifyLeft'), 'Γçñ', 'Align left')}
-        {btn(false, () => run('justifyCenter'), 'Γç╣', 'Align center')}
-        {btn(false, () => run('justifyRight'), 'ΓçÑ', 'Align right')}
+        {btn(false, () => run('justifyLeft'), '⇤', 'Align left')}
+        {btn(false, () => run('justifyCenter'), '⇹', 'Align center')}
+        {btn(false, () => run('justifyRight'), '⇥', 'Align right')}
         <span className="w-px h-5 bg-line dark:bg-line-dark mx-1" />
-        {btn(false, () => run('insertUnorderedList'), 'ΓÇóΓëí', 'Bullet list')}
-        {btn(false, () => run('insertOrderedList'), '1Γëí', 'Numbered list')}
-        {btn(false, () => run('removeFormat'), 'Γî½', 'Clear formatting')}
+        {btn(false, () => run('insertUnorderedList'), '•≡', 'Bullet list')}
+        {btn(false, () => run('insertOrderedList'), '1≡', 'Numbered list')}
+        {btn(false, () => run('removeFormat'), '⌫', 'Clear formatting')}
       </div>
       <div
         ref={ref}
