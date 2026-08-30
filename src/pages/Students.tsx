@@ -77,6 +77,7 @@ export function Students() {
 
   const q = params.get('q') || ''
   const mode = params.get('mode')
+  const feePick = params.get('fee') === '1'
   const wantNew = params.get('new') === '1'
   const batchParam = params.get('batch') || ''
 
@@ -235,7 +236,7 @@ export function Students() {
         animate="show"
       >
         <Link
-          to={mode === 'record' ? `/payment/${s.id}` : `/student/${s.id}`}
+          to={mode === 'record' ? (feePick ? `/payment/${s.id}?fee=1` : `/payment/${s.id}`) : `/student/${s.id}`}
           className="block"
           onClick={() => { savedScrollY = getY() }}
         >
@@ -310,7 +311,7 @@ export function Students() {
 
         {mode === 'record' && (
           <div className="mt-3 rounded-xl bg-teal/10 dark:bg-teal/20 border border-teal/20 px-3.5 py-2.5 text-[13px] font-medium text-teal">
-            Pick a student to record their payment
+            {feePick ? 'Pick a student to record their one-time fee' : 'Pick a student to record their payment'}
           </div>
         )}
 
@@ -318,7 +319,7 @@ export function Students() {
           <IconSearch className="w-[18px] h-[18px] absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />
           <input
             value={q}
-            onChange={(e) => setParams({ q: e.target.value, ...(mode ? { mode } : {}) }, { replace: true })}
+            onChange={(e) => setParams({ q: e.target.value, ...(mode ? { mode, ...(feePick ? { fee: '1' } : {}) } : {}) }, { replace: true })}
             placeholder="Search by name or batch…"
             className="w-full rounded-xl bg-white dark:bg-card-dark border border-line dark:border-line-dark pl-10 pr-4 py-3 text-[15px] text-body dark:text-text-dark placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-teal/25"
           />

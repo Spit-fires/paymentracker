@@ -2,13 +2,13 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
 import { useApp } from '../state/AppContext'
-import { balanceOf, duesForPeriod, monthTotals, type DuesRow } from '../lib/ledger'
+import { balanceOf, duesForPeriod, monthTotals, isMonthly, type DuesRow } from '../lib/ledger'
 import { fmtTaka, periodNow, periodLabel } from '../lib/format'
 import { Card, Button } from '../components/ui'
 import { SyncIndicator } from '../components/Layout'
 import { ReauthBanner } from '../components/ReauthBanner'
 import { fadeUp, useCountUp } from '../components/anim'
-import { IconReceipt, IconSearch, IconCheck, IconCalendar, IconUsers, IconClock } from '../components/Icons'
+import { IconReceipt, IconSearch, IconCheck, IconCalendar, IconUsers, IconClock, IconPlus } from '../components/Icons'
 
 function shiftPeriod(p: string, delta: number): string {
   const [y, m] = p.split('-').map(Number)
@@ -32,13 +32,15 @@ export function Dashboard() {
 
   // collected this month = every receipt RECORDED inside the selected month,
   // regardless of which period it pays for (e.g. a September payment recorded
-  // in August counts here in August)
+  // in August counts here in August). One-time fees are excluded - they are
+  // tracked separately in the Accounting fee tab.
   const recordedTotal = useMemo(() => {
     const [y, m] = period.split('-').map(Number)
     const start = new Date(y, m - 1, 1).getTime()
     const end = new Date(y, m, 1).getTime()
     let s = 0
     for (const p of payments) {
+      if (!isMonthly(p)) continue
       if (p.date >= start && p.date < end) s += balanceOf(p)
     }
     return s
@@ -50,11 +52,12 @@ export function Dashboard() {
   const totalDue = rows.reduce((s, r) => s + r.due, 0)
 
   // net per-student collection (balance = real payment − commission) - used
-  // for the batch collected figures, matching the home "Collected" total
+  // for the batch collected figures, matching the home "Collected" total.
+  // One-time fees never count toward monthly collection.
   const balanceByStudent = useMemo(() => {
     const map = new Map<string, number>()
     for (const p of payments) {
-      if (p.period !== period) continue
+      if (!isMonthly(p) || p.period !== period) continue
       map.set(p.studentId, (map.get(p.studentId) || 0) + balanceOf(p))
     }
     return map
@@ -155,26 +158,35 @@ export function Dashboard() {
             {paidCount}/{billed.length}
           </div>
         </Card>
-        <button onClick={() => navigate('/students?mode=record')} className="text-left">
+        <button onClick={() => navigate('/routines')} className="text-left">
           <div className="h-full flex flex-col justify-center rounded-2xl bg-ink text-white dark:bg-ink-soft p-3.5 border border-ink dark:border-ink-soft shadow-[0_2px_8px_rgba(18,49,79,0.28)] active:scale-[0.98] transition">
-            <div className="text-[11px] font-semibold text-white/70">Record payment</div>
+            <div className="text-[11px] font-semibold text-white/70">Routine</div>
             <div className="inline-flex items-center gap-1.5 text-white font-bold mt-1">
-              <IconReceipt className="w-4 h-4" />
-              <span className="text-[14px] leading-tight">Tap to record</span>
+              <IconClock className="w-4 h-4" />
+              <span className="text-[14px] leading-tight">Tap to plan</span>
             </div>
           </div>
         </button>
       </div>
 
-      {/* Quick actions */}
-      <div className="px-4 mt-3">
+      {/* Quick actions - record a monthly payment or a one-time fee */}
+      <div className="px-4 mt-3 grid grid-cols-2 gap-2.5">
         <Button
           variant="secondary"
           size="lg"
           full
-          onClick={() => navigate('/routines')}
+          onClick={() => navigate('/students?mode=record')}
         >
-          <IconClock className="w-5 h-5" /> Routine
+          <IconReceipt className="w-5 h-5" /> Payment
+        </Button>
+        <Button
+          variant="secondary"
+          size="lg"
+          full
+          className="!text-teal dark:!text-teal-bright"
+          onClick={() => navigate('/students?mode=record&fee=1')}
+        >
+          <IconPlus className="w-5 h-5" /> Fee
         </Button>
       </div>
 

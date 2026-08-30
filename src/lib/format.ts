@@ -109,6 +109,25 @@ export function rangeLabel(fromMs: number, toMs: number): string {
   return periodDisplay({ period: '', periodType: 'range', periodFrom: fromMs, periodTo: toMs })
 }
 
+/** Row label on the receipt for the "paying for" line: one-time fee → "Fee",
+ *  range → "For the period", month → "For the month". */
+export function payingForLabel(p: { kind?: string; periodType?: string }): string {
+  if (p.kind === 'fee') return 'Fee'
+  return p.periodType === 'range' ? 'For the period' : 'For the month'
+}
+
+/** Value on the "paying for" line: one-time fee → "One-time fee · Title",
+ *  monthly → month or range display. */
+export function payingForDisplay(
+  p: { period: string; periodType?: string; periodFrom?: number; periodTo?: number; kind?: string; feeLabel?: string },
+): string {
+  if (p.kind === 'fee') {
+    const t = (p.feeLabel || '').trim()
+    return t ? `One-time fee · ${t}` : 'One-time fee'
+  }
+  return periodDisplay(p)
+}
+
 export function receiptFileName(receiptNo: number, dateMs: number): string {
   const d = new Date(dateMs)
   const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(

@@ -1,8 +1,20 @@
 import type { Student, Payment, Posting } from '../types'
 
+/** Monthly-tuition payments only. One-time fees (kind === 'fee') are tracked
+ *  separately in the Accounting > Fee tab and must NEVER leak into monthly
+ *  accounting (dues, collected, posting cash, autofill, commissions). */
+export function isMonthly(p: Payment): boolean {
+  return p.kind !== 'fee'
+}
+
+/** One-time fee payments only - the inverse of isMonthly. */
+export function isFee(p: Payment): boolean {
+  return p.kind === 'fee'
+}
+
 export function studentPeriodPaid(payments: Payment[], studentId: string, period: string): number {
   return payments
-    .filter((p) => p.studentId === studentId && p.period === period)
+    .filter((p) => isMonthly(p) && p.studentId === studentId && p.period === period)
     .reduce((sum, p) => sum + p.amount, 0)
 }
 
@@ -11,7 +23,7 @@ export function studentPeriodPaid(payments: Payment[], studentId: string, period
  *  doesn't reduce what the student paid. */
 export function studentPeriodPaidReal(payments: Payment[], studentId: string, period: string): number {
   return payments
-    .filter((p) => p.studentId === studentId && p.period === period)
+    .filter((p) => isMonthly(p) && p.studentId === studentId && p.period === period)
     .reduce((sum, p) => sum + (p.realAmount ?? p.amount), 0)
 }
 
@@ -20,7 +32,7 @@ export function studentPeriodPaidReal(payments: Payment[], studentId: string, pe
  *  what the center still expects, matching home "Collected". */
 export function studentPeriodBalance(payments: Payment[], studentId: string, period: string): number {
   return payments
-    .filter((p) => p.studentId === studentId && p.period === period)
+    .filter((p) => isMonthly(p) && p.studentId === studentId && p.period === period)
     .reduce((sum, p) => sum + balanceOf(p), 0)
 }
 
@@ -31,7 +43,7 @@ export function studentBalanceFee(student: Student): number {
 }
 
 export function studentPeriodPaidAny(payments: Payment[], studentId: string, period: string): boolean {
-  return payments.some((p) => p.studentId === studentId && p.period === period)
+  return payments.some((p) => isMonthly(p) && p.studentId === studentId && p.period === period)
 }
 
 export interface DuesRow {
@@ -62,7 +74,15 @@ export function duesForPeriod(students: Student[], payments: Payment[], period: 
 
 export function lastPaymentForStudent(payments: Payment[], studentId: string): Payment | undefined {
   const list = payments
-    .filter((p) => p.studentId === studentId)
+    .filter((p) => isMonthly(p) && p.studentId === studentId)
+    .sort((a, b) => b.date - a.date)
+  return list[0]
+}
+
+/** Last one-time fee receipt for a student - newest first. */
+export function lastFeeForStudent(payments: Payment[], studentId: string): Payment | undefined {
+  const list = payments
+    .filter((p) => isFee(p) && p.studentId === studentId)
     .sort((a, b) => b.date - a.date)
   return list[0]
 }
@@ -105,11 +125,11 @@ export function balanceOf(p: Payment): number {
 }
 
 export function monthTotals(payments: Payment[], period: string): number {
-  return payments.filter((p) => p.period === period).reduce((s, p) => s + balanceOf(p), 0)
+  return payments.filter((p) => isMonthly(p) && p.period === period).reduce((s, p) => s + balanceOf(p), 0)
 }
 
 export function totalAllTime(payments: Payment[]): number {
-  return payments.reduce((s, p) => s + balanceOf(p), 0)
+  return payments.filter(isMonthly).reduce((s, p) => s + balanceOf(p), 0)
 }
 
 /** Cash handed over ("posted") so far - sum of all ACTIVE postings
@@ -144,6 +164,50 @@ export function postingLedger(payments: Payment[], postings: Posting[]): Posting
 
 export function paymentModes(payments: Payment[]): Record<string, number> {
   const out: Record<string, number> = {}
-  for (const p of payments) out[p.mode] = (out[p.mode] || 0) + balanceOf(p)
+  for (const p of payments) {
+    if (!isMonthly(p)) continue
+    out[p.mode] = (out[p.mode] || 0) + balanceOf(p)
+  }
   return out
+}
+
+/* ------------------------------------------------------------------ *
+ * One-time fees (kind === 'fee') - a fully separate ledger.          *
+ * ------------------------------------------------------------------ */
+
+/** All one-time fee payments whose "paying for" month matches `period`,
+ *  newest first - rows for the Accounting > Fee tab. */
+export function feesForPeriod(payments: Payment[], period: string): Payment[] {
+  return payments
+    .filter((p) => isFee(p) && p.period === period)
+    .sort((a, b) => b.date - a.date || b.receiptNo - a.receiptNo)
+}
+
+export interface FeeTotals {
+  count: number
+  slip: number
+  real: number
+  settled: number
+  pending: number
+  settledCount: number
+}
+
+/** Totals for the Fee tab over the given fee rows: slip sum, real sum
+ *  (real amount when recorded, slip otherwise), and the private tick-box
+ *  split (settled vs pending). Fees never carry commission. */
+export function feeTotals(fees: Payment[]): FeeTotals {
+  let slip = 0
+  let real = 0
+  let settled = 0
+  let settledCount = 0
+  for (const p of fees) {
+    const r = p.realAmount ?? p.amount
+    slip += p.amount
+    real += r
+    if (p.feeSettled) {
+      settled += r
+      settledCount++
+    }
+  }
+  return { count: fees.length, slip, real, settled, pending: real - settled, settledCount }
 }

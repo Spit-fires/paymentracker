@@ -6,6 +6,7 @@ import { useApp } from '../state/AppContext'
 import {
   studentPeriodPaid,
   lastPaymentForStudent,
+  lastFeeForStudent,
   autofillAmount,
   realAutofillAmount,
 } from '../lib/ledger'
@@ -43,12 +44,15 @@ export function Payment() {
   const student = students.find((s) => s.id === id)
   const photoUrl = useBlobUrl(student?.photoBlob)
   const prefill = params.get('prefill')
+  const feeParam = params.get('fee') === '1'
   const existing = useMemo(
     () => (prefill ? payments.find((x) => x.id === prefill) : undefined),
     [prefill, payments],
   )
 
   const period = periodNow()
+  const [kind, setKind] = useState<'monthly' | 'fee'>(feeParam ? 'fee' : 'monthly')
+  const [feeTitle, setFeeTitle] = useState('')
   const [amount, setAmount] = useState('')
   const [realAmount, setRealAmount] = useState('')
   const [commissionOn, setCommissionOn] = useState(false)
@@ -79,6 +83,8 @@ export function Payment() {
     if (prefill) {
       const p = payments.find((x) => x.id === prefill)
       if (p) {
+        setKind(p.kind === 'fee' ? 'fee' : 'monthly')
+        setFeeTitle(p.kind === 'fee' ? p.feeLabel || '' : '')
         setAmount(String(p.amount))
         setRealAmount(p.realAmount != null ? String(p.realAmount) : '')
         setCommissionOn(p.commission != null)
@@ -89,7 +95,11 @@ export function Payment() {
           const t = teachers.find((x) => x.name === p.receivedBy?.name)
           setReceivedBy(t || { id: p.receivedBy.name, name: p.receivedBy.name, phone: p.receivedBy.phone })
         }
-        if (p.periodType === 'range' && p.periodFrom && p.periodTo) {
+        if (p.kind === 'fee') {
+          // one-time fees are always month-based - no date-range variant
+          setPeriodType('month')
+          setSelPeriod(p.period)
+        } else if (p.periodType === 'range' && p.periodFrom && p.periodTo) {
           setPeriodType('range')
           const f = new Date(p.periodFrom)
           const t = new Date(p.periodTo)
@@ -104,6 +114,8 @@ export function Payment() {
         return
       }
     }
+    // one-time fees never autofill - each fee is its own amount
+    if (feeParam) return
     setAmount(String(autofillAmount(students, payments, student.id, period)))
     // real payment prefills from the student's recorded real fee, else last
     // month's real total - blank keeps it "same as slip"
@@ -116,7 +128,22 @@ export function Payment() {
       setCommission(String(student.commission))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [student?.id, prefill])
+  }, [student?.id, prefill, feeParam])
+
+  /** Monthly ↔ Fee switch: fees drop commission (never tracked on fees) and
+   *  monthly re-runs the amount autofill when the slip is still blank. */
+  const switchKind = (next: 'monthly' | 'fee') => {
+    if (next === kind) return
+    setKind(next)
+    if (next === 'fee') {
+      setCommissionOn(false)
+      setCommission('')
+    } else if (amount.trim() === '' && student) {
+      setAmount(String(autofillAmount(students, payments, student.id, selPeriod)))
+      const real = realAutofillAmount(students, payments, student.id, selPeriod)
+      if (real > 0) setRealAmount(String(real))
+    }
+  }
 
   // upgrade a refilled teacher snapshot (synthetic id = name) to the real
   // Settings teacher once the list is available - without clobbering a
@@ -129,12 +156,17 @@ export function Payment() {
   }, [teachers])
 
   const lastTotal = useMemo(
-    () => (student ? studentPeriodPaid(payments, student.id, selPeriod) : 0),
-    [student, payments, selPeriod],
+    () => (student && kind === 'monthly' ? studentPeriodPaid(payments, student.id, selPeriod) : 0),
+    [student, payments, selPeriod, kind],
   )
   const lastPayment = useMemo(
-    () => (student ? lastPaymentForStudent(payments, student.id) : undefined),
-    [student, payments],
+    () =>
+      student
+        ? kind === 'fee'
+          ? lastFeeForStudent(payments, student.id)
+          : lastPaymentForStudent(payments, student.id)
+        : undefined,
+    [student, payments, kind],
   )
   const amountNum = Number(amount) || 0
   const dueNum = Math.max(0, Number(due) || 0)
@@ -152,7 +184,8 @@ export function Payment() {
       const missingOnDay = sameDay.filter((x) => x.dailySeq == null).length
       return Math.max(maxDaily, missingOnDay) + 1
     })()
-    const isRange = periodType === 'range'
+    const isFee = kind === 'fee'
+    const isRange = !isFee && periodType === 'range'
     const fromMs = isRange ? new Date(rangeFrom + 'T00:00:00').getTime() || dateMs : 0
     const toMs = isRange ? new Date(rangeTo + 'T00:00:00').getTime() || fromMs : 0
     const periodVal = selPeriod
@@ -161,18 +194,20 @@ export function Payment() {
       receiptNo: existing ? existing.receiptNo : receiptSeq + 1,
       dailySeq,
       studentId: student.id,
+      kind: (isFee ? 'fee' : 'monthly') as 'monthly' | 'fee',
+      feeLabel: isFee ? feeTitle.trim() || undefined : undefined,
       amount: amountNum,
       due: dueNum,
       mode,
       receivedBy: receivedBy ? { name: receivedBy.name, phone: receivedBy.phone } : undefined,
       period: periodVal,
-      periodType: periodType as 'month' | 'range',
+      periodType: (isFee ? 'month' : periodType) as 'month' | 'range',
       periodFrom: isRange ? fromMs : undefined,
       periodTo: isRange ? toMs : undefined,
       date: existing ? existing.date : dateMs,
       updatedAt: Date.now(),
     }
-  }, [student, existing, amountNum, dueNum, mode, receivedBy, selPeriod, periodType, rangeFrom, rangeTo, receiptSeq, receivedDate, payments])
+  }, [student, existing, kind, feeTitle, amountNum, dueNum, mode, receivedBy, selPeriod, periodType, rangeFrom, rangeTo, receiptSeq, receivedDate, payments])
 
   if (!student) {
     return (
@@ -187,12 +222,12 @@ export function Payment() {
 
   const submit = async () => {
     if (amountNum <= 0) return showToast('Enter a valid amount', 'err')
-    if (periodType === 'range') {
+    if (kind === 'monthly' && periodType === 'range') {
       const fromMs = new Date(rangeFrom + 'T00:00:00').getTime()
       const toMs = new Date(rangeTo + 'T00:00:00').getTime()
       if (!fromMs || !toMs || fromMs > toMs) return showToast('Select a valid date range', 'err')
     }
-    if (commissionNum > 0 && !receivedBy) {
+    if (kind === 'monthly' && commissionNum > 0 && !receivedBy) {
       showToast('Commission requires selecting the receiving teacher', 'err')
       return
     }
@@ -214,7 +249,8 @@ export function Payment() {
       }))
       const dataUrl = await capturePng(previewRef.current)
       const blob = await fetch(dataUrl).then((r) => r.blob())
-      const isRange = periodType === 'range'
+      const isFee = kind === 'fee'
+      const isRange = !isFee && periodType === 'range'
       const fromMs = isRange ? new Date(rangeFrom + 'T00:00:00').getTime() : 0
       const toMs = isRange ? new Date(rangeTo + 'T00:00:00').getTime() : 0
       const periodVal = selPeriod
@@ -222,14 +258,16 @@ export function Payment() {
         await updatePayment(existing.id, {
           amount: amountNum,
           realAmount: realAmount.trim() === '' ? undefined : realNum,
-          commission: commissionOn ? commissionNum : undefined,
+          commission: isFee ? undefined : commissionOn ? commissionNum : undefined,
           due: dueNum,
           mode,
           receivedBy: receivedBy ? { name: receivedBy.name, phone: receivedBy.phone } : undefined,
           period: periodVal,
-          periodType: periodType,
+          periodType: isFee ? 'month' : periodType,
           periodFrom: isRange ? fromMs : undefined,
           periodTo: isRange ? toMs : undefined,
+          kind: isFee ? 'fee' : 'monthly',
+          feeLabel: isFee ? feeTitle.trim() || undefined : undefined,
           pngBlob: blob,
         })
         showToast(`Invoice ${fmtInvoiceNo(existing.date, existing.dailySeq ?? invoiceDailySeq(existing, payments))} updated`, 'ok')
@@ -239,14 +277,16 @@ export function Payment() {
           studentId: student.id,
           amount: amountNum,
           realAmount: realAmount.trim() === '' ? undefined : realNum,
-          commission: commissionOn ? commissionNum : undefined,
+          commission: isFee ? undefined : commissionOn ? commissionNum : undefined,
           due: dueNum,
           mode,
           receivedBy: receivedBy ? { name: receivedBy.name, phone: receivedBy.phone } : undefined,
           period: periodVal,
-          periodType: periodType,
+          periodType: isFee ? 'month' : periodType,
           periodFrom: isRange ? fromMs : undefined,
           periodTo: isRange ? toMs : undefined,
+          kind: isFee ? 'fee' : 'monthly',
+          feeLabel: isFee ? feeTitle.trim() || undefined : undefined,
           date: new Date(receivedDate + 'T00:00:00').getTime() || Date.now(),
           pngBlob: blob,
         })
@@ -262,9 +302,32 @@ export function Payment() {
 
   return (
     <div>
-      <PageHeader title={existing ? 'Edit receipt' : 'Record payment'} back onBack={() => navigate(-1)} />
+      <PageHeader
+        title={existing ? (kind === 'fee' ? 'Edit fee receipt' : 'Edit receipt') : kind === 'fee' ? 'Record fee' : 'Record payment'}
+        back
+        onBack={() => navigate(-1)}
+      />
 
       <div className="px-4 space-y-4">
+        {/* Monthly tuition vs one-time fee - locked while editing so an
+            existing receipt can never be converted across the two ledgers */}
+        {!existing && (
+          <div className="flex rounded-xl bg-white dark:bg-card-dark border border-line dark:border-line-dark p-1">
+            <button
+              onClick={() => switchKind('monthly')}
+              className={`flex-1 rounded-lg py-2.5 text-[13.5px] font-bold transition ${kind === 'monthly' ? 'bg-ink text-white dark:bg-ink-soft' : 'text-body/70 dark:text-muted-dark'}`}
+            >
+              Monthly payment
+            </button>
+            <button
+              onClick={() => switchKind('fee')}
+              className={`flex-1 rounded-lg py-2.5 text-[13.5px] font-bold transition ${kind === 'fee' ? 'bg-ink text-white dark:bg-ink-soft' : 'text-body/70 dark:text-muted-dark'}`}
+            >
+              One-time fee
+            </button>
+          </div>
+        )}
+
         {/* Student summary */}
         <Card className="!rounded-2xl p-4 flex items-center gap-3">
           {photoUrl ? (
@@ -282,11 +345,30 @@ export function Payment() {
           </div>
           {lastPayment && (
             <div className="text-right shrink-0">
-              <div className="text-[10px] uppercase tracking-wider text-faint">Last payment</div>
+              <div className="text-[10px] uppercase tracking-wider text-faint">{kind === 'fee' ? 'Last fee' : 'Last payment'}</div>
               <div className="text-[13px] font-bold text-teal tabular-nums">{fmtTaka(lastPayment.amount)}</div>
             </div>
           )}
         </Card>
+
+        {/* Fee title - one-time fees only, free text (Admission/Exam/Books…) */}
+        {kind === 'fee' && (
+          <Card className="!rounded-2xl p-4">
+            <div className="text-[13px] font-semibold text-body/80 dark:text-muted-dark mb-1.5">
+              Fee title <span className="text-faint font-normal">· optional</span>
+            </div>
+            <input
+              value={feeTitle}
+              onChange={(e) => setFeeTitle(e.target.value)}
+              placeholder="e.g. Admission, Exam, Books…"
+              maxLength={60}
+              className="w-full rounded-xl border border-line dark:border-line-dark bg-white dark:bg-input-dark px-4 py-3 text-[15px] font-semibold text-ink dark:text-white placeholder:font-normal placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-teal/30"
+            />
+            <div className="text-[12px] text-muted dark:text-muted-dark mt-1">
+              Printed on the receipt and shown in the Accounting fee list.
+            </div>
+          </Card>
+        )}
 
         {/* Amount */}
         <Card className="!rounded-2xl p-4">
@@ -310,7 +392,7 @@ export function Payment() {
               Taka {takaToWords(amountNum)} Only - this is the amount printed on the receipt.
             </div>
           )}
-          {lastTotal > 0 && (
+          {kind === 'monthly' && lastTotal > 0 && (
             <button
               onClick={() => setAmount(String(lastTotal))}
               className="text-[12.5px] font-semibold text-teal mt-2 py-1"
@@ -320,7 +402,10 @@ export function Payment() {
           )}
         </Card>
 
-        {/* Real payment + commission (accounting only - never on the receipt) */}
+        {/* Real payment + commission (accounting only - never on the receipt).
+            *  Fees never carry a commission - the teacher cut only exists on
+            *  monthly tuition. */}
+        {kind === 'monthly' && (
         <Card className="!rounded-2xl p-4 space-y-4">
           <div>
             <div className="text-[13px] font-semibold text-body/80 dark:text-muted-dark mb-1.5">
@@ -386,6 +471,7 @@ export function Payment() {
             </div>
           )}
         </Card>
+        )}
 
         {/* Due (partial payments) */}
         <Card className="!rounded-2xl p-4">
@@ -475,12 +561,15 @@ export function Payment() {
         {/* Period — Month vs Date to Date */}
         <div>
           <div className="flex items-center gap-1.5 mb-1.5">
-            <div className="text-[13px] font-semibold text-body/80 dark:text-muted-dark">Paying for</div>
+            <div className="text-[13px] font-semibold text-body/80 dark:text-muted-dark">
+              {kind === 'fee' ? 'Fee recorded in' : 'Paying for'}
+            </div>
             <span className="group relative inline-flex">
               <IconInfo className="w-3.5 h-3.5 text-muted dark:text-muted-dark" />
               <span className="pointer-events-none absolute left-1/2 top-full z-10 hidden -translate-x-1/2 whitespace-nowrap rounded-lg bg-ink px-2.5 py-1 text-[11px] font-semibold text-white shadow group-hover:block dark:bg-ink-soft">Month the payment is recorded for</span>
             </span>
           </div>
+          {kind === 'monthly' && (
           <div className="flex rounded-xl bg-white dark:bg-card-dark border border-line dark:border-line-dark p-1 mb-2">
             <button
               onClick={() => setPeriodType('month')}
@@ -495,6 +584,7 @@ export function Payment() {
               Date to Date
             </button>
           </div>
+          )}
           <div className="flex items-center justify-between rounded-xl bg-white dark:bg-card-dark border border-line dark:border-line-dark px-3 py-2">
             <button
               onClick={() => setSelPeriod(shiftPeriod(selPeriod, -1))}
@@ -512,7 +602,7 @@ export function Payment() {
               ›
             </button>
           </div>
-          {periodType === 'range' && (
+          {kind === 'monthly' && periodType === 'range' && (
             <div className="grid grid-cols-2 gap-3 mt-3">
               <div>
                 <div className="text-[11px] font-semibold text-muted dark:text-muted-dark mb-1">From</div>
@@ -569,7 +659,7 @@ export function Payment() {
 
         <Button full size="lg" onClick={submit} disabled={busy}>
           {busy ? <Spinner className="text-white" /> : <IconCheck className="w-5 h-5" />}
-          {busy ? 'Saving…' : existing ? 'Save changes' : 'Submit payment'}
+          {busy ? 'Saving…' : existing ? 'Save changes' : kind === 'fee' ? 'Record fee' : 'Submit payment'}
         </Button>
       </div>
 

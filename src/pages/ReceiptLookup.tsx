@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../state/AppContext'
-import { fmtTaka, fmtDate, periodDisplay, fmtInvoiceNo, invoiceDailySeq } from '../lib/format'
+import { fmtTaka, fmtDate, payingForDisplay, fmtInvoiceNo, invoiceDailySeq } from '../lib/format'
 import { Card, EmptyState, PageHeader, Input } from '../components/ui'
 import { IconReceipt, IconArrow } from '../components/Icons'
 
@@ -66,8 +66,13 @@ export function ReceiptLookup() {
                   <div className="text-[14px] font-bold text-ink dark:text-white truncate">
                     {s?.name || '-'} <span className="font-semibold text-muted">· {fmtTaka(p.amount)}</span>
                   </div>
-                  <div className="text-[12px] text-muted dark:text-muted-dark">
-                    {periodDisplay(p as never)} · {fmtDate(p.date)} · {p.mode}
+                  <div className="text-[12px] text-muted dark:text-muted-dark flex items-center gap-1.5">
+                    {p.kind === 'fee' && (
+                      <span className="text-[9.5px] font-bold uppercase tracking-wider text-teal dark:text-teal-bright bg-teal/10 dark:bg-teal/20 rounded px-1.5 py-0.5 shrink-0">
+                        Fee
+                      </span>
+                    )}
+                    <span className="truncate">{payingForDisplay(p)} · {fmtDate(p.date)} · {p.mode}</span>
                   </div>
                 </div>
                 <IconArrow className="w-4 h-4 text-faint dark:text-[#5f7a92]" />

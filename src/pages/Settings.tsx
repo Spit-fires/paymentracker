@@ -208,6 +208,8 @@ export function Settings() {
         Student: s?.name || '',
         Batch: s?.batch || '',
         Phone: s?.phone || '',
+        Kind: p.kind === 'fee' ? 'Fee' : 'Monthly',
+        'Fee title': p.kind === 'fee' ? p.feeLabel || '' : '',
         Mode: p.mode,
         Period: p.period,
         Amount: p.amount,

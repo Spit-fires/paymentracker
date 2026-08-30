@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useApp } from '../state/AppContext'
 import { studentPeriodBalance, studentBalanceFee, studentPeriodPaidAny } from '../lib/ledger'
-import { fmtTaka, periodNow, periodLabel, periodDisplay, fmtDate, fillMessage, todayKey, addDays, fmtWeekday, fmtDateLong, fmtInvoiceNo, invoiceDailySeq } from '../lib/format'
+import { fmtTaka, periodNow, periodLabel, payingForDisplay, fmtDate, fillMessage, todayKey, addDays, fmtWeekday, fmtDateLong, fmtInvoiceNo, invoiceDailySeq } from '../lib/format'
 import { getKV, K, db } from '../lib/db'
 import { getToken } from '../lib/token'
 import { Card, Button, Modal, EmptyState, SectionLabel, PageHeader, useBlobUrl } from '../components/ui'
@@ -15,6 +15,7 @@ import {
   IconReceipt,
   IconArchive,
   IconPhone,
+  IconPlus,
 } from '../components/Icons'
 import { defaultCenter } from '../lib/sync'
 import { waLink, waPhone, openExternal } from '../lib/phone'
@@ -289,9 +290,17 @@ export function StudentDetail() {
             <IconReceipt className="w-5 h-5" /> Record payment
           </Button>
           <Button
+            size="lg"
+            variant="secondary"
+            className="!text-teal dark:!text-teal-bright"
+            onClick={() => navigate(`/payment/${student.id}?fee=1`)}
+          >
+            <IconPlus className="w-5 h-5" /> Record fee
+          </Button>
+          <Button
             variant="secondary"
             size="lg"
-            className="!text-teal dark:!text-teal-bright"
+            className="!text-teal dark:!text-teal-bright col-span-2"
             onClick={() => openExternal(waLink(student.phone, reminderText))}
             disabled={!student.phone}
             title={student.phone ? undefined : 'Add a phone number to send WhatsApp reminders'}
@@ -378,8 +387,13 @@ export function StudentDetail() {
                     {fmtTaka(p.amount)}
                     <span className="text-[12px] font-semibold text-muted ml-2">{p.mode}</span>
                   </div>
-                  <div className="text-[12px] text-muted dark:text-muted-dark truncate">
-                    {periodDisplay(p as never)} · {fmtDate(p.date)}
+                  <div className="text-[12px] text-muted dark:text-muted-dark truncate flex items-center gap-1.5">
+                    {p.kind === 'fee' && (
+                      <span className="text-[9.5px] font-bold uppercase tracking-wider text-teal dark:text-teal-bright bg-teal/10 dark:bg-teal/20 rounded px-1.5 py-0.5 shrink-0">
+                        Fee
+                      </span>
+                    )}
+                    <span className="truncate">{payingForDisplay(p)} · {fmtDate(p.date)}</span>
                   </div>
                 </div>
               </Link>

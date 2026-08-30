@@ -2,14 +2,15 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'motion/react'
 import { useApp } from '../state/AppContext'
-import { fmtTaka, fmtDate } from '../lib/format'
+import { fmtTaka, fmtDate, periodNow, periodLabel } from '../lib/format'
+import { isMonthly, feesForPeriod, feeTotals } from '../lib/ledger'
 import { getKV, setKV, K } from '../lib/db'
 import { Card, PageHeader, EmptyState, cx } from '../components/ui'
 import { PostingPanel } from '../components/PostingPanel'
-import { IconBook, IconSearch, IconUsers } from '../components/Icons'
+import { IconBook, IconSearch, IconUsers, IconCheck, IconReceipt } from '../components/Icons'
 import type { Payment } from '../types'
 
-type Tab = 'ledger' | 'commissions' | 'postings'
+type Tab = 'ledger' | 'commissions' | 'postings' | 'fee'
 
 interface AcctFilters {
   batch: string
@@ -20,21 +21,34 @@ interface AcctFilters {
 
 const num = (v?: number) => (typeof v === 'number' && isFinite(v) ? v : 0)
 
+function shiftPeriod(p: string, delta: number): string {
+  const [y, m] = p.split('-').map(Number)
+  const d = new Date(y, m - 1 + delta, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
 export function Accounting() {
-  const { payments, students, teachers, center } = useApp()
+  const { payments, students, teachers, center, updatePayment } = useApp()
   const [params, setParams] = useSearchParams()
   const tab =
     params.get('tab') === 'commissions'
       ? 'commissions'
       : params.get('tab') === 'postings'
         ? 'postings'
-        : 'ledger'
+        : params.get('tab') === 'fee'
+          ? 'fee'
+          : 'ledger'
 
   const [q, setQ] = useState('')
   const [batch, setBatch] = useState('')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [teacher, setTeacher] = useState('')
+
+  // Fee tab: its own month selector (fees are grouped by the month they were
+  // recorded for) + ids with an in-flight tick toggle
+  const [feePeriod, setFeePeriod] = useState(periodNow())
+  const [ticking, setTicking] = useState<ReadonlySet<string>>(new Set())
 
   // restore the last-used filters (batch/from/to/teacher) from pt_kv - same
   // pattern as the Students page batch filter; writes stay disabled until the
@@ -80,6 +94,8 @@ export function Accounting() {
   const rows = useMemo(() => {
     const ql = q.trim().toLowerCase()
     return payments
+      // one-time fees live in their own Fee tab - never in the monthly ledger
+      .filter(isMonthly)
       .filter(inRange)
       .filter((p) => {
         const s = studentMap.get(p.studentId)
@@ -98,6 +114,36 @@ export function Accounting() {
       })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [payments, students, q, batch, from, to])
+
+  /** Fee-tab rows: one-time fees whose "paying for" month matches the
+   *  selector, filtered by the same search/batch chips. */
+  const feeRows = useMemo(() => {
+    const ql = q.trim().toLowerCase()
+    return feesForPeriod(payments, feePeriod).filter((p) => {
+      const s = studentMap.get(p.studentId)
+      if (!s) return false
+      if (batch && s.batch !== batch) return false
+      if (ql && !s.name.toLowerCase().includes(ql)) return false
+      return true
+    })
+  }, [payments, q, batch, feePeriod, studentMap])
+
+  const feeSums = useMemo(() => feeTotals(feeRows), [feeRows])
+
+  /** Tick/untick a fee row - saved on the payment record and synced. */
+  const onTick = async (p: Payment) => {
+    if (ticking.has(p.id)) return
+    setTicking((s) => new Set(s).add(p.id))
+    try {
+      await updatePayment(p.id, { feeSettled: !p.feeSettled })
+    } finally {
+      setTicking((s) => {
+        const n = new Set(s)
+        n.delete(p.id)
+        return n
+      })
+    }
+  }
 
   const ledgerRows = rows
 
@@ -142,12 +188,13 @@ export function Accounting() {
 
       <div className="px-4">
         {/* Sub-navigation */}
-        <div className="grid grid-cols-3 gap-1.5 p-1 rounded-2xl bg-[#eef2f6] dark:bg-input-dark">
+        <div className="grid grid-cols-4 gap-1.5 p-1 rounded-2xl bg-[#eef2f6] dark:bg-input-dark">
           {(
             [
               ['ledger', 'Ledger'],
-              ['commissions', 'Commissions'],
+              ['commissions', 'Comm.'],
               ['postings', 'Posting'],
+              ['fee', 'Fee'],
             ] as Array<[Tab, string]>
           ).map(([t, label]) => (
             <button
@@ -165,7 +212,8 @@ export function Accounting() {
           ))}
         </div>
 
-        {/* Filters - ledger/commissions only; the posting ledger has its own view */}
+        {/* Filters - ledger/commissions/fee share search + batch; the posting
+            ledger has its own view; from/to only applies to the monthly tabs */}
         {tab !== 'postings' && (
         <div className="mt-3 space-y-2.5">
           <div className="relative">
@@ -238,6 +286,7 @@ export function Accounting() {
             </div>
           )}
 
+          {(tab === 'ledger' || tab === 'commissions') && (
           <div className="grid grid-cols-2 gap-2">
             <label className="block">
               <div className="text-[11.5px] font-semibold text-muted dark:text-muted-dark mb-1">From</div>
@@ -258,6 +307,7 @@ export function Accounting() {
               />
             </label>
           </div>
+          )}
         </div>
         )}
       </div>
@@ -434,6 +484,138 @@ export function Accounting() {
             </Card>
           )}
         </div>
+        </motion.div>
+      )}
+
+      {/* Fees - one-time fee collection, a separate ledger from monthly tuition */}
+      {tab === 'fee' && (
+        <motion.div
+          key="fee"
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -4 }}
+          transition={{ duration: 0.15, ease: [0.25, 0.1, 0.25, 1] }}
+        >
+          <div className="px-4 mt-3 space-y-3">
+            {/* Month selector - fees are grouped by the month recorded for */}
+            <div className="flex items-center justify-between rounded-xl bg-white dark:bg-card-dark border border-line dark:border-line-dark px-3 py-2">
+              <button
+                onClick={() => setFeePeriod(shiftPeriod(feePeriod, -1))}
+                className="w-9 h-9 grid place-items-center rounded-lg text-body dark:text-text-dark text-[18px] active:scale-95 transition"
+                aria-label="Previous month"
+              >
+                ‹
+              </button>
+              <div className="text-[14px] font-semibold text-ink dark:text-white">{periodLabel(feePeriod)}</div>
+              <button
+                onClick={() => setFeePeriod(shiftPeriod(feePeriod, 1))}
+                className="w-9 h-9 grid place-items-center rounded-lg text-body dark:text-text-dark text-[18px] active:scale-95 transition"
+                aria-label="Next month"
+              >
+                ›
+              </button>
+            </div>
+
+            {/* Summary */}
+            <Card className="!rounded-xl p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-teal/10 dark:bg-teal/20 grid place-items-center shrink-0">
+                <IconReceipt className="w-5 h-5 text-teal" />
+              </div>
+              <div className="flex-1">
+                <div className="text-[11px] uppercase tracking-wider text-faint">Fees collected</div>
+                <div className="text-[18px] font-bold text-ink dark:text-white tabular-nums">
+                  {fmtTaka(feeSums.real)}
+                </div>
+              </div>
+              <div className="text-right text-[12px] text-muted dark:text-muted-dark leading-snug">
+                {feeSums.count} fee{feeSums.count === 1 ? '' : 's'}
+                {feeSums.count > 0 && (
+                  <>
+                    <br />
+                    <span className="text-emerald-600 font-semibold">{fmtTaka(feeSums.settled)} ticked</span>
+                  </>
+                )}
+              </div>
+            </Card>
+
+            {/* Fee table - tick box per row, saved on the payment */}
+            {feeRows.length === 0 ? (
+              <Card className="!rounded-2xl">
+                <EmptyState
+                  icon={<IconReceipt className="w-7 h-7" />}
+                  title="No fees"
+                  subtitle={`One-time fees recorded for ${periodLabel(feePeriod)} will appear here.`}
+                />
+              </Card>
+            ) : (
+              <Card className="!rounded-xl overflow-hidden">
+                <div className="grid grid-cols-[44px_1fr_auto_auto] gap-x-2 px-3 py-2.5 text-[11px] font-bold uppercase tracking-wider text-faint border-b border-line dark:border-line-dark">
+                  <div className="text-center">✓</div>
+                  <div>Student - Fee</div>
+                  <div className="text-right w-[68px]">Slip</div>
+                  <div className="text-right w-[68px]">Real</div>
+                </div>
+                <div className="max-h-[46dvh] overflow-y-auto">
+                  {feeRows.map((p) => {
+                    const s = studentMap.get(p.studentId)
+                    const real = num(p.realAmount ?? p.amount)
+                    const busyTick = ticking.has(p.id)
+                    return (
+                      <div
+                        key={p.id}
+                        className={cx(
+                          'grid grid-cols-[44px_1fr_auto_auto] gap-x-2 px-3 py-2.5 border-b border-line/60 dark:border-line-dark/60 last:border-0 transition-colors',
+                          p.feeSettled && 'bg-teal/[0.05] dark:bg-teal/[0.08]',
+                        )}
+                      >
+                        <button
+                          onClick={() => void onTick(p)}
+                          disabled={busyTick}
+                          className={cx(
+                            'w-8 h-8 grid place-items-center rounded-lg border-2 transition active:scale-90',
+                            p.feeSettled
+                              ? 'bg-teal border-teal text-white'
+                              : 'border-line dark:border-line-dark text-transparent hover:border-teal/50',
+                            busyTick && 'opacity-50',
+                          )}
+                          aria-label={p.feeSettled ? 'Untick this fee' : 'Tick this fee'}
+                          title="Private tracking tick - saved instantly"
+                        >
+                          <IconCheck className="w-4.5 h-4.5" />
+                        </button>
+                        <div className="min-w-0">
+                          <div className="text-[13.5px] font-semibold text-ink dark:text-white truncate">
+                            {s?.name || '-'}
+                          </div>
+                          <div className="text-[11px] text-faint truncate">
+                            {p.feeLabel ? `${p.feeLabel} · ` : ''}{s?.batch || 'No batch'} · {fmtDate(p.date)}
+                          </div>
+                        </div>
+                        <div className="text-right w-[68px] text-[12.5px] text-body dark:text-text-dark tabular-nums pt-0.5">
+                          {fmtTaka(p.amount)}
+                        </div>
+                        <div className="text-right w-[68px] text-[12.5px] font-bold text-ink dark:text-white tabular-nums pt-0.5">
+                          {fmtTaka(real)}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="grid grid-cols-[44px_1fr_auto_auto] gap-x-2 px-3 py-2.5 bg-cream dark:bg-input-dark border-t border-line dark:border-line-dark">
+                  <div />
+                  <div className="text-[12.5px] font-bold text-ink dark:text-white pt-0.5">
+                    Total · {feeSums.count} fee{feeSums.count === 1 ? '' : 's'}
+                  </div>
+                  <div className="text-right w-[68px] text-[13px] font-bold text-ink dark:text-white tabular-nums">
+                    {fmtTaka(feeSums.slip)}
+                  </div>
+                  <div className="text-right w-[68px] text-[13px] font-bold text-teal dark:text-teal-bright tabular-nums">
+                    {fmtTaka(feeSums.real)}
+                  </div>
+                </div>
+              </Card>
+            )}
+          </div>
         </motion.div>
       )}
       </AnimatePresence>

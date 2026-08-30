@@ -43,6 +43,15 @@ export interface Payment {
   /** per-day sequence for invoice number (DDMMYYUE##), resets each calendar day */
   dailySeq?: number
   studentId: string
+  /** 'monthly' (default/undefined = monthly tuition) or 'fee' - a one-time
+   *  fee (admission/exam/books…) tracked separately from monthly accounting
+   *  in the Accounting > Fee tab */
+  kind?: 'monthly' | 'fee'
+  /** free-text title for one-time fees, e.g. "Admission", "Exam" - shown on
+   *  the receipt and the Fee tab; monthly payments never set this */
+  feeLabel?: string
+  /** Fee-tab tick box - private tracking marker; toggling syncs like any edit */
+  feeSettled?: boolean
   /** slip amount - what is written on the printed receipt */
   amount: number
   /** what the center actually collected; blank/undefined = same as slip */

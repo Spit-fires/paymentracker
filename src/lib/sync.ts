@@ -155,11 +155,13 @@ export async function exportToSheet(
     ]),
   ])
   await client().sheetValues(id, 'Payments!A1', [
-    ['Receipt No', 'Date', 'Student', 'Period', 'Mode', 'Amount (৳)', 'Due (৳)', 'Received by'],
+    ['Receipt No', 'Date', 'Student', 'Kind', 'Fee title', 'Period', 'Mode', 'Amount (৳)', 'Due (৳)', 'Received by'],
     ...payments.map((p) => [
       p.receiptNo,
       fmtDate(p.date),
       names.get(p.studentId) || '',
+      p.kind === 'fee' ? 'Fee' : 'Monthly',
+      p.kind === 'fee' ? p.feeLabel || '' : '',
       p.period,
       p.mode,
       p.amount,
@@ -327,6 +329,9 @@ function paymentSig(p: Payment): string {
   return JSON.stringify([
     p.receiptNo,
     p.studentId,
+    p.kind || 'monthly',
+    p.feeLabel || '',
+    p.feeSettled ?? false,
     p.amount,
     p.realAmount ?? null,
     p.commission ?? null,

@@ -68,6 +68,10 @@ export interface NewPaymentInput {
   periodType?: 'month' | 'range'
   periodFrom?: number
   periodTo?: number
+  /** 'monthly' (default) or 'fee' - one-time fees are accounted separately */
+  kind?: 'monthly' | 'fee'
+  /** free-text title for one-time fees (admission/exam/books…) */
+  feeLabel?: string
   date: number
   pngBlob: Blob
 }
@@ -623,9 +627,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         receiptNo: next,
         dailySeq: nextDaily,
         studentId: input.studentId,
+        kind: input.kind,
+        feeLabel: input.kind === 'fee' ? input.feeLabel : undefined,
         amount: input.amount,
         realAmount: input.realAmount,
-        commission: input.commission,
+        commission: input.kind === 'fee' ? undefined : input.commission,
         due: input.due || 0,
         mode: input.mode,
         receivedBy: input.receivedBy,
