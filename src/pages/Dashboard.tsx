@@ -4,11 +4,11 @@ import { motion } from 'motion/react'
 import { useApp } from '../state/AppContext'
 import { balanceOf, duesForPeriod, monthTotals, isMonthly, type DuesRow } from '../lib/ledger'
 import { fmtTaka, periodNow, periodLabel } from '../lib/format'
-import { Card, Button } from '../components/ui'
+import { Card } from '../components/ui'
 import { SyncIndicator } from '../components/Layout'
 import { ReauthBanner } from '../components/ReauthBanner'
 import { fadeUp, useCountUp } from '../components/anim'
-import { IconReceipt, IconSearch, IconCheck, IconCalendar, IconUsers, IconClock, IconPlus } from '../components/Icons'
+import { IconReceipt, IconSearch, IconCheck, IconCalendar, IconUsers, IconClock } from '../components/Icons'
 
 function shiftPeriod(p: string, delta: number): string {
   const [y, m] = p.split('-').map(Number)
@@ -170,7 +170,7 @@ export function Dashboard() {
       </div>
 
       {/* Quick actions - Record payment moved down here keeping its dark
-          prominent design as a full-width button; Record fee sits below */}
+          prominent design as a full-width button */}
       <div className="px-4 mt-3 space-y-2.5">
         <button
           onClick={() => navigate('/students?mode=record')}
@@ -178,15 +178,6 @@ export function Dashboard() {
         >
           <IconReceipt className="w-5 h-5" /> Record payment
         </button>
-        <Button
-          variant="secondary"
-          size="lg"
-          full
-          className="!text-teal dark:!text-teal-bright"
-          onClick={() => navigate('/students?mode=record&fee=1')}
-        >
-          <IconPlus className="w-5 h-5" /> Record fee
-        </Button>
       </div>
 
       {/* Batch summary */}
