@@ -112,6 +112,7 @@ export function defaultCenter(): Center {
     reminderMsg:
       'Assalamu alaikum {student},\n\nThis is a friendly reminder that your {period} fee is pending for {center}. Please make the payment at your earliest convenience. Thank you!',
     receiptMsg: '{student} এর {period} বেতন পরিশোধের রশিদ দেখতে নিচের লিংকে ক্লিক করুন। {link}',
+    feeReceiptMsg: '{student} এর {fee} পরিশোধের রশিদ দেখতে নিচের লিংকে ক্লিক করুন। {link}',
     attendanceMsg:
       'Assalamu alaikum {student},\n\nYou were marked absent on {date} for {batch} at {center}. Please let us know if everything is okay. Thank you!',
     routineMsg:

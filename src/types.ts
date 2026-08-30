@@ -164,6 +164,9 @@ export interface Center {
   reminderMsg?: string
   /** WhatsApp receipt-share template; tokens: {student} {period} {center} {link} {date} {batch} */
   receiptMsg?: string
+  /** WhatsApp one-time-fee receipt-share template; tokens: {student} {fee}
+   *  {amount} {period} {center} {link} {date} {batch} */
+  feeReceiptMsg?: string
   /** WhatsApp absent-student template; tokens: {student} {date} {batch} {center} */
   attendanceMsg?: string
   /** WhatsApp routine-send template; tokens: {student} {date} {batch} {center} {routine} {routine date} {routine day} */

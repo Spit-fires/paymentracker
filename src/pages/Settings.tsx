@@ -448,6 +448,17 @@ export function Settings() {
             />
           </Field>
           <Field
+            label="Fee receipt message"
+            hint="Sent when sharing a one-time fee receipt on WhatsApp. {fee} is the fee title (or 'One-time fee'), {amount} the slip amount, {period} the month it was recorded for, {link} the Drive link."
+          >
+            <Textarea
+              value={form.feeReceiptMsg ?? defaultCenter().feeReceiptMsg ?? ''}
+              onChange={(e) => setForm({ ...form, feeReceiptMsg: e.target.value })}
+              rows={3}
+              placeholder={defaultCenter().feeReceiptMsg}
+            />
+          </Field>
+          <Field
             label="Absent student message"
             hint="Sent to absent students from the Attendance page. {date}, {batch}, {routine}, {routine date} and {routine day} are filled in automatically - plan the routine in the Routine panel first."
           >
@@ -472,7 +483,7 @@ export function Settings() {
           <p className="text-[11.5px] text-faint">
             Available tokens:{" "}
             <span className="font-mono">
-              {"{student} {period} {center} {link} {date} {batch} {routine} {routine date} {routine day}"}
+              {"{student} {period} {fee} {amount} {center} {link} {date} {batch} {routine} {routine date} {routine day}"}
             </span>{" "}
             - leave a field empty to keep the default message.
           </p>

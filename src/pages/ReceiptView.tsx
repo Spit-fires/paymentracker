@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toPng as htmlToImageToPng } from 'html-to-image'
 import { domToPng } from 'modern-screenshot'
 import { useApp } from '../state/AppContext'
-import { receiptFileName, payingForDisplay, fillMessage, fmtDateLong, fmtInvoiceNo, invoiceDailySeq } from '../lib/format'
+import { receiptFileName, payingForDisplay, fillMessage, fmtDateLong, fmtInvoiceNo, invoiceDailySeq, fmtTaka, periodLabel } from '../lib/format'
 import { Button, PageHeader } from '../components/ui'
 import { ReceiptCard } from '../components/ReceiptCard'
 import { IconPrint, IconShare, IconDownload, IconWhatsApp } from '../components/Icons'
@@ -66,10 +66,20 @@ export function ReceiptView() {
   const fileName = receiptFileName(payment.receiptNo, payment.date)
   const dailySeq = payment.dailySeq ?? invoiceDailySeq(payment, payments)
 
-  const messageTemplate = (center.receiptMsg || defaultCenter().receiptMsg || '').trim()
+  // one-time fee receipts get their own template; monthly receipts keep the
+  // classic receipt message. Extra vars ({fee} {amount}) are ignored by the
+  // monthly template and vice versa - fillMessage only swaps known tokens.
+  const isFee = payment.kind === 'fee'
+  const messageTemplate = (
+    (isFee
+      ? center.feeReceiptMsg || defaultCenter().feeReceiptMsg
+      : center.receiptMsg || defaultCenter().receiptMsg) || ''
+  ).trim()
   const msgVars = {
     student: student.name,
-    period: payingForDisplay(payment),
+    period: isFee ? periodLabel(payment.period) : payingForDisplay(payment),
+    fee: payment.feeLabel?.trim() || 'One-time fee',
+    amount: fmtTaka(payment.amount),
     center: center.name || defaultCenter().name,
     date: fmtDateLong(payment.date),
     batch: student.batch || '',
