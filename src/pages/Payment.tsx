@@ -50,9 +50,25 @@ export function Payment() {
     [prefill, payments],
   )
 
+  // saved fee titles - every label used on a one-time fee becomes a dropdown
+  // option (same pattern as school names derived from students)
+  const feeTitles = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          payments
+            .filter((p) => p.kind === 'fee' && p.feeLabel?.trim())
+            .map((p) => p.feeLabel!.trim()),
+        ),
+      ).sort(),
+    [payments],
+  )
+
   const period = periodNow()
   const [kind, setKind] = useState<'monthly' | 'fee'>(feeParam ? 'fee' : 'monthly')
   const [feeTitle, setFeeTitle] = useState('')
+  // "Other" mode for the fee-title dropdown - mirrors the school picker
+  const [feeOther, setFeeOther] = useState(false)
   const [amount, setAmount] = useState('')
   const [realAmount, setRealAmount] = useState('')
   const [commissionOn, setCommissionOn] = useState(false)
@@ -85,6 +101,9 @@ export function Payment() {
       if (p) {
         setKind(p.kind === 'fee' ? 'fee' : 'monthly')
         setFeeTitle(p.kind === 'fee' ? p.feeLabel || '' : '')
+        // a prefilled label is always a known option (the record itself is in
+        // payments) - but stay safe with labels that somehow aren't
+        setFeeOther(p.kind === 'fee' ? !!p.feeLabel?.trim() && !feeTitles.includes(p.feeLabel.trim()) : false)
         setAmount(String(p.amount))
         setRealAmount(p.realAmount != null ? String(p.realAmount) : '')
         setCommissionOn(p.commission != null)
@@ -115,7 +134,11 @@ export function Payment() {
       }
     }
     // one-time fees never autofill - each fee is its own amount
-    if (feeParam) return
+    if (feeParam) {
+      setFeeTitle('')
+      setFeeOther(false)
+      return
+    }
     setAmount(String(autofillAmount(students, payments, student.id, period)))
     // real payment prefills from the student's recorded real fee, else last
     // month's real total - blank keeps it "same as slip"
@@ -351,21 +374,47 @@ export function Payment() {
           )}
         </Card>
 
-        {/* Fee title - one-time fees only, free text (Admission/Exam/Books…) */}
+        {/* Fee title - one-time fees only; dropdown of saved titles with an
+            "Other" free-text option - new titles are remembered (like schools) */}
         {kind === 'fee' && (
           <Card className="!rounded-2xl p-4">
             <div className="text-[13px] font-semibold text-body/80 dark:text-muted-dark mb-1.5">
               Fee title <span className="text-faint font-normal">· optional</span>
             </div>
-            <input
-              value={feeTitle}
-              onChange={(e) => setFeeTitle(e.target.value)}
-              placeholder="e.g. Admission, Exam, Books…"
-              maxLength={60}
-              className="w-full rounded-xl border border-line dark:border-line-dark bg-white dark:bg-input-dark px-4 py-3 text-[15px] font-semibold text-ink dark:text-white placeholder:font-normal placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-teal/30"
-            />
+            <select
+              value={feeOther ? 'Other' : feeTitle}
+              onChange={(e) => {
+                const v = e.target.value
+                if (v === 'Other') {
+                  setFeeOther(true)
+                  // keep a typed value if one is already there, otherwise clear
+                  if (feeTitles.includes(feeTitle)) setFeeTitle('')
+                } else {
+                  setFeeOther(false)
+                  setFeeTitle(v)
+                }
+              }}
+              className="w-full rounded-xl bg-white dark:bg-input-dark border border-line dark:border-line-dark px-3 py-3 text-[14px] font-semibold text-ink dark:text-white focus:outline-none focus:ring-2 focus:ring-teal/25"
+            >
+              <option value="">None — no title</option>
+              {feeTitles.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+              <option value="Other">Other — new fee title</option>
+            </select>
+            {feeOther && (
+              <input
+                value={feeTitle}
+                onChange={(e) => setFeeTitle(e.target.value)}
+                placeholder="Type fee title (e.g. Admission, Exam, Books…)"
+                maxLength={60}
+                className="mt-2 w-full rounded-xl border border-line dark:border-line-dark bg-white dark:bg-input-dark px-4 py-3 text-[15px] font-semibold text-ink dark:text-white placeholder:font-normal placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-teal/30"
+              />
+            )}
             <div className="text-[12px] text-muted dark:text-muted-dark mt-1">
-              Printed on the receipt and shown in the Accounting fee list.
+              Printed on the receipt and shown in the Accounting fee list. Titles you type are saved as options.
             </div>
           </Card>
         )}
