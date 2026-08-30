@@ -130,12 +130,13 @@ export function Accounting() {
 
   const feeSums = useMemo(() => feeTotals(feeRows), [feeRows])
 
-  /** Tick/untick a fee row - saved on the payment record and synced. */
-  const onTick = async (p: Payment) => {
+  /** Tick/untick a row (fee or commission) - saved on the payment record and
+   *  synced like any edit. */
+  const onTick = async (p: Payment, field: 'feeSettled' | 'commSettled') => {
     if (ticking.has(p.id)) return
     setTicking((s) => new Set(s).add(p.id))
     try {
-      await updatePayment(p.id, { feeSettled: !p.feeSettled })
+      await updatePayment(p.id, { [field]: !p[field] } as Partial<Payment>)
     } finally {
       setTicking((s) => {
         const n = new Set(s)
@@ -174,6 +175,15 @@ export function Accounting() {
 
   const commTotal = useMemo(
     () => commissionRows.reduce((a, p) => a + num(p.commission), 0),
+    [commissionRows],
+  )
+  /** ticked commissions - the private payout-tracking split */
+  const commSettled = useMemo(
+    () =>
+      commissionRows.reduce(
+        (a, p) => ({ total: a.total + (p.commSettled ? num(p.commission) : 0), count: a.count + (p.commSettled ? 1 : 0) }),
+        { total: 0, count: 0 },
+      ),
     [commissionRows],
   )
 
@@ -428,9 +438,15 @@ export function Accounting() {
                 {fmtTaka(commTotal)}
               </div>
             </div>
-            <div className="text-right text-[12px] text-muted dark:text-muted-dark">
+            <div className="text-right text-[12px] text-muted dark:text-muted-dark leading-snug">
               {commissionRows.length} receipt{commissionRows.length === 1 ? '' : 's'}
               {teacher ? ` · ${teacher}` : ''}
+              {commissionRows.length > 0 && (
+                <>
+                  <br />
+                  <span className="text-emerald-600 font-semibold">{fmtTaka(commSettled.total)} ticked</span>
+                </>
+              )}
             </div>
           </Card>
 
@@ -448,18 +464,38 @@ export function Accounting() {
             </Card>
           ) : (
             <Card className="!rounded-xl overflow-hidden">
-              <div className="grid grid-cols-[1fr_auto] gap-x-2 px-3 py-2.5 text-[11px] font-bold uppercase tracking-wider text-faint border-b border-line dark:border-line-dark">
+              <div className="grid grid-cols-[44px_1fr_auto] gap-x-2 px-3 py-2.5 text-[11px] font-bold uppercase tracking-wider text-faint border-b border-line dark:border-line-dark">
+                <div className="text-center">✓</div>
                 <div>Student - Batch</div>
                 <div className="text-right w-[88px]">Commission</div>
               </div>
               <div className="max-h-[46dvh] overflow-y-auto">
                 {commissionRows.map((p) => {
                   const s = studentMap.get(p.studentId)
+                  const busyTick = ticking.has(p.id)
                   return (
                     <div
                       key={p.id}
-                      className="grid grid-cols-[1fr_auto] gap-x-2 px-3 py-2.5 border-b border-line/60 dark:border-line-dark/60 last:border-0"
+                      className={cx(
+                        'grid grid-cols-[44px_1fr_auto] gap-x-2 px-3 py-2.5 border-b border-line/60 dark:border-line-dark/60 last:border-0 transition-colors',
+                        p.commSettled && 'bg-teal/[0.05] dark:bg-teal/[0.08]',
+                      )}
                     >
+                      <button
+                        onClick={() => void onTick(p, 'commSettled')}
+                        disabled={busyTick}
+                        className={cx(
+                          'w-8 h-8 grid place-items-center rounded-lg border-2 transition active:scale-90',
+                          p.commSettled
+                            ? 'bg-teal border-teal text-white'
+                            : 'border-line dark:border-line-dark text-transparent hover:border-teal/50',
+                          busyTick && 'opacity-50',
+                        )}
+                        aria-label={p.commSettled ? 'Untick this commission' : 'Tick this commission'}
+                        title="Private tracking tick - saved instantly"
+                      >
+                        <IconCheck className="w-4.5 h-4.5" />
+                      </button>
                       <div className="min-w-0">
                         <div className="text-[13.5px] font-semibold text-ink dark:text-white truncate">
                           {s?.name || '-'}
@@ -475,7 +511,8 @@ export function Accounting() {
                   )
                 })}
               </div>
-              <div className="grid grid-cols-[1fr_auto] gap-x-2 px-3 py-2.5 bg-cream dark:bg-input-dark border-t border-line dark:border-line-dark">
+              <div className="grid grid-cols-[44px_1fr_auto] gap-x-2 px-3 py-2.5 bg-cream dark:bg-input-dark border-t border-line dark:border-line-dark">
+                <div />
                 <div className="text-[12.5px] font-bold text-ink dark:text-white pt-0.5">Total</div>
                 <div className="text-right w-[88px] text-[13px] font-bold text-teal dark:text-teal-bright tabular-nums">
                   {fmtTaka(commTotal)}
@@ -569,7 +606,7 @@ export function Accounting() {
                         )}
                       >
                         <button
-                          onClick={() => void onTick(p)}
+                          onClick={() => void onTick(p, 'feeSettled')}
                           disabled={busyTick}
                           className={cx(
                             'w-8 h-8 grid place-items-center rounded-lg border-2 transition active:scale-90',

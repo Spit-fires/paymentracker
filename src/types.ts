@@ -52,6 +52,9 @@ export interface Payment {
   feeLabel?: string
   /** Fee-tab tick box - private tracking marker; toggling syncs like any edit */
   feeSettled?: boolean
+  /** Commissions-tab tick box - private tracking marker for the teacher's
+   *  payout; toggling syncs like any edit */
+  commSettled?: boolean
   /** slip amount - what is written on the printed receipt */
   amount: number
   /** what the center actually collected; blank/undefined = same as slip */

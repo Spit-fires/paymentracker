@@ -332,6 +332,7 @@ function paymentSig(p: Payment): string {
     p.kind || 'monthly',
     p.feeLabel || '',
     p.feeSettled ?? false,
+    p.commSettled ?? false,
     p.amount,
     p.realAmount ?? null,
     p.commission ?? null,
