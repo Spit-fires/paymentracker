@@ -159,26 +159,25 @@ export function Dashboard() {
           </div>
         </Card>
         <button onClick={() => navigate('/routines')} className="text-left">
-          <div className="h-full flex flex-col justify-center rounded-2xl bg-ink text-white dark:bg-ink-soft p-3.5 border border-ink dark:border-ink-soft shadow-[0_2px_8px_rgba(18,49,79,0.28)] active:scale-[0.98] transition">
-            <div className="text-[11px] font-semibold text-white/70">Routine</div>
-            <div className="inline-flex items-center gap-1.5 text-white font-bold mt-1">
-              <IconClock className="w-4 h-4" />
+          <div className="h-full flex flex-col justify-center rounded-2xl bg-white dark:bg-card-dark border border-line dark:border-line-dark p-3.5 active:scale-[0.98] transition">
+            <div className="text-[11px] font-semibold text-muted dark:text-muted-dark">Routine</div>
+            <div className="inline-flex items-center gap-1.5 text-ink dark:text-white font-bold mt-1">
+              <IconClock className="w-4 h-4 text-teal" />
               <span className="text-[14px] leading-tight">Tap to plan</span>
             </div>
           </div>
         </button>
       </div>
 
-      {/* Quick actions - record a monthly payment or a one-time fee */}
-      <div className="px-4 mt-3 grid grid-cols-2 gap-2.5">
-        <Button
-          variant="secondary"
-          size="lg"
-          full
+      {/* Quick actions - Record payment moved down here keeping its dark
+          prominent design as a full-width button; Record fee sits below */}
+      <div className="px-4 mt-3 space-y-2.5">
+        <button
           onClick={() => navigate('/students?mode=record')}
+          className="w-full flex items-center justify-center gap-2 rounded-2xl bg-ink text-white dark:bg-ink-soft border border-ink dark:border-ink-soft shadow-[0_2px_8px_rgba(18,49,79,0.28)] py-3.5 text-[15px] font-bold active:scale-[0.98] transition"
         >
-          <IconReceipt className="w-5 h-5" /> Payment
-        </Button>
+          <IconReceipt className="w-5 h-5" /> Record payment
+        </button>
         <Button
           variant="secondary"
           size="lg"
@@ -186,7 +185,7 @@ export function Dashboard() {
           className="!text-teal dark:!text-teal-bright"
           onClick={() => navigate('/students?mode=record&fee=1')}
         >
-          <IconPlus className="w-5 h-5" /> Fee
+          <IconPlus className="w-5 h-5" /> Record fee
         </Button>
       </div>
 
