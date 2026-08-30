@@ -13,7 +13,7 @@ import { fmtTaka, takaToWords, periodNow, periodLabel, receiptFileName, dayKey, 
 import type { PaymentMode, Teacher } from '../types'
 import { Card, Button, PageHeader, Spinner, useBlobUrl } from '../components/ui'
 import { ReceiptCard } from '../components/ReceiptCard'
-import { IconCheck, IconReceipt, IconPlus } from '../components/Icons'
+import { IconCheck, IconReceipt, IconPlus, IconInfo } from '../components/Icons'
 
 const MODES: PaymentMode[] = ['Cash', 'Bkash', 'Nagad', 'Other']
 
@@ -155,7 +155,7 @@ export function Payment() {
     const isRange = periodType === 'range'
     const fromMs = isRange ? new Date(rangeFrom + 'T00:00:00').getTime() || dateMs : 0
     const toMs = isRange ? new Date(rangeTo + 'T00:00:00').getTime() || fromMs : 0
-    const periodVal = isRange ? `${dayKey(new Date(fromMs))}_${dayKey(new Date(toMs))}` : selPeriod
+    const periodVal = selPeriod
     return {
       id: 'preview',
       receiptNo: existing ? existing.receiptNo : receiptSeq + 1,
@@ -217,7 +217,7 @@ export function Payment() {
       const isRange = periodType === 'range'
       const fromMs = isRange ? new Date(rangeFrom + 'T00:00:00').getTime() : 0
       const toMs = isRange ? new Date(rangeTo + 'T00:00:00').getTime() : 0
-      const periodVal = isRange ? `${dayKey(new Date(fromMs))}_${dayKey(new Date(toMs))}` : selPeriod
+      const periodVal = selPeriod
       if (existing) {
         await updatePayment(existing.id, {
           amount: amountNum,
@@ -474,8 +474,12 @@ export function Payment() {
 
         {/* Period — Month vs Date to Date */}
         <div>
-          <div className="text-[13px] font-semibold text-body/80 dark:text-muted-dark mb-1.5">
-            Paying for
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <div className="text-[13px] font-semibold text-body/80 dark:text-muted-dark">Paying for</div>
+            <span className="group relative inline-flex">
+              <IconInfo className="w-3.5 h-3.5 text-muted dark:text-muted-dark" />
+              <span className="pointer-events-none absolute left-1/2 top-full z-10 hidden -translate-x-1/2 whitespace-nowrap rounded-lg bg-ink px-2.5 py-1 text-[11px] font-semibold text-white shadow group-hover:block dark:bg-ink-soft">Month the payment is recorded for</span>
+            </span>
           </div>
           <div className="flex rounded-xl bg-white dark:bg-card-dark border border-line dark:border-line-dark p-1 mb-2">
             <button
@@ -491,26 +495,25 @@ export function Payment() {
               Date to Date
             </button>
           </div>
-          {periodType === 'month' ? (
-            <div className="flex items-center justify-between rounded-xl bg-white dark:bg-card-dark border border-line dark:border-line-dark px-3 py-2">
-              <button
-                onClick={() => setSelPeriod(shiftPeriod(selPeriod, -1))}
-                className="w-9 h-9 grid place-items-center rounded-lg text-body dark:text-text-dark text-[18px] active:scale-95 transition"
-                aria-label="Previous month"
-              >
-                ‹
-              </button>
-              <div className="text-[14px] font-semibold text-ink dark:text-white">{periodLabel(selPeriod)}</div>
-              <button
-                onClick={() => setSelPeriod(shiftPeriod(selPeriod, 1))}
-                className="w-9 h-9 grid place-items-center rounded-lg text-body dark:text-text-dark text-[18px] active:scale-95 transition"
-                aria-label="Next month"
-              >
-                ›
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-3">
+          <div className="flex items-center justify-between rounded-xl bg-white dark:bg-card-dark border border-line dark:border-line-dark px-3 py-2">
+            <button
+              onClick={() => setSelPeriod(shiftPeriod(selPeriod, -1))}
+              className="w-9 h-9 grid place-items-center rounded-lg text-body dark:text-text-dark text-[18px] active:scale-95 transition"
+              aria-label="Previous month"
+            >
+              ‹
+            </button>
+            <div className="text-[14px] font-semibold text-ink dark:text-white">{periodLabel(selPeriod)}</div>
+            <button
+              onClick={() => setSelPeriod(shiftPeriod(selPeriod, 1))}
+              className="w-9 h-9 grid place-items-center rounded-lg text-body dark:text-text-dark text-[18px] active:scale-95 transition"
+              aria-label="Next month"
+            >
+              ›
+            </button>
+          </div>
+          {periodType === 'range' && (
+            <div className="grid grid-cols-2 gap-3 mt-3">
               <div>
                 <div className="text-[11px] font-semibold text-muted dark:text-muted-dark mb-1">From</div>
                 <input
