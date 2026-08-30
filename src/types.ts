@@ -54,7 +54,13 @@ export interface Payment {
   due?: number
   mode: PaymentMode
   receivedBy?: ReceivedBy
-  period: string // 'YYYY-MM' month paid for
+  period: string // 'YYYY-MM' month paid for (or range key when periodType is 'range')
+  /** 'month' (default) or 'range' — range uses periodFrom/periodTo */
+  periodType?: 'month' | 'range'
+  /** when periodType is 'range' — inclusive start day */
+  periodFrom?: number
+  /** when periodType is 'range' — inclusive end day */
+  periodTo?: number
   date: number // epoch ms when recorded
   pngFileId?: string
   pngBlob?: Blob

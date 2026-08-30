@@ -57,6 +57,15 @@ export function Payment() {
   const [mode, setMode] = useState<PaymentMode>('Cash')
   const [receivedBy, setReceivedBy] = useState<Teacher | undefined>()
   const [selPeriod, setSelPeriod] = useState(period)
+  const [periodType, setPeriodType] = useState<'month' | 'range'>('month')
+  const [rangeFrom, setRangeFrom] = useState(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  })
+  const [rangeTo, setRangeTo] = useState(() => {
+    const d = new Date(Date.now() + 6 * 24 * 60 * 60 * 1000)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  })
   const [receivedDate, setReceivedDate] = useState(() => {
     const d = new Date()
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -80,7 +89,16 @@ export function Payment() {
           const t = teachers.find((x) => x.name === p.receivedBy?.name)
           setReceivedBy(t || { id: p.receivedBy.name, name: p.receivedBy.name, phone: p.receivedBy.phone })
         }
-        setSelPeriod(p.period)
+        if (p.periodType === 'range' && p.periodFrom && p.periodTo) {
+          setPeriodType('range')
+          const f = new Date(p.periodFrom)
+          const t = new Date(p.periodTo)
+          setRangeFrom(`${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}-${String(f.getDate()).padStart(2, '0')}`)
+          setRangeTo(`${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`)
+        } else {
+          setPeriodType('month')
+          setSelPeriod(p.period)
+        }
         const d = new Date(p.date)
         setReceivedDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
         return
@@ -134,6 +152,10 @@ export function Payment() {
       const missingOnDay = sameDay.filter((x) => x.dailySeq == null).length
       return Math.max(maxDaily, missingOnDay) + 1
     })()
+    const isRange = periodType === 'range'
+    const fromMs = isRange ? new Date(rangeFrom + 'T00:00:00').getTime() || dateMs : 0
+    const toMs = isRange ? new Date(rangeTo + 'T00:00:00').getTime() || fromMs : 0
+    const periodVal = isRange ? `${dayKey(new Date(fromMs))}_${dayKey(new Date(toMs))}` : selPeriod
     return {
       id: 'preview',
       receiptNo: existing ? existing.receiptNo : receiptSeq + 1,
@@ -143,11 +165,14 @@ export function Payment() {
       due: dueNum,
       mode,
       receivedBy: receivedBy ? { name: receivedBy.name, phone: receivedBy.phone } : undefined,
-      period: selPeriod,
+      period: periodVal,
+      periodType: periodType as 'month' | 'range',
+      periodFrom: isRange ? fromMs : undefined,
+      periodTo: isRange ? toMs : undefined,
       date: existing ? existing.date : dateMs,
       updatedAt: Date.now(),
     }
-  }, [student, existing, amountNum, dueNum, mode, receivedBy, selPeriod, receiptSeq, receivedDate, payments])
+  }, [student, existing, amountNum, dueNum, mode, receivedBy, selPeriod, periodType, rangeFrom, rangeTo, receiptSeq, receivedDate, payments])
 
   if (!student) {
     return (
@@ -162,6 +187,11 @@ export function Payment() {
 
   const submit = async () => {
     if (amountNum <= 0) return showToast('Enter a valid amount', 'err')
+    if (periodType === 'range') {
+      const fromMs = new Date(rangeFrom + 'T00:00:00').getTime()
+      const toMs = new Date(rangeTo + 'T00:00:00').getTime()
+      if (!fromMs || !toMs || fromMs > toMs) return showToast('Select a valid date range', 'err')
+    }
     if (commissionNum > 0 && !receivedBy) {
       showToast('Commission requires selecting the receiving teacher', 'err')
       return
@@ -184,6 +214,10 @@ export function Payment() {
       }))
       const dataUrl = await capturePng(previewRef.current)
       const blob = await fetch(dataUrl).then((r) => r.blob())
+      const isRange = periodType === 'range'
+      const fromMs = isRange ? new Date(rangeFrom + 'T00:00:00').getTime() : 0
+      const toMs = isRange ? new Date(rangeTo + 'T00:00:00').getTime() : 0
+      const periodVal = isRange ? `${dayKey(new Date(fromMs))}_${dayKey(new Date(toMs))}` : selPeriod
       if (existing) {
         await updatePayment(existing.id, {
           amount: amountNum,
@@ -192,7 +226,10 @@ export function Payment() {
           due: dueNum,
           mode,
           receivedBy: receivedBy ? { name: receivedBy.name, phone: receivedBy.phone } : undefined,
-          period: selPeriod,
+          period: periodVal,
+          periodType: periodType,
+          periodFrom: isRange ? fromMs : undefined,
+          periodTo: isRange ? toMs : undefined,
           pngBlob: blob,
         })
         showToast(`Invoice ${fmtInvoiceNo(existing.date, existing.dailySeq ?? invoiceDailySeq(existing, payments))} updated`, 'ok')
@@ -206,7 +243,10 @@ export function Payment() {
           due: dueNum,
           mode,
           receivedBy: receivedBy ? { name: receivedBy.name, phone: receivedBy.phone } : undefined,
-          period: selPeriod,
+          period: periodVal,
+          periodType: periodType,
+          periodFrom: isRange ? fromMs : undefined,
+          periodTo: isRange ? toMs : undefined,
           date: new Date(receivedDate + 'T00:00:00').getTime() || Date.now(),
           pngBlob: blob,
         })
@@ -432,28 +472,67 @@ export function Payment() {
           )}
         </div>
 
-        {/* Period */}
+        {/* Period — Month vs Date to Date */}
         <div>
           <div className="text-[13px] font-semibold text-body/80 dark:text-muted-dark mb-1.5">
             Paying for
           </div>
-          <div className="flex items-center justify-between rounded-xl bg-white dark:bg-card-dark border border-line dark:border-line-dark px-3 py-2">
+          <div className="flex rounded-xl bg-white dark:bg-card-dark border border-line dark:border-line-dark p-1 mb-2">
             <button
-              onClick={() => setSelPeriod(shiftPeriod(selPeriod, -1))}
-              className="w-9 h-9 grid place-items-center rounded-lg text-body dark:text-text-dark text-[18px] active:scale-95 transition"
-              aria-label="Previous month"
+              onClick={() => setPeriodType('month')}
+              className={`flex-1 rounded-lg py-2.5 text-[13.5px] font-bold transition ${periodType === 'month' ? 'bg-ink text-white dark:bg-ink-soft' : 'text-body/70 dark:text-muted-dark'}`}
             >
-              ‹
+              Month
             </button>
-            <div className="text-[14px] font-semibold text-ink dark:text-white">{periodLabel(selPeriod)}</div>
             <button
-              onClick={() => setSelPeriod(shiftPeriod(selPeriod, 1))}
-              className="w-9 h-9 grid place-items-center rounded-lg text-body dark:text-text-dark text-[18px] active:scale-95 transition"
-              aria-label="Next month"
+              onClick={() => setPeriodType('range')}
+              className={`flex-1 rounded-lg py-2.5 text-[13.5px] font-bold transition ${periodType === 'range' ? 'bg-ink text-white dark:bg-ink-soft' : 'text-body/70 dark:text-muted-dark'}`}
             >
-              ›
+              Date to Date
             </button>
           </div>
+          {periodType === 'month' ? (
+            <div className="flex items-center justify-between rounded-xl bg-white dark:bg-card-dark border border-line dark:border-line-dark px-3 py-2">
+              <button
+                onClick={() => setSelPeriod(shiftPeriod(selPeriod, -1))}
+                className="w-9 h-9 grid place-items-center rounded-lg text-body dark:text-text-dark text-[18px] active:scale-95 transition"
+                aria-label="Previous month"
+              >
+                ‹
+              </button>
+              <div className="text-[14px] font-semibold text-ink dark:text-white">{periodLabel(selPeriod)}</div>
+              <button
+                onClick={() => setSelPeriod(shiftPeriod(selPeriod, 1))}
+                className="w-9 h-9 grid place-items-center rounded-lg text-body dark:text-text-dark text-[18px] active:scale-95 transition"
+                aria-label="Next month"
+              >
+                ›
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <div className="text-[11px] font-semibold text-muted dark:text-muted-dark mb-1">From</div>
+                <input
+                  type="date"
+                  value={rangeFrom}
+                  onChange={(e) => setRangeFrom(e.target.value)}
+                  max={rangeTo}
+                  className="w-full rounded-xl border border-line dark:border-line-dark bg-white dark:bg-input-dark px-3 py-3 text-[14px] font-semibold text-ink dark:text-white focus:outline-none focus:ring-2 focus:ring-teal/30"
+                />
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold text-muted dark:text-muted-dark mb-1">To</div>
+                <input
+                  type="date"
+                  value={rangeTo}
+                  onChange={(e) => setRangeTo(e.target.value)}
+                  min={rangeFrom}
+                  className="w-full rounded-xl border border-line dark:border-line-dark bg-white dark:bg-input-dark px-3 py-3 text-[14px] font-semibold text-ink dark:text-white focus:outline-none focus:ring-2 focus:ring-teal/30"
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Date received */}

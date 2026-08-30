@@ -127,8 +127,7 @@ export function Dashboard() {
           </div>
           <button
             onClick={() => setPeriod(shiftPeriod(period, 1))}
-            disabled={period >= now}
-            className="w-9 h-9 grid place-items-center rounded-lg bg-white dark:bg-card-dark border border-line dark:border-line-dark text-body dark:text-text-dark disabled:opacity-30 active:scale-95 transition"
+            className="w-9 h-9 grid place-items-center rounded-lg bg-white dark:bg-card-dark border border-line dark:border-line-dark text-body dark:text-text-dark active:scale-95 transition"
             aria-label="Next month"
           >
             ›

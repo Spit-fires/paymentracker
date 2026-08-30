@@ -65,6 +65,9 @@ export interface NewPaymentInput {
   mode: PaymentMode
   receivedBy?: ReceivedBy
   period: string
+  periodType?: 'month' | 'range'
+  periodFrom?: number
+  periodTo?: number
   date: number
   pngBlob: Blob
 }
@@ -627,6 +630,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         mode: input.mode,
         receivedBy: input.receivedBy,
         period: input.period,
+        periodType: input.periodType,
+        periodFrom: input.periodFrom,
+        periodTo: input.periodTo,
         date: input.date,
         pngBlob: input.pngBlob,
         updatedAt: Date.now(),

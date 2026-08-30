@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../state/AppContext'
-import { fmtTaka, fmtDate, periodLabel, fmtInvoiceNo, invoiceDailySeq } from '../lib/format'
+import { fmtTaka, fmtDate, periodDisplay, fmtInvoiceNo, invoiceDailySeq } from '../lib/format'
 import { Card, EmptyState, PageHeader, Input } from '../components/ui'
 import { IconReceipt, IconArrow } from '../components/Icons'
 
@@ -67,7 +67,7 @@ export function ReceiptLookup() {
                     {s?.name || '-'} <span className="font-semibold text-muted">· {fmtTaka(p.amount)}</span>
                   </div>
                   <div className="text-[12px] text-muted dark:text-muted-dark">
-                    {periodLabel(p.period)} · {fmtDate(p.date)} · {p.mode}
+                    {periodDisplay(p as never)} · {fmtDate(p.date)} · {p.mode}
                   </div>
                 </div>
                 <IconArrow className="w-4 h-4 text-faint dark:text-[#5f7a92]" />

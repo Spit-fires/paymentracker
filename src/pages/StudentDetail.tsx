@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useApp } from '../state/AppContext'
 import { studentPeriodBalance, studentBalanceFee, studentPeriodPaidAny } from '../lib/ledger'
-import { fmtTaka, periodNow, periodLabel, fmtDate, fillMessage, todayKey, addDays, fmtWeekday, fmtDateLong, fmtInvoiceNo, invoiceDailySeq } from '../lib/format'
+import { fmtTaka, periodNow, periodLabel, periodDisplay, fmtDate, fillMessage, todayKey, addDays, fmtWeekday, fmtDateLong, fmtInvoiceNo, invoiceDailySeq } from '../lib/format'
 import { getKV, K, db } from '../lib/db'
 import { getToken } from '../lib/token'
 import { Card, Button, Modal, EmptyState, SectionLabel, PageHeader, useBlobUrl } from '../components/ui'
@@ -379,7 +379,7 @@ export function StudentDetail() {
                     <span className="text-[12px] font-semibold text-muted ml-2">{p.mode}</span>
                   </div>
                   <div className="text-[12px] text-muted dark:text-muted-dark truncate">
-                    {periodLabel(p.period)} · {fmtDate(p.date)}
+                    {periodDisplay(p as never)} · {fmtDate(p.date)}
                   </div>
                 </div>
               </Link>

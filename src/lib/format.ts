@@ -86,6 +86,29 @@ export function periodLabel(period: string): string {
   })
 }
 
+/** Display for payment period — Month → "August 2025", Range → "10 Aug 2025 – 20 Aug 2025" */
+export function periodDisplay(p: { period: string; periodType?: string; periodFrom?: number; periodTo?: number }): string {
+  if (p.periodType === 'range' && p.periodFrom && p.periodTo) {
+    const from = new Date(p.periodFrom)
+    const to = new Date(p.periodTo)
+    const sameMonth = from.getMonth() === to.getMonth() && from.getFullYear() === to.getFullYear()
+    const sameYear = from.getFullYear() === to.getFullYear()
+    if (sameMonth) {
+      return `${String(from.getDate()).padStart(2, '0')} – ${String(to.getDate()).padStart(2, '0')} ${from.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}`
+    }
+    if (sameYear) {
+      return `${from.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} – ${to.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`
+    }
+    return `${fmtDate(p.periodFrom!)} – ${fmtDate(p.periodTo!)}`
+  }
+  return periodLabel(p.period)
+}
+
+/** Short label for range, e.g. "10 Aug - 20 Aug" */
+export function rangeLabel(fromMs: number, toMs: number): string {
+  return periodDisplay({ period: '', periodType: 'range', periodFrom: fromMs, periodTo: toMs })
+}
+
 export function receiptFileName(receiptNo: number, dateMs: number): string {
   const d = new Date(dateMs)
   const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(

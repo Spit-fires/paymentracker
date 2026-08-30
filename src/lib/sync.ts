@@ -334,6 +334,9 @@ function paymentSig(p: Payment): string {
     p.mode,
     p.receivedBy ? [p.receivedBy.name, p.receivedBy.phone || ''] : null,
     p.period,
+    p.periodType || 'month',
+    p.periodFrom ?? null,
+    p.periodTo ?? null,
     p.date,
     p.deletedAt ?? null,
   ])

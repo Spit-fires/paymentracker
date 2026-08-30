@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toPng as htmlToImageToPng } from 'html-to-image'
 import { domToPng } from 'modern-screenshot'
 import { useApp } from '../state/AppContext'
-import { receiptFileName, periodLabel, fillMessage, fmtDateLong, fmtInvoiceNo, invoiceDailySeq } from '../lib/format'
+import { receiptFileName, periodDisplay, fillMessage, fmtDateLong, fmtInvoiceNo, invoiceDailySeq } from '../lib/format'
 import { Button, PageHeader } from '../components/ui'
 import { ReceiptCard } from '../components/ReceiptCard'
 import { IconPrint, IconShare, IconDownload, IconWhatsApp } from '../components/Icons'
@@ -69,7 +69,7 @@ export function ReceiptView() {
   const messageTemplate = (center.receiptMsg || defaultCenter().receiptMsg || '').trim()
   const msgVars = {
     student: student.name,
-    period: periodLabel(payment.period),
+    period: periodDisplay(payment as never),
     center: center.name || defaultCenter().name,
     date: fmtDateLong(payment.date),
     batch: student.batch || '',

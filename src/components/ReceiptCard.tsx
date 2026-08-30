@@ -1,5 +1,5 @@
 import type { Payment, Student, Center } from '../types'
-import { fmtTaka, takaToWords, fmtDate, periodLabel, fmtInvoiceNo } from '../lib/format'
+import { fmtTaka, takaToWords, fmtDate, periodDisplay, fmtInvoiceNo } from '../lib/format'
 import { sanitizeHtml } from './RichEditor'
 import { useBlobUrl } from './ui'
 
@@ -104,7 +104,7 @@ export function ReceiptCard({ center, student, payment }: Props) {
             ['Student', student.name],
             ['Batch / Class', student.batch || '-'],
             ['Payment mode', payment.mode],
-            ['For the month', periodLabel(payment.period)],
+            [payment.periodType === 'range' ? 'For the period' : 'For the month', periodDisplay(payment as never)],
             ['Date received', fmtDate(payment.date)],
           ].map(([k, v]) => (
             <div key={k} style={{ display: 'contents' }}>
