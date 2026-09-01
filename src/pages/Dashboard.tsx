@@ -159,10 +159,10 @@ export function Dashboard() {
           </div>
         </Card>
         <button onClick={() => navigate('/students?mode=record')} className="text-left">
-          <div className="h-full flex flex-col justify-center rounded-2xl bg-white dark:bg-card-dark border border-line dark:border-line-dark p-3.5 active:scale-[0.98] transition">
-            <div className="text-[11px] font-semibold text-muted dark:text-muted-dark">Record payment</div>
-            <div className="inline-flex items-center gap-1.5 text-ink dark:text-white font-bold mt-1">
-              <IconReceipt className="w-4 h-4 text-teal" />
+          <div className="h-full flex flex-col justify-center rounded-2xl bg-ink text-white dark:bg-ink-soft p-3.5 border border-ink dark:border-ink-soft shadow-[0_2px_8px_rgba(18,49,79,0.28)] active:scale-[0.98] transition">
+            <div className="text-[11px] font-semibold text-white/70">Record payment</div>
+            <div className="inline-flex items-center gap-1.5 text-white font-bold mt-1">
+              <IconReceipt className="w-4 h-4" />
               <span className="text-[14px] leading-tight">Tap to record</span>
             </div>
           </div>
@@ -183,11 +183,11 @@ export function Dashboard() {
         </button>
         <button
           onClick={() => navigate('/routines')}
-          className="h-full flex flex-col justify-center rounded-2xl bg-ink text-white dark:bg-ink-soft p-3.5 border border-ink dark:border-ink-soft shadow-[0_2px_8px_rgba(18,49,79,0.28)] active:scale-[0.98] transition text-left"
+          className="h-full flex flex-col justify-center rounded-2xl bg-white dark:bg-card-dark border border-line dark:border-line-dark p-3.5 active:scale-[0.98] transition text-left"
         >
-          <div className="text-[11px] font-semibold text-white/70">Routine</div>
-          <div className="inline-flex items-center gap-1.5 text-white font-bold mt-1">
-            <IconClock className="w-4 h-4" />
+          <div className="text-[11px] font-semibold text-muted dark:text-muted-dark">Routine</div>
+          <div className="inline-flex items-center gap-1.5 text-ink dark:text-white font-bold mt-1">
+            <IconClock className="w-4 h-4 text-teal" />
             <span className="text-[13px] leading-tight">Tap to plan</span>
           </div>
         </button>
