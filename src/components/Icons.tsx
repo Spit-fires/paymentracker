@@ -223,3 +223,25 @@ export const IconClipboardCheck = (p: P) => (
     <path d="m9 14 2 2 4-4" />
   </svg>
 )
+
+export const IconLink = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07" />
+  </svg>
+)
+
+export const IconNote = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+    <path d="M14 2v6h6" />
+    <path d="M8 13h8" />
+    <path d="M8 17h5" />
+  </svg>
+)
+
+export const IconBolt = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M13 2 3 14h8l-1 9 10-12h-9l1-8Z" />
+  </svg>
+)

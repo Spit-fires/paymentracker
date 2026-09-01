@@ -16,6 +16,7 @@ import { Settings } from './pages/Settings'
 import { Accounting } from './pages/Accounting'
 import { Attendance } from './pages/Attendance'
 import { Routines } from './pages/Routines'
+import { QuickAccess } from './pages/QuickAccess'
 import { Spinner } from './components/ui'
 import { Logo } from './components/Logo'
 import { AppMotion, pageVariants } from './components/anim'
@@ -204,6 +205,7 @@ function AnimatedRoutes() {
           <Route path="/students" element={<Students />} />
           <Route path="/attendance" element={<Attendance />} />
           <Route path="/routines" element={<Routines />} />
+          <Route path="/quick-access" element={<QuickAccess />} />
           <Route path="/accounting" element={<Accounting />} />
           <Route path="/student/:id" element={<StudentDetail />} />
           <Route path="/payment/:id" element={<Payment />} />

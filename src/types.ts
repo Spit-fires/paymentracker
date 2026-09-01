@@ -142,6 +142,24 @@ export interface Routine {
   deletedAt?: number
 }
 
+/** Quick Access card - a note (rich text) or a link shortcut, managed from
+ *  the Home > Quick Access screen. Syncs via _quick.json with LWW merging. */
+export interface QuickCard {
+  id: string
+  kind: 'note' | 'link'
+  title: string
+  /** short description shown on the card */
+  desc?: string
+  /** link cards - the URL to open */
+  url?: string
+  /** note cards - rich text HTML (same sanitizer as receipt rules) */
+  noteHtml?: string
+  createdAt: number
+  updatedAt: number
+  /** tombstone - set (instead of removing) when deleted; syncs deletes across devices */
+  deletedAt?: number
+}
+
 export interface Center {
   name: string
   tagline: string
@@ -191,7 +209,7 @@ export interface DriveRefs {
   studentsFolderId?: string
   /** Google account that owns this folder - refs are only trusted for that account. */
   ownerEmail?: string
-  fileIds: { students?: string; payments?: string; meta?: string; postings?: string; attendance?: string; routines?: string }
+  fileIds: { students?: string; payments?: string; meta?: string; postings?: string; attendance?: string; routines?: string; quick?: string }
   /** modifiedTime of each JSON file at last sync - lets pull() skip downloads */
   stamps?: Record<string, string>
 }
@@ -209,11 +227,11 @@ export interface Session {
   theme: 'light' | 'dark'
   lastPulledAt: number
   /** per-file: timestamp of the last snapshot each JSON file was fully processed from */
-  pulledAt?: Partial<Record<'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines', number>>
+  pulledAt?: Partial<Record<'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick', number>>
 }
 
 export type OutboxOp =
-  | { kind: 'pushJSON'; file: 'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' }
+  | { kind: 'pushJSON'; file: 'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick' }
   | {
       kind: 'uploadMedia'
       type: 'photo' | 'receipt'

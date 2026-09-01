@@ -1,5 +1,5 @@
 import { DriveClient } from './drive'
-import { db, getKV, setKV, queueOp, getStudents, getPayments, getPostings, getAttendance, getRoutines, K } from './db'
+import { db, getKV, setKV, queueOp, getStudents, getPayments, getPostings, getAttendance, getRoutines, getQuickCards, K } from './db'
 import { fmtDate, dayKey } from './format'
 import { log } from './logs'
 import { postingLedger } from './ledger'
@@ -12,6 +12,7 @@ import type {
   Posting,
   Attendance,
   Routine,
+  QuickCard,
   Center,
   Session,
   Teacher,
@@ -71,7 +72,7 @@ function cleanPayment(p: Payment) {
   return rest
 }
 
-async function buildJSON(file: 'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines'): Promise<string> {
+async function buildJSON(file: 'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick'): Promise<string> {
   if (file === 'students') {
     const students = (await getStudents()).map(cleanStudent)
     return JSON.stringify({ version: 1, updatedAt: Date.now(), students })
@@ -93,6 +94,11 @@ async function buildJSON(file: 'students' | 'payments' | 'meta' | 'postings' | '
     // Routine has no Blob fields - the raw records serialize as-is
     const routines = await getRoutines()
     return JSON.stringify({ version: 1, updatedAt: Date.now(), routines })
+  }
+  if (file === 'quick') {
+    // Quick access cards - no Blob fields, raw records serialize as-is
+    const quick = await getQuickCards()
+    return JSON.stringify({ version: 1, updatedAt: Date.now(), quick })
   }
   const center = (await getKV<Center>(K.CENTER)) || defaultCenter()
   const receiptSeq = (await getKV<number>(K.RECEIPT_SEQ)) || 0
@@ -362,6 +368,9 @@ function attendanceSig(a: Attendance): string {
 function routineSig(r: Routine): string {
   return JSON.stringify([r.day, r.batch, r.text || '', r.deletedAt ?? null])
 }
+function quickSig(q: QuickCard): string {
+  return JSON.stringify([q.kind, q.title, q.desc || '', q.url || '', q.noteHtml || '', q.deletedAt ?? null])
+}
 
 /**
  * Union-merge two teacher lists (last-writer-wins per member, tombstones for
@@ -396,7 +405,7 @@ function mergeTeachers(local: Teacher[], remote: Teacher[]): Teacher[] {
  */
 export async function pull(): Promise<{
   changed: boolean
-  needPush: Array<'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines'>
+  needPush: Array<'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick'>
 }> {
   const drive = await getKV<DriveRefs>(K.DRIVE)
   if (!drive?.rootFolderId) return { changed: false, needPush: [] }
@@ -414,24 +423,25 @@ export async function pull(): Promise<{
   // processed them, so their baseline must be 0, never lastPulledAt. With the
   // legacy fallback a snapshot older than the fleet's latest meta write would
   // be silently skipped forever (the exact bug class that hid tombstones).
-  const baseAt = (f: 'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines') =>
-    f === 'postings' || f === 'attendance' || f === 'routines'
+  const baseAt = (f: 'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick') =>
+    f === 'postings' || f === 'attendance' || f === 'routines' || f === 'quick'
       ? (pulledAt[f] ?? 0)
       : (pulledAt[f] ?? session.lastPulledAt) || 0
   let changed = false
   let pullDirty = false
   let latest = session.lastPulledAt
-  const needPush: Array<'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines'> = []
+  const needPush: Array<'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick'> = []
   const stamps = { ...(drive.stamps || {}) }
   let stampDirty = false
 
-  const files: Array<['students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines', string | undefined]> = [
+  const files: Array<['students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick', string | undefined]> = [
     ['students', drive.fileIds.students],
     ['payments', drive.fileIds.payments],
     ['meta', drive.fileIds.meta],
     ['postings', drive.fileIds.postings],
     ['attendance', drive.fileIds.attendance],
     ['routines', drive.fileIds.routines],
+    ['quick', drive.fileIds.quick],
   ]
   // run two passes: the second is nearly free (in-memory stamps skip
   // unchanged files) and catches files that another device rewrote while
@@ -838,6 +848,61 @@ export async function pull(): Promise<{
             await db.routines.bulkPut(merged)
           })
           changed = true
+        } else if (file === 'quick' && Array.isArray(j.quick)) {
+          // mirrors the routines merge - tombstones, then missing records
+          // (absence is NEVER a delete), then LWW per card
+          await db.transaction('rw', db.quick, async () => {
+            const local = new Map((await db.quick.toArray()).map((q) => [q.id, q]))
+            const remoteIds = new Set(j.quick.map((q: QuickCard) => q.id))
+            // 1) tombstones: purge locally unless we edited the record after
+            //    the remote delete - a newer local edit resurrects it via re-push
+            for (const q of j.quick) {
+              if (!q.deletedAt) continue
+              const cur = local.get(q.id)
+              if (!cur) continue
+              if ((cur.updatedAt || 0) > (q.deletedAt || 0)) {
+                if (!needPush.includes('quick')) needPush.push('quick')
+                continue
+              }
+              // keep the tombstone locally instead of purging: a device that
+              // forgets the delete would re-broadcast the record on its next
+              // whole-file push and resurrect it everywhere
+              await db.quick.put(q)
+              local.set(q.id, q)
+            }
+            // 2) records missing from the file: absence is NEVER a delete -
+            //    deletes are explicit tombstones above. Missing = the author's
+            //    snapshot predates it → re-push to converge
+            for (const loc of local.values()) {
+              if (remoteIds.has(loc.id)) continue
+              if (!needPush.includes('quick')) needPush.push('quick')
+            }
+            // 3) plain records: keep local when fresher than our last pull
+            //    or newer than the remote record; otherwise take remote
+            const merged = j.quick
+              .filter((q: QuickCard) => !q.deletedAt)
+              .map((q: QuickCard) => {
+                const cur = local.get(q.id)
+                if (!cur) return q
+                // a local tombstone always beats a stale remote copy - re-push
+                // so every device converges on the tombstone
+                if (cur.deletedAt && !q.deletedAt) {
+                  if (!needPush.includes('quick')) needPush.push('quick')
+                  return cur
+                }
+                const keepLocal =
+                  (cur.updatedAt || 0) > baseAt('quick') || (cur.updatedAt || 0) >= (q.updatedAt || 0)
+                const div =
+                  (cur.updatedAt || 0) > (q.updatedAt || 0) ||
+                  ((cur.updatedAt || 0) === (q.updatedAt || 0) && quickSig(cur) !== quickSig(q))
+                if (keepLocal && div) {
+                  if (!needPush.includes('quick')) needPush.push('quick')
+                }
+                return keepLocal ? cur : q
+              })
+            await db.quick.bulkPut(merged)
+          })
+          changed = true
         } else if (file === 'meta' && j.center) {
           await setKV(K.CENTER, { ...((await getKV<Center>(K.CENTER)) || {}), ...j.center })
           const seq = Math.max(j.receiptSeq || 0, (await getKV<number>(K.RECEIPT_SEQ)) || 0)
@@ -969,6 +1034,25 @@ export async function ensureDriveStructure(): Promise<DriveRefs> {
         log('sync', 'Created _routines.json (schema upgrade)')
         return drive
       }
+      // schema upgrade: installs that predate quick access have no _quick.json
+      // ref - create it now so quick cards sync across the fleet
+      if (!existing.fileIds.quick) {
+        const files = await c.list(`'${existing.rootFolderId}' in parents and trashed=false`)
+        const hit = files.find((f) => f.name === '_quick.json')
+        const quick =
+          hit?.id ||
+          (await c.createFile(
+            existing.rootFolderId,
+            '_quick.json',
+            'application/json',
+            JSON.stringify({ version: 1, updatedAt: 0 }),
+            { pt: '_quick.json' },
+          ))
+        const drive = { ...existing, fileIds: { ...existing.fileIds, quick } }
+        await setKV(K.DRIVE, drive)
+        log('sync', 'Created _quick.json (schema upgrade)')
+        return drive
+      }
       return existing
     } catch (e) {
       if (!isNotFound(e)) throw e
@@ -1019,6 +1103,7 @@ export async function ensureDriveStructure(): Promise<DriveRefs> {
       postings: await mk('_postings.json'),
       attendance: await mk('_attendance.json'),
       routines: await mk('_routines.json'),
+      quick: await mk('_quick.json'),
     },
   }
   await setKV(K.DRIVE, drive)

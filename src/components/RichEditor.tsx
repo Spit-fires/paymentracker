@@ -72,11 +72,18 @@ export function sanitizeHtml(html: string): string {
 const COLORS = [
   { label: 'Default', value: 'inherit' },
   { label: 'Black', value: '#1c2936' },
+  { label: 'Gray', value: '#6b7280' },
   { label: 'Navy', value: '#12314f' },
-  { label: 'Red', value: '#b23b3b' },
-  { label: 'Green', value: '#15803d' },
-  { label: 'Gold', value: '#b98a2f' },
+  { label: 'Blue', value: '#2563eb' },
+  { label: 'Sky', value: '#0284c7' },
   { label: 'Teal', value: '#0d9488' },
+  { label: 'Green', value: '#15803d' },
+  { label: 'Red', value: '#b23b3b' },
+  { label: 'Pink', value: '#db2777' },
+  { label: 'Purple', value: '#7c3aed' },
+  { label: 'Gold', value: '#b98a2f' },
+  { label: 'Orange', value: '#ea580c' },
+  { label: 'Brown', value: '#8a5a2b' },
 ]
 
 const SIZES = [12, 14, 16, 18, 20, 24]

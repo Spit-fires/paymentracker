@@ -8,7 +8,7 @@ import { Card } from '../components/ui'
 import { SyncIndicator } from '../components/Layout'
 import { ReauthBanner } from '../components/ReauthBanner'
 import { fadeUp, useCountUp } from '../components/anim'
-import { IconReceipt, IconSearch, IconCheck, IconCalendar, IconUsers, IconClock } from '../components/Icons'
+import { IconReceipt, IconSearch, IconCheck, IconCalendar, IconUsers, IconClock, IconBolt } from '../components/Icons'
 
 function shiftPeriod(p: string, delta: number): string {
   const [y, m] = p.split('-').map(Number)
@@ -28,7 +28,7 @@ export function Dashboard() {
   const totalDisp = useCountUp(total)
   const totalStr = fmtTaka(Math.round(totalDisp))
   const sizeFor = (s: string) =>
-    s.length > 16 ? 'text-[13px]' : s.length > 11 ? 'text-[15px]' : 'text-[19px]'
+    s.length > 16 ? 'text-[13px]' : s.length > 11 ? 'text-[15px]' : 'text-[20px]'
 
   // collected this month = every receipt RECORDED inside the selected month,
   // regardless of which period it pays for (e.g. a September payment recorded
@@ -158,25 +158,38 @@ export function Dashboard() {
             {paidCount}/{billed.length}
           </div>
         </Card>
-        <button onClick={() => navigate('/routines')} className="text-left">
+        <button onClick={() => navigate('/students?mode=record')} className="text-left">
           <div className="h-full flex flex-col justify-center rounded-2xl bg-white dark:bg-card-dark border border-line dark:border-line-dark p-3.5 active:scale-[0.98] transition">
-            <div className="text-[11px] font-semibold text-muted dark:text-muted-dark">Routine</div>
+            <div className="text-[11px] font-semibold text-muted dark:text-muted-dark">Record payment</div>
             <div className="inline-flex items-center gap-1.5 text-ink dark:text-white font-bold mt-1">
-              <IconClock className="w-4 h-4 text-teal" />
-              <span className="text-[14px] leading-tight">Tap to plan</span>
+              <IconReceipt className="w-4 h-4 text-teal" />
+              <span className="text-[14px] leading-tight">Tap to record</span>
             </div>
           </div>
         </button>
       </div>
 
-      {/* Quick actions - Record payment moved down here keeping its dark
-          prominent design as a full-width button */}
-      <div className="px-4 mt-3 space-y-2.5">
+      {/* 2x1 slot - Quick Access opens its own page like Routine does */}
+      <div className="px-4 mt-3 grid grid-cols-2 gap-2.5">
         <button
-          onClick={() => navigate('/students?mode=record')}
-          className="w-full flex items-center justify-center gap-2 rounded-2xl bg-ink text-white dark:bg-ink-soft border border-ink dark:border-ink-soft shadow-[0_2px_8px_rgba(18,49,79,0.28)] py-3.5 text-[15px] font-bold active:scale-[0.98] transition"
+          onClick={() => navigate('/quick-access')}
+          className="h-full flex flex-col justify-center rounded-2xl bg-white dark:bg-card-dark border border-line dark:border-line-dark p-3.5 active:scale-[0.98] transition text-left"
         >
-          <IconReceipt className="w-5 h-5" /> Record payment
+          <div className="text-[11px] font-semibold text-muted dark:text-muted-dark">Quick Access</div>
+          <div className="inline-flex items-center gap-1.5 text-ink dark:text-white font-bold mt-1">
+            <IconBolt className="w-4 h-4 text-teal" />
+            <span className="text-[13px] leading-tight">Tap to open</span>
+          </div>
+        </button>
+        <button
+          onClick={() => navigate('/routines')}
+          className="h-full flex flex-col justify-center rounded-2xl bg-ink text-white dark:bg-ink-soft p-3.5 border border-ink dark:border-ink-soft shadow-[0_2px_8px_rgba(18,49,79,0.28)] active:scale-[0.98] transition text-left"
+        >
+          <div className="text-[11px] font-semibold text-white/70">Routine</div>
+          <div className="inline-flex items-center gap-1.5 text-white font-bold mt-1">
+            <IconClock className="w-4 h-4" />
+            <span className="text-[13px] leading-tight">Tap to plan</span>
+          </div>
         </button>
       </div>
 

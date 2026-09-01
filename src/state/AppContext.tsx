@@ -15,6 +15,7 @@ import type {
   Attendance,
   AttendanceStatus,
   Routine,
+  QuickCard,
   Center,
   Session,
   SessionUser,
@@ -125,6 +126,9 @@ interface Ctx {
   toggleCleared: (id: string, cleared: boolean) => Promise<void>
 
   routines: Routine[]
+  quickCards: QuickCard[]
+  saveQuickCard: (card: QuickCard) => Promise<void>
+  deleteQuickCard: (id: string) => Promise<void>
   saveRoutine: (input: { day: string; batch: string; text: string }) => Promise<void>
   deleteRoutine: (id: string) => Promise<void>
 
@@ -176,6 +180,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [postings, setPostings] = useState<Posting[]>([])
   const [attendances, setAttendances] = useState<Attendance[]>([])
   const [routines, setRoutines] = useState<Routine[]>([])
+  const [quickCards, setQuickCards] = useState<QuickCard[]>([])
   const [teachers, setTeachers] = useState<Teacher[]>([])
   const [center, setCenter] = useState<Center>(defaultCenter())
   const [receiptSeq, setReceiptSeq] = useState(0)
@@ -230,6 +235,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPostings((await db.postings.toArray()).filter((p) => !p.deletedAt))
     setAttendances((await db.attendance.toArray()).filter((a) => !a.deletedAt))
     setRoutines((await db.routines.toArray()).filter((r) => !r.deletedAt))
+    setQuickCards((await db.quick.toArray()).filter((q) => !q.deletedAt))
     const loaded = (await getKV<Center>(K.CENTER)) || defaultCenter()
     // soft-migrate the legacy phone field: receipts no longer print it - if
     // the address block is empty, the old phone moves there (preserved as
@@ -837,6 +843,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [refreshData, scheduleSync],
   )
 
+  /** Upsert a Quick Access card (note or link). The caller passes the full
+   *  record - new cards get an id + createdAt here. */
+  const saveQuickCard = useCallback(
+    async (card: QuickCard) => {
+      const now = Date.now()
+      await db.quick.put({ ...card, updatedAt: now })
+      await queueOp({ kind: 'pushJSON', file: 'quick' })
+      await refreshData()
+      scheduleSync()
+    },
+    [refreshData, scheduleSync],
+  )
+
+  const deleteQuickCard = useCallback(
+    async (id: string) => {
+      const cur = await db.quick.get(id)
+      if (!cur) return
+      await db.quick.put({ ...cur, deletedAt: Date.now(), updatedAt: Date.now() })
+      await queueOp({ kind: 'pushJSON', file: 'quick' })
+      await refreshData()
+      scheduleSync()
+    },
+    [refreshData, scheduleSync],
+  )
+
   const updateCenter = useCallback(
     async (c: Center) => {
       await setKV(K.CENTER, c)
@@ -879,6 +910,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       postings,
       attendances,
       routines,
+      quickCards,
       teachers,
       center,
       receiptSeq,
@@ -903,6 +935,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       toggleCleared,
       saveRoutine,
       deleteRoutine,
+      saveQuickCard,
+      deleteQuickCard,
       updateCenter,
       setTheme,
       setPin,
@@ -925,6 +959,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       postings,
       attendances,
       routines,
+      quickCards,
       teachers,
       center,
       receiptSeq,
@@ -949,6 +984,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       toggleCleared,
       saveRoutine,
       deleteRoutine,
+      saveQuickCard,
+      deleteQuickCard,
       updateCenter,
       setTheme,
       setPin,
