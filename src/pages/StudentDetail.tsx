@@ -15,7 +15,6 @@ import {
   IconReceipt,
   IconArchive,
   IconPhone,
-  IconPlus,
 } from '../components/Icons'
 import { defaultCenter } from '../lib/sync'
 import { waLink, waPhone, openExternal } from '../lib/phone'
@@ -290,17 +289,9 @@ export function StudentDetail() {
             <IconReceipt className="w-5 h-5" /> Record payment
           </Button>
           <Button
-            size="lg"
             variant="secondary"
+            size="lg"
             className="!text-teal dark:!text-teal-bright"
-            onClick={() => navigate(`/payment/${student.id}?fee=1`)}
-          >
-            <IconPlus className="w-5 h-5" /> Record fee
-          </Button>
-          <Button
-            variant="secondary"
-            size="lg"
-            className="!text-teal dark:!text-teal-bright col-span-2"
             onClick={() => openExternal(waLink(student.phone, reminderText))}
             disabled={!student.phone}
             title={student.phone ? undefined : 'Add a phone number to send WhatsApp reminders'}
