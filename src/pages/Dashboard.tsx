@@ -28,7 +28,7 @@ export function Dashboard() {
   const totalDisp = useCountUp(total)
   const totalStr = fmtTaka(Math.round(totalDisp))
   const sizeFor = (s: string) =>
-    s.length > 16 ? 'text-[11.5px]' : s.length > 11 ? 'text-[13.5px]' : 'text-[17px]'
+    s.length > 16 ? 'text-[13px]' : s.length > 11 ? 'text-[15px]' : 'text-[19px]'
 
   // collected this month = every receipt RECORDED inside the selected month,
   // regardless of which period it pays for (e.g. a September payment recorded
@@ -142,7 +142,7 @@ export function Dashboard() {
       <div className="grid grid-cols-2 gap-2.5 px-4 mt-4">
         <Card className="!rounded-2xl p-3.5">
           <div className="text-[11px] font-semibold text-muted dark:text-muted-dark">Collected this month</div>
-          <div className={`font-bold text-teal tabular-nums mt-1 leading-tight ${sizeFor(fmtTaka(recordedTotal))}`}>
+          <div className={`font-bold text-red-500 dark:text-red-400 tabular-nums mt-1 leading-tight ${sizeFor(fmtTaka(recordedTotal))}`}>
             {recordedStr}
           </div>
         </Card>
