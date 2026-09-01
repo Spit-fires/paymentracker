@@ -153,18 +153,24 @@ export function Payment() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [student?.id, prefill, feeParam])
 
-  /** Monthly ↔ Fee switch: fees drop commission (never tracked on fees) and
-   *  monthly re-runs the amount autofill when the slip is still blank. */
+  /** Monthly ↔ Fee switch: fees drop commission and any real payment (they
+   *  are never tracked on fees - fee Real always equals its slip), and
+   *  monthly re-runs the amount/real autofill when the fields are blank. */
   const switchKind = (next: 'monthly' | 'fee') => {
     if (next === kind) return
     setKind(next)
     if (next === 'fee') {
       setCommissionOn(false)
       setCommission('')
-    } else if (amount.trim() === '' && student) {
-      setAmount(String(autofillAmount(students, payments, student.id, selPeriod)))
-      const real = realAutofillAmount(students, payments, student.id, selPeriod)
-      if (real > 0) setRealAmount(String(real))
+      // the Real Payment input is hidden on fees - a stale monthly autofill
+      // must never ride along invisibly (bug: Real showed the monthly real)
+      setRealAmount('')
+    } else if (student) {
+      if (amount.trim() === '') setAmount(String(autofillAmount(students, payments, student.id, selPeriod)))
+      if (realAmount.trim() === '') {
+        const real = realAutofillAmount(students, payments, student.id, selPeriod)
+        if (real > 0) setRealAmount(String(real))
+      }
     }
   }
 
@@ -280,7 +286,7 @@ export function Payment() {
       if (existing) {
         await updatePayment(existing.id, {
           amount: amountNum,
-          realAmount: realAmount.trim() === '' ? undefined : realNum,
+          realAmount: isFee ? undefined : realAmount.trim() === '' ? undefined : realNum,
           commission: isFee ? undefined : commissionOn ? commissionNum : undefined,
           due: dueNum,
           mode,
@@ -299,7 +305,7 @@ export function Payment() {
         const payment = await addPayment({
           studentId: student.id,
           amount: amountNum,
-          realAmount: realAmount.trim() === '' ? undefined : realNum,
+          realAmount: isFee ? undefined : realAmount.trim() === '' ? undefined : realNum,
           commission: isFee ? undefined : commissionOn ? commissionNum : undefined,
           due: dueNum,
           mode,

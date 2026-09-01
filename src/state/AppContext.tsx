@@ -630,7 +630,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         kind: input.kind,
         feeLabel: input.kind === 'fee' ? input.feeLabel : undefined,
         amount: input.amount,
-        realAmount: input.realAmount,
+        // fees carry no separate real payment - Real always equals the slip;
+        // mirrors the commission strip so no path can store a mismatch
+        realAmount: input.kind === 'fee' ? undefined : input.realAmount,
         commission: input.kind === 'fee' ? undefined : input.commission,
         due: input.due || 0,
         mode: input.mode,
