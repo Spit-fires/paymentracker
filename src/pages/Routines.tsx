@@ -31,9 +31,7 @@ export function Routines() {
   // builder fields
   const [timeSplit, setTimeSplit] = useState(false)
   const [timeStart, setTimeStart] = useState('')
-  const [timeEnd, setTimeEnd] = useState('')
   const [timeGirlsStart, setTimeGirlsStart] = useState('')
-  const [timeGirlsEnd, setTimeGirlsEnd] = useState('')
   const [picked, setPicked] = useState<string[]>([])
   const [note, setNote] = useState('')
   const [addingSubject, setAddingSubject] = useState(false)
@@ -58,9 +56,7 @@ export function Routines() {
     setBatch('')
     setTimeSplit(false)
     setTimeStart('')
-    setTimeEnd('')
     setTimeGirlsStart('')
-    setTimeGirlsEnd('')
     setPicked([])
     setNote('')
     setAddingSubject(false)
@@ -72,9 +68,7 @@ export function Routines() {
     setBatch(r.batch)
     setTimeSplit(!!r.timeSplit)
     setTimeStart(r.timeStart || '')
-    setTimeEnd(r.timeEnd || '')
     setTimeGirlsStart(r.timeGirlsStart || '')
-    setTimeGirlsEnd(r.timeGirlsEnd || '')
     setPicked(r.subjectList ? [...r.subjectList] : [])
     // legacy free-form routines keep their text alive through the note field
     setNote(r.text?.trim() && !hasBuilderFields(r) ? r.text : r.note || '')
@@ -91,9 +85,7 @@ export function Routines() {
         day,
         batch,
         timeStart: timeStart || undefined,
-        timeEnd: timeEnd || undefined,
         timeGirlsStart: timeSplit ? timeGirlsStart || undefined : undefined,
-        timeGirlsEnd: timeSplit ? timeGirlsEnd || undefined : undefined,
         timeSplit,
         subjectList: picked.length ? [...picked] : undefined,
         note: note || undefined,
@@ -174,23 +166,17 @@ export function Routines() {
           <Field label="Class time">
             {timeSplit ? (
               <div className="space-y-2">
-                <div className="grid grid-cols-[auto_1fr_1fr] items-center gap-2">
+                <div className="grid grid-cols-[auto_1fr] items-center gap-2">
                   <span className="text-[12px] font-bold text-muted dark:text-muted-dark w-10">Boys</span>
                   <Input type="time" value={timeStart} onChange={(e) => setTimeStart(e.target.value)} />
-                  <Input type="time" value={timeEnd} onChange={(e) => setTimeEnd(e.target.value)} />
                 </div>
-                <div className="grid grid-cols-[auto_1fr_1fr] items-center gap-2">
+                <div className="grid grid-cols-[auto_1fr] items-center gap-2">
                   <span className="text-[12px] font-bold text-muted dark:text-muted-dark w-10">Girls</span>
                   <Input type="time" value={timeGirlsStart} onChange={(e) => setTimeGirlsStart(e.target.value)} />
-                  <Input type="time" value={timeGirlsEnd} onChange={(e) => setTimeGirlsEnd(e.target.value)} />
                 </div>
-                <div className="text-[11px] text-faint">End time is optional - leave it empty for a start-only time.</div>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-2">
-                <Input type="time" value={timeStart} onChange={(e) => setTimeStart(e.target.value)} />
-                <Input type="time" value={timeEnd} onChange={(e) => setTimeEnd(e.target.value)} />
-              </div>
+              <Input type="time" value={timeStart} onChange={(e) => setTimeStart(e.target.value)} />
             )}
           </Field>
 
@@ -219,11 +205,6 @@ export function Routines() {
               Boys & girls separate
             </button>
           </div>
-          {!timeSplit && (
-            <div className="text-[11px] text-faint -mt-1">
-              End time is optional - leave it empty for a start-only time.
-            </div>
-          )}
 
           {/* Subjects */}
           <Field label="Subjects" hint="Tap to select - new subjects are saved for future routines.">

@@ -136,9 +136,7 @@ interface Ctx {
     day: string
     batch: string
     timeStart?: string
-    timeEnd?: string
     timeGirlsStart?: string
-    timeGirlsEnd?: string
     timeSplit?: boolean
     subjectList?: string[]
     note?: string
@@ -832,9 +830,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       day: string
       batch: string
       timeStart?: string
-      timeEnd?: string
       timeGirlsStart?: string
-      timeGirlsEnd?: string
       timeSplit?: boolean
       subjectList?: string[]
       note?: string
@@ -847,9 +843,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         day: input.day,
         batch: input.batch,
         timeStart: input.timeStart,
-        timeEnd: input.timeEnd,
         timeGirlsStart: input.timeGirlsStart,
-        timeGirlsEnd: input.timeGirlsEnd,
         timeSplit: input.timeSplit,
         subjectList: input.subjectList,
         note: input.note?.trim() || undefined,

@@ -136,11 +136,8 @@ export interface Routine {
   text?: string
   /** class start time, 'HH:MM' 24h from the time picker */
   timeStart?: string
-  /** class end time, 'HH:MM' - optional */
-  timeEnd?: string
-  /** when timeSplit - girls start/end times, 'HH:MM' */
+  /** when timeSplit - girls start time, 'HH:MM' */
   timeGirlsStart?: string
-  timeGirlsEnd?: string
   /** boys and girls have separate times - {time} then shows both */
   timeSplit?: boolean
   /** selected subjects - fills {subjects} */

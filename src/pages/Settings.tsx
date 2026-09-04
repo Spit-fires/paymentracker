@@ -471,7 +471,7 @@ export function Settings() {
           </Field>
           <Field
             label="Routine message"
-            hint="Sent from the Send Routine button on a student page. {time} is the class time (shows boys & girls separately when set), {subjects} the subject list, {note} the optional note, and {routine} only carries old free-text routines - plan it in the Routine panel first."
+            hint="Sent from the Send Routine button on a student page. {time} is the class time (shows boys & girls separately when set), {subjects} the subject list, {note} the optional note. {routine} is OUTDATED - it only carries old free-text routines; use {time}, {subjects} and {note} instead."
           >
             <Textarea
               value={form.routineMsg ?? defaultCenter().routineMsg ?? ''}
@@ -483,9 +483,9 @@ export function Settings() {
           <p className="text-[11.5px] text-faint">
             Available tokens:{" "}
             <span className="font-mono">
-              {"{student} {period} {fee} {amount} {center} {link} {date} {batch} {time} {subjects} {note} {routine} {routine date} {routine day}"}
+              {"{student} {period} {fee} {amount} {center} {link} {date} {batch} {time} {subjects} {note} {routine date} {routine day}"}
             </span>{" "}
-            - leave a field empty to keep the default message.
+            - leave a field empty to keep the default message. <span className="font-mono">{"{routine}"}</span> is outdated - only old free-text routines fill it; use {"{time}"}, {"{subjects}"} and {"{note}"} instead.
           </p>
           <Button variant="soft" full onClick={() => void saveCenter()} disabled={saved}>
             {saved ? <IconCheck className="w-4 h-4" /> : null} {saved ? 'Saved' : 'Save messages'}
