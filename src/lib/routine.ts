@@ -10,18 +10,18 @@ export function fmtTime12(v?: string): string {
   return `${h12}:${String(m ?? 0).padStart(2, '0')} ${suffix}`
 }
 
-/** Value for the {time} token - one class time, or boys+girls in the same
- *  message when the times are split. */
+/** Value for the {time} token - one class time, or boys+girls stacked on
+ *  separate lines in the same message when the times are split. */
 export function routineTimeLabel(r: Routine): string {
   if (!r.timeSplit) return fmtTime12(r.timeStart)
   const boys = fmtTime12(r.timeStart)
   const girls = fmtTime12(r.timeGirlsStart)
-  return [boys && `Boys: ${boys}`, girls && `Girls: ${girls}`].filter(Boolean).join(' · ')
+  return [boys && `Boys: ${boys}`, girls && `Girls: ${girls}`].filter(Boolean).join('\n')
 }
 
-/** Value for the {subjects} token - comma-joined selected subjects. */
+/** Value for the {subjects} token - one subject per line. */
 export function routineSubjectsLabel(r: Routine): string {
-  return (r.subjectList || []).join(', ')
+  return (r.subjectList || []).join('\n')
 }
 
 /** Value for the {note} token. */
