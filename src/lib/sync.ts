@@ -104,7 +104,8 @@ async function buildJSON(file: 'students' | 'payments' | 'meta' | 'postings' | '
   const receiptSeq = (await getKV<number>(K.RECEIPT_SEQ)) || 0
   const teachers = (await getKV<Teacher[]>(K.TEACHERS)) || []
   const seqReserved = (await getKV<{ high: number; used: number }>(K.SEQ_RESERVED)) || { high: 0, used: 0 }
-  return JSON.stringify({ version: 1, updatedAt: Date.now(), center, receiptSeq, teachers, seqReserved })
+  const subjects = (await getKV<string[]>(K.SUBJECTS)) || []
+  return JSON.stringify({ version: 1, updatedAt: Date.now(), center, receiptSeq, teachers, seqReserved, subjects })
 }
 
 export function defaultCenter(): Center {
@@ -122,7 +123,7 @@ export function defaultCenter(): Center {
     attendanceMsg:
       'Assalamu alaikum {student},\n\nYou were marked absent on {date} for {batch} at {center}. Please let us know if everything is okay. Thank you!',
     routineMsg:
-      'Assalamu alaikum {student},\n\nHere is your next class schedule for {batch} at {center}:\n\n{routine day}, {routine date}\n{routine}\n\nThank you!',
+      'Assalamu alaikum {student},\n\nHere is your next class schedule for {batch} at {center}:\n\n{routine day}, {routine date}\nTime: {time}\nSubjects: {subjects}\n{note}\n\nThank you!',
   }
 }
 
@@ -366,7 +367,19 @@ function attendanceSig(a: Attendance): string {
   return JSON.stringify([a.studentId, a.day, a.batch, a.status, a.deletedAt ?? null])
 }
 function routineSig(r: Routine): string {
-  return JSON.stringify([r.day, r.batch, r.text || '', r.deletedAt ?? null])
+  return JSON.stringify([
+    r.day,
+    r.batch,
+    r.text || '',
+    r.timeStart || '',
+    r.timeEnd || '',
+    r.timeGirlsStart || '',
+    r.timeGirlsEnd || '',
+    r.timeSplit ?? false,
+    (r.subjectList || []).join(','),
+    r.note || '',
+    r.deletedAt ?? null,
+  ])
 }
 function quickSig(q: QuickCard): string {
   return JSON.stringify([q.kind, q.title, q.desc || '', q.url || '', q.noteHtml || '', q.deletedAt ?? null])
@@ -928,6 +941,17 @@ export async function pull(): Promise<{
             JSON.stringify([...arr].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)))
           if (canon(mergedT) !== canon(remoteT)) {
             if (!needPush.includes('meta')) needPush.push('meta')
+          }
+          // subject master list: append-only union merge - a subject added on
+          // any device lands everywhere and is never removed by a merge
+          const curS = (await getKV<string[]>(K.SUBJECTS)) || []
+          const remoteS = Array.isArray(j.subjects) ? j.subjects : []
+          const mergedS = [...curS]
+          for (const s of remoteS) {
+            if (!mergedS.some((x) => x.toLowerCase() === String(s).toLowerCase())) mergedS.push(String(s))
+          }
+          if (mergedS.length !== curS.length) {
+            await setKV(K.SUBJECTS, mergedS)
           }
           changed = true
         }

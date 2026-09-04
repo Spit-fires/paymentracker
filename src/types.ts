@@ -123,20 +123,34 @@ export interface Attendance {
 /** One routine (class schedule) per batch per day. The id is deterministic
  *  (`day_batch`), so re-saving a day+batch updates instead of duplicating and
  *  two devices editing the same slot merge cleanly via the LWW machinery.
- *  `text` is free text (teacher-written), substituted into the absent-student
- *  WhatsApp message via the {routine} token. `time`/`subjects` are legacy
- *  fields kept for old records created before the merge. */
+ *  New routines are built from structured fields (time pickers, subject
+ *  list, note); `text` is the pre-builder free-form field kept so old
+ *  records keep sending via the {routine} token. `time`/`subjects` are
+ *  legacy fields from before that merge. */
 export interface Routine {
   id: string
   /** local day key, 'YYYY-MM-DD' - defaults to tomorrow when planning */
   day: string
   batch: string
-  /** free text: class time + subjects, e.g. "3:00 PM - 5:00 PM\nMath, English" */
+  /** @deprecated legacy free-form text (pre-builder) - still fills {routine} */
   text?: string
-  /** @deprecated legacy, merged into text */
-  time?: string
-  /** @deprecated legacy, merged into text */
+  /** class start time, 'HH:MM' 24h from the time picker */
+  timeStart?: string
+  /** class end time, 'HH:MM' - optional */
+  timeEnd?: string
+  /** when timeSplit - girls start/end times, 'HH:MM' */
+  timeGirlsStart?: string
+  timeGirlsEnd?: string
+  /** boys and girls have separate times - {time} then shows both */
+  timeSplit?: boolean
+  /** selected subjects - fills {subjects} */
+  subjectList?: string[]
+  /** optional free-text note */
+  note?: string
+  /** @deprecated legacy subjects string (pre-merge) */
   subjects?: string
+  /** @deprecated legacy time string (pre-merge) */
+  time?: string
   updatedAt: number
   /** tombstone - set (instead of removing) when deleted; syncs deletes across devices */
   deletedAt?: number
@@ -187,7 +201,7 @@ export interface Center {
   feeReceiptMsg?: string
   /** WhatsApp absent-student template; tokens: {student} {date} {batch} {center} */
   attendanceMsg?: string
-  /** WhatsApp routine-send template; tokens: {student} {date} {batch} {center} {routine} {routine date} {routine day} */
+  /** WhatsApp routine-send template; tokens: {student} {date} {batch} {center} {time} {subjects} {note} {routine} {routine date} {routine day} */
   routineMsg?: string
   /** custom PAID stamp image as a dataURL, uploaded in Settings */
   paidImage?: string

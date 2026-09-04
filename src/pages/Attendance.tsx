@@ -11,6 +11,7 @@ import {
 } from 'chart.js'
 import { useApp } from '../state/AppContext'
 import { fmtDateLong, fmtWeekday, fillMessage, todayKey, dayKey, addDays } from '../lib/format'
+import { routineTimeLabel, routineSubjectsLabel, routineNote, routineHasContent } from '../lib/routine'
 import { defaultCenter } from '../lib/sync'
 import { getKV, setKV, K } from '../lib/db'
 import { waLink, openExternal } from '../lib/phone'
@@ -420,7 +421,7 @@ function ClearView() {
     for (const [batch] of groups) {
       for (let i = 1; i <= 14; i++) {
         const d = addDays(day, i)
-        const routine = routines.find((r) => r.batch === batch && r.day === d)
+        const routine = routines.find((r) => r.batch === batch && r.day === d && routineHasContent(r))
         if (routine) {
           m.set(batch, { day: d, routine })
           break
@@ -485,9 +486,11 @@ function ClearView() {
                 date: fmtDateLong(isoDayToMs(day)),
                 batch: s.batch || batch,
                 center: center.name || 'our center',
-                // only new-format routines (single text field) are valid -
-                // legacy time/subjects records from before the merge are ignored
+                // legacy free-form routines only - builder routines use {time} {subjects} {note}
                 routine: found?.routine?.text || '',
+                time: found?.routine ? routineTimeLabel(found.routine) : '',
+                subjects: found?.routine ? routineSubjectsLabel(found.routine) : '',
+                note: found?.routine ? routineNote(found.routine) : '',
                 'routine date': found ? fmtDateLong(isoDayToMs(found.day)) : '',
                 'routine day': found ? fmtWeekday(isoDayToMs(found.day)) : '',
               })

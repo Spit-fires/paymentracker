@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
 import { useApp } from '../state/AppContext'
 import { dayKey } from '../lib/format'
+import { routineBlock, hasBuilderFields } from '../lib/routine'
+import type { Routine } from '../types'
 import { Card, PageHeader, Button, Field, Input, Textarea, EmptyState, cx } from '../components/ui'
-import { IconClock, IconTrash, IconEdit, IconCheck } from '../components/Icons'
+import { IconClock, IconTrash, IconEdit, IconCheck, IconPlus } from '../components/Icons'
 
 /** tomorrow's local day key - routines are planned the evening before */
 function tomorrowKey(): string {
@@ -19,20 +21,23 @@ function fmtDay(day: string): string {
   })
 }
 
-/** merged text for a routine - legacy time/subjects records (pre-merge) are
- *  not valid and are ignored; editing one starts blank so saving re-creates
- *  it in the new single-field format */
-function routineText(r: { text?: string }): string {
-  return r.text || ''
-}
-
 export function Routines() {
-  const { students, routines, saveRoutine, deleteRoutine, showToast } = useApp()
+  const { students, routines, subjects, addSubject, saveRoutine, deleteRoutine, showToast } = useApp()
   const [day, setDay] = useState(tomorrowKey())
   const [batch, setBatch] = useState('')
-  const [text, setText] = useState('')
   const [editing, setEditing] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+
+  // builder fields
+  const [timeSplit, setTimeSplit] = useState(false)
+  const [timeStart, setTimeStart] = useState('')
+  const [timeEnd, setTimeEnd] = useState('')
+  const [timeGirlsStart, setTimeGirlsStart] = useState('')
+  const [timeGirlsEnd, setTimeGirlsEnd] = useState('')
+  const [picked, setPicked] = useState<string[]>([])
+  const [note, setNote] = useState('')
+  const [addingSubject, setAddingSubject] = useState(false)
+  const [newSubject, setNewSubject] = useState('')
 
   const batches = useMemo(
     () => Array.from(new Set(students.map((s) => s.batch))).filter(Boolean).sort(),
@@ -48,16 +53,33 @@ export function Routines() {
     [routines, day],
   )
 
-  const startEdit = (r: (typeof dayRows)[number]) => {
-    setEditing(r.id)
-    setBatch(r.batch)
-    setText(routineText(r))
-  }
-
   const resetForm = () => {
     setEditing(null)
     setBatch('')
-    setText('')
+    setTimeSplit(false)
+    setTimeStart('')
+    setTimeEnd('')
+    setTimeGirlsStart('')
+    setTimeGirlsEnd('')
+    setPicked([])
+    setNote('')
+    setAddingSubject(false)
+    setNewSubject('')
+  }
+
+  const startEdit = (r: Routine) => {
+    setEditing(r.id)
+    setBatch(r.batch)
+    setTimeSplit(!!r.timeSplit)
+    setTimeStart(r.timeStart || '')
+    setTimeEnd(r.timeEnd || '')
+    setTimeGirlsStart(r.timeGirlsStart || '')
+    setTimeGirlsEnd(r.timeGirlsEnd || '')
+    setPicked(r.subjectList ? [...r.subjectList] : [])
+    // legacy free-form routines keep their text alive through the note field
+    setNote(r.text?.trim() && !hasBuilderFields(r) ? r.text : r.note || '')
+    setAddingSubject(false)
+    setNewSubject('')
   }
 
   const save = async () => {
@@ -65,7 +87,17 @@ export function Routines() {
     if (!batch) return showToast('Pick a batch first', 'err')
     setSaving(true)
     try {
-      await saveRoutine({ day, batch, text })
+      await saveRoutine({
+        day,
+        batch,
+        timeStart: timeStart || undefined,
+        timeEnd: timeEnd || undefined,
+        timeGirlsStart: timeSplit ? timeGirlsStart || undefined : undefined,
+        timeGirlsEnd: timeSplit ? timeGirlsEnd || undefined : undefined,
+        timeSplit,
+        subjectList: picked.length ? [...picked] : undefined,
+        note: note || undefined,
+      })
       showToast(editing ? 'Routine updated' : 'Routine saved', 'ok')
       resetForm()
     } catch (e) {
@@ -79,6 +111,19 @@ export function Routines() {
     await deleteRoutine(id)
     if (editing === id) resetForm()
     showToast('Routine removed', 'ok')
+  }
+
+  const pickSubject = (s: string) => {
+    setPicked((p) => (p.includes(s) ? p.filter((x) => x !== s) : [...p, s]))
+  }
+
+  const submitNewSubject = async () => {
+    const v = newSubject.trim()
+    if (!v) return
+    await addSubject(v)
+    setPicked((p) => (p.some((x) => x.toLowerCase() === v.toLowerCase()) ? p : [...p, v]))
+    setNewSubject('')
+    setAddingSubject(false)
   }
 
   return (
@@ -125,13 +170,134 @@ export function Routines() {
             )}
           </div>
 
-          <Field label="Routine">
-            <Textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder={'e.g. 3:00 PM - 5:00 PM\nMathematics, English, Science'}
-              rows={4}
-            />
+          {/* Class time */}
+          <Field label="Class time">
+            {timeSplit ? (
+              <div className="space-y-2">
+                <div className="grid grid-cols-[auto_1fr_1fr] items-center gap-2">
+                  <span className="text-[12px] font-bold text-muted dark:text-muted-dark w-10">Boys</span>
+                  <Input type="time" value={timeStart} onChange={(e) => setTimeStart(e.target.value)} />
+                  <Input type="time" value={timeEnd} onChange={(e) => setTimeEnd(e.target.value)} />
+                </div>
+                <div className="grid grid-cols-[auto_1fr_1fr] items-center gap-2">
+                  <span className="text-[12px] font-bold text-muted dark:text-muted-dark w-10">Girls</span>
+                  <Input type="time" value={timeGirlsStart} onChange={(e) => setTimeGirlsStart(e.target.value)} />
+                  <Input type="time" value={timeGirlsEnd} onChange={(e) => setTimeGirlsEnd(e.target.value)} />
+                </div>
+                <div className="text-[11px] text-faint">End time is optional - leave it empty for a start-only time.</div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                <Input type="time" value={timeStart} onChange={(e) => setTimeStart(e.target.value)} />
+                <Input type="time" value={timeEnd} onChange={(e) => setTimeEnd(e.target.value)} />
+              </div>
+            )}
+          </Field>
+
+          {/* Boys/girls split toggle */}
+          <div className="flex rounded-xl bg-[#eef2f6] dark:bg-input-dark p-1">
+            <button
+              onClick={() => setTimeSplit(false)}
+              className={cx(
+                'flex-1 rounded-lg py-2 text-[12.5px] font-bold transition',
+                !timeSplit
+                  ? 'bg-white dark:bg-card-dark text-ink dark:text-white shadow-sm'
+                  : 'text-muted dark:text-muted-dark',
+              )}
+            >
+              Same time for all
+            </button>
+            <button
+              onClick={() => setTimeSplit(true)}
+              className={cx(
+                'flex-1 rounded-lg py-2 text-[12.5px] font-bold transition',
+                timeSplit
+                  ? 'bg-white dark:bg-card-dark text-ink dark:text-white shadow-sm'
+                  : 'text-muted dark:text-muted-dark',
+              )}
+            >
+              Boys & girls separate
+            </button>
+          </div>
+          {!timeSplit && (
+            <div className="text-[11px] text-faint -mt-1">
+              End time is optional - leave it empty for a start-only time.
+            </div>
+          )}
+
+          {/* Subjects */}
+          <Field label="Subjects" hint="Tap to select - new subjects are saved for future routines.">
+            {subjects.length === 0 && !addingSubject && !picked.length ? (
+              <button
+                onClick={() => setAddingSubject(true)}
+                className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-teal/40 text-teal text-[13px] font-semibold py-2.5 active:scale-[0.99] transition"
+              >
+                <IconPlus className="w-3.5 h-3.5" /> Add a subject
+              </button>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {[...subjects]
+                  .sort((a, b) => a.localeCompare(b))
+                  .map((s) => {
+                    const on = picked.includes(s)
+                    return (
+                      <button
+                        key={s}
+                        onClick={() => pickSubject(s)}
+                        className={cx(
+                          'px-3 py-1.5 rounded-full text-[12.5px] font-bold transition active:scale-[0.97] flex items-center gap-1',
+                          on
+                            ? 'bg-teal text-white'
+                            : 'bg-white dark:bg-card-dark border border-line dark:border-line-dark text-muted dark:text-muted-dark',
+                        )}
+                      >
+                        {on && <IconCheck className="w-3 h-3" />}
+                        {s}
+                      </button>
+                    )
+                  })}
+                {picked
+                  .filter((s) => !subjects.includes(s))
+                  .map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => pickSubject(s)}
+                      className="px-3 py-1.5 rounded-full text-[12.5px] font-bold bg-teal text-white flex items-center gap-1"
+                    >
+                      <IconCheck className="w-3 h-3" />
+                      {s}
+                    </button>
+                  ))}
+                {addingSubject ? (
+                  <div className="flex items-center gap-1.5 w-full">
+                    <Input
+                      value={newSubject}
+                      onChange={(e) => setNewSubject(e.target.value)}
+                      placeholder="Subject name"
+                      maxLength={40}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') void submitNewSubject()
+                      }}
+                    />
+                    <Button onClick={() => void submitNewSubject()} disabled={!newSubject.trim()}>
+                      Add
+                    </Button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setAddingSubject(true)}
+                    className="px-3 py-1.5 rounded-full text-[12.5px] font-semibold border border-dashed border-teal/40 text-teal flex items-center gap-1"
+                  >
+                    <IconPlus className="w-3 h-3" /> Add
+                  </button>
+                )}
+              </div>
+            )}
+          </Field>
+
+          {/* Optional note */}
+          <Field label="Note" hint="Optional - anything else the class should know.">
+            <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional…" rows={2} />
           </Field>
 
           <div className="flex gap-2 pt-1">
@@ -160,9 +326,9 @@ export function Routines() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-[14px] font-bold text-ink dark:text-white truncate">{r.batch}</div>
-                    {routineText(r) && (
+                    {routineBlock(r) && (
                       <div className="text-[12px] text-muted dark:text-muted-dark whitespace-pre-line leading-snug line-clamp-2">
-                        {routineText(r)}
+                        {routineBlock(r)}
                       </div>
                     )}
                   </div>
@@ -191,7 +357,7 @@ export function Routines() {
             <EmptyState
               icon={<IconCheck className="w-7 h-7" />}
               title="Nothing planned for this day"
-              subtitle="Pick a batch and save a routine - {routine} then fills itself into the absent-student WhatsApp message."
+              subtitle="Pick a batch and save a routine - {time}, {subjects} and {note} then fill themselves into the routine WhatsApp message."
             />
           </Card>
         )}

@@ -17,6 +17,7 @@ import {
   IconPhone,
 } from '../components/Icons'
 import { defaultCenter } from '../lib/sync'
+import { routineTimeLabel, routineSubjectsLabel, routineNote, routineHasContent } from '../lib/routine'
 import { waLink, waPhone, openExternal } from '../lib/phone'
 import type { Routine } from '../types'
 
@@ -156,7 +157,7 @@ export function StudentDetail() {
       const t = todayKey()
       for (let i = 1; i <= 14; i++) {
         const d = addDays(t, i)
-        const r = routines.find((x) => x.batch === student.batch && x.day === d && x.text)
+        const r = routines.find((x) => x.batch === student.batch && x.day === d && routineHasContent(x))
         if (r) {
           next = { day: d, routine: r }
           break
@@ -174,7 +175,11 @@ export function StudentDetail() {
       date: fmtDateLong(dayMs),
       batch: student.batch || '',
       center: center.name || defaultCenter().name,
+      // legacy free-form routines only - builder routines use {time} {subjects} {note}
       routine: next.routine.text || '',
+      time: routineTimeLabel(next.routine),
+      subjects: routineSubjectsLabel(next.routine),
+      note: routineNote(next.routine),
       'routine date': fmtDateLong(dayMs),
       'routine day': fmtWeekday(dayMs),
     })

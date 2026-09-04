@@ -16,6 +16,8 @@ export const K = {
   SEQ_RESERVED: 'seqReserved',
   /** last-used Attendance batch filter */
   ATT_BATCH: 'attBatch',
+  /** master subject list for the routine builder - synced via the meta file */
+  SUBJECTS: 'subjects',
 } as const
 
 /**

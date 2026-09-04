@@ -129,7 +129,20 @@ interface Ctx {
   quickCards: QuickCard[]
   saveQuickCard: (card: QuickCard) => Promise<void>
   deleteQuickCard: (id: string) => Promise<void>
-  saveRoutine: (input: { day: string; batch: string; text: string }) => Promise<void>
+  /** master subject list for the routine builder - synced via meta */
+  subjects: string[]
+  addSubject: (name: string) => Promise<void>
+  saveRoutine: (input: {
+    day: string
+    batch: string
+    timeStart?: string
+    timeEnd?: string
+    timeGirlsStart?: string
+    timeGirlsEnd?: string
+    timeSplit?: boolean
+    subjectList?: string[]
+    note?: string
+  }) => Promise<void>
   deleteRoutine: (id: string) => Promise<void>
 
   updateCenter: (c: Center) => Promise<void>
@@ -181,6 +194,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [attendances, setAttendances] = useState<Attendance[]>([])
   const [routines, setRoutines] = useState<Routine[]>([])
   const [quickCards, setQuickCards] = useState<QuickCard[]>([])
+  const [subjects, setSubjects] = useState<string[]>([])
   const [teachers, setTeachers] = useState<Teacher[]>([])
   const [center, setCenter] = useState<Center>(defaultCenter())
   const [receiptSeq, setReceiptSeq] = useState(0)
@@ -236,6 +250,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setAttendances((await db.attendance.toArray()).filter((a) => !a.deletedAt))
     setRoutines((await db.routines.toArray()).filter((r) => !r.deletedAt))
     setQuickCards((await db.quick.toArray()).filter((q) => !q.deletedAt))
+    setSubjects((await getKV<string[]>(K.SUBJECTS)) || [])
     const loaded = (await getKV<Center>(K.CENTER)) || defaultCenter()
     // soft-migrate the legacy phone field: receipts no longer print it - if
     // the address block is empty, the old phone moves there (preserved as
@@ -813,7 +828,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   )
 
   const saveRoutine = useCallback(
-    async (input: { day: string; batch: string; text: string }) => {
+    async (input: {
+      day: string
+      batch: string
+      timeStart?: string
+      timeEnd?: string
+      timeGirlsStart?: string
+      timeGirlsEnd?: string
+      timeSplit?: boolean
+      subjectList?: string[]
+      note?: string
+    }) => {
       // one logical edit per day-batch slot: a single timestamp keeps edits
       // from two devices merging into a perpetual re-push loop
       const now = Date.now()
@@ -821,7 +846,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         id: `${input.day}_${input.batch}`,
         day: input.day,
         batch: input.batch,
-        text: input.text.trim(),
+        timeStart: input.timeStart,
+        timeEnd: input.timeEnd,
+        timeGirlsStart: input.timeGirlsStart,
+        timeGirlsEnd: input.timeGirlsEnd,
+        timeSplit: input.timeSplit,
+        subjectList: input.subjectList,
+        note: input.note?.trim() || undefined,
         updatedAt: now,
       })
       await queueOp({ kind: 'pushJSON', file: 'routines' })
@@ -829,6 +860,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       scheduleSync()
     },
     [refreshData, scheduleSync],
+  )
+
+  /** Add a subject to the master list (case-insensitive dedupe) - synced via
+   *  the meta file so every device's builder dropdown stays identical. */
+  const addSubject = useCallback(
+    async (name: string) => {
+      const v = name.trim()
+      if (!v) return
+      const cur = (await getKV<string[]>(K.SUBJECTS)) || []
+      if (cur.some((x) => x.toLowerCase() === v.toLowerCase())) return
+      const next = [...cur, v]
+      await setKV(K.SUBJECTS, next)
+      setSubjects(next)
+      await queueOp({ kind: 'pushJSON', file: 'meta' })
+      scheduleSync()
+    },
+    [scheduleSync],
   )
 
   const deleteRoutine = useCallback(
@@ -911,6 +959,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       attendances,
       routines,
       quickCards,
+      subjects,
       teachers,
       center,
       receiptSeq,
@@ -937,6 +986,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       deleteRoutine,
       saveQuickCard,
       deleteQuickCard,
+      addSubject,
       updateCenter,
       setTheme,
       setPin,
@@ -960,6 +1010,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       attendances,
       routines,
       quickCards,
+      subjects,
       teachers,
       center,
       receiptSeq,
@@ -986,6 +1037,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       deleteRoutine,
       saveQuickCard,
       deleteQuickCard,
+      addSubject,
       updateCenter,
       setTheme,
       setPin,

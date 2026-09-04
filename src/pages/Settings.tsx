@@ -460,7 +460,7 @@ export function Settings() {
           </Field>
           <Field
             label="Absent student message"
-            hint="Sent to absent students from the Attendance page. {date}, {batch}, {routine}, {routine date} and {routine day} are filled in automatically - plan the routine in the Routine panel first."
+            hint="Sent to absent students from the Attendance page. {date}, {batch}, {time}, {subjects}, {note} and {routine} are filled from the next scheduled routine - plan it in the Routine panel first."
           >
             <Textarea
               value={form.attendanceMsg ?? defaultCenter().attendanceMsg ?? ''}
@@ -471,7 +471,7 @@ export function Settings() {
           </Field>
           <Field
             label="Routine message"
-            hint="Sent from the Send Routine button on a student page. {routine}, {routine date} and {routine day} are the next scheduled class - plan it in the Routine panel first."
+            hint="Sent from the Send Routine button on a student page. {time} is the class time (shows boys & girls separately when set), {subjects} the subject list, {note} the optional note, and {routine} only carries old free-text routines - plan it in the Routine panel first."
           >
             <Textarea
               value={form.routineMsg ?? defaultCenter().routineMsg ?? ''}
@@ -483,7 +483,7 @@ export function Settings() {
           <p className="text-[11.5px] text-faint">
             Available tokens:{" "}
             <span className="font-mono">
-              {"{student} {period} {fee} {amount} {center} {link} {date} {batch} {routine} {routine date} {routine day}"}
+              {"{student} {period} {fee} {amount} {center} {link} {date} {batch} {time} {subjects} {note} {routine} {routine date} {routine day}"}
             </span>{" "}
             - leave a field empty to keep the default message.
           </p>
