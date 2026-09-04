@@ -21,6 +21,17 @@ function fmtDay(day: string): string {
   })
 }
 
+/** tapping anywhere on a time field opens the native picker - without this
+ *  only the clock icon opens it and the rest of the field is just typing */
+function openPicker(e: React.MouseEvent<HTMLInputElement>) {
+  const el = e.currentTarget as HTMLInputElement & { showPicker?: () => void }
+  try {
+    el.showPicker?.()
+  } catch {
+    /* unsupported browser - falls back to focus + typing */
+  }
+}
+
 export function Routines() {
   const { students, routines, subjects, addSubject, saveRoutine, deleteRoutine, showToast } = useApp()
   const [day, setDay] = useState(tomorrowKey())
@@ -168,15 +179,15 @@ export function Routines() {
               <div className="space-y-2">
                 <div className="grid grid-cols-[auto_1fr] items-center gap-2">
                   <span className="text-[12px] font-bold text-muted dark:text-muted-dark w-10">Boys</span>
-                  <Input type="time" value={timeStart} onChange={(e) => setTimeStart(e.target.value)} />
+                  <Input type="time" value={timeStart} onClick={openPicker} onChange={(e) => setTimeStart(e.target.value)} />
                 </div>
                 <div className="grid grid-cols-[auto_1fr] items-center gap-2">
                   <span className="text-[12px] font-bold text-muted dark:text-muted-dark w-10">Girls</span>
-                  <Input type="time" value={timeGirlsStart} onChange={(e) => setTimeGirlsStart(e.target.value)} />
+                  <Input type="time" value={timeGirlsStart} onClick={openPicker} onChange={(e) => setTimeGirlsStart(e.target.value)} />
                 </div>
               </div>
             ) : (
-              <Input type="time" value={timeStart} onChange={(e) => setTimeStart(e.target.value)} />
+              <Input type="time" value={timeStart} onClick={openPicker} onChange={(e) => setTimeStart(e.target.value)} />
             )}
           </Field>
 
