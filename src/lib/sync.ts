@@ -13,6 +13,7 @@ import type {
   Attendance,
   Routine,
   QuickCard,
+  SubjectEntry,
   Center,
   Session,
   Teacher,
@@ -104,7 +105,7 @@ async function buildJSON(file: 'students' | 'payments' | 'meta' | 'postings' | '
   const receiptSeq = (await getKV<number>(K.RECEIPT_SEQ)) || 0
   const teachers = (await getKV<Teacher[]>(K.TEACHERS)) || []
   const seqReserved = (await getKV<{ high: number; used: number }>(K.SEQ_RESERVED)) || { high: 0, used: 0 }
-  const subjects = (await getKV<string[]>(K.SUBJECTS)) || []
+  const subjects = normalizeSubjects((await getKV<unknown>(K.SUBJECTS)))
   return JSON.stringify({ version: 1, updatedAt: Date.now(), center, receiptSeq, teachers, seqReserved, subjects })
 }
 
@@ -381,6 +382,27 @@ function routineSig(r: Routine): string {
 }
 function quickSig(q: QuickCard): string {
   return JSON.stringify([q.kind, q.title, q.desc || '', q.url || '', q.noteHtml || '', q.deletedAt ?? null])
+}
+
+/** The subject master list was briefly a plain string[] - normalize both
+ *  shapes into entries so old snapshots keep merging cleanly. */
+export function normalizeSubjects(v: unknown): SubjectEntry[] {
+  if (!Array.isArray(v)) return []
+  return v
+    .map((x) => (typeof x === 'string' ? { name: x, updatedAt: 0 } : (x as SubjectEntry)))
+    .filter((s) => !!s?.name)
+}
+
+/** Union-merge subject lists by name - the newer entry (tombstones included)
+ *  wins, so a delete on one device propagates instead of resurrecting. */
+function mergeSubjects(local: SubjectEntry[], remote: SubjectEntry[]): SubjectEntry[] {
+  const byKey = new Map<string, SubjectEntry>()
+  for (const s of [...local, ...remote]) {
+    const key = s.name.toLowerCase()
+    const cur = byKey.get(key)
+    if (!cur || (s.updatedAt || 0) >= (cur.updatedAt || 0)) byKey.set(key, s)
+  }
+  return [...byKey.values()]
 }
 
 /**
@@ -940,16 +962,17 @@ export async function pull(): Promise<{
           if (canon(mergedT) !== canon(remoteT)) {
             if (!needPush.includes('meta')) needPush.push('meta')
           }
-          // subject master list: append-only union merge - a subject added on
-          // any device lands everywhere and is never removed by a merge
-          const curS = (await getKV<string[]>(K.SUBJECTS)) || []
-          const remoteS = Array.isArray(j.subjects) ? j.subjects : []
-          const mergedS = [...curS]
-          for (const s of remoteS) {
-            if (!mergedS.some((x) => x.toLowerCase() === String(s).toLowerCase())) mergedS.push(String(s))
-          }
-          if (mergedS.length !== curS.length) {
+          // subject master list: merge by name with tombstones - a delete on
+          // one device propagates, and entries only one side has still land
+          const curS = normalizeSubjects((await getKV<unknown>(K.SUBJECTS)))
+          const remoteS = normalizeSubjects(j.subjects)
+          const mergedS = mergeSubjects(curS, remoteS)
+          const canonS = (arr: SubjectEntry[]) => JSON.stringify([...arr].sort((a, b) => a.name.localeCompare(b.name)))
+          if (canonS(mergedS) !== canonS(curS)) {
             await setKV(K.SUBJECTS, mergedS)
+          }
+          if (canonS(mergedS) !== canonS(remoteS)) {
+            if (!needPush.includes('meta')) needPush.push('meta')
           }
           changed = true
         }

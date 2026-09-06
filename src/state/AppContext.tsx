@@ -16,6 +16,7 @@ import type {
   AttendanceStatus,
   Routine,
   QuickCard,
+  SubjectEntry,
   Center,
   Session,
   SessionUser,
@@ -31,6 +32,7 @@ import {
   pull,
   setDriveToken,
   defaultCenter,
+  normalizeSubjects,
 } from '../lib/sync'
 import { newId, receiptFileName, dayKey } from '../lib/format'
 import { setToken, getToken, clearToken, tokenNeedsRefresh } from '../lib/token'
@@ -130,8 +132,9 @@ interface Ctx {
   saveQuickCard: (card: QuickCard) => Promise<void>
   deleteQuickCard: (id: string) => Promise<void>
   /** master subject list for the routine builder - synced via meta */
-  subjects: string[]
+  subjects: SubjectEntry[]
   addSubject: (name: string) => Promise<void>
+  deleteSubject: (name: string) => Promise<void>
   saveRoutine: (input: {
     day: string
     batch: string
@@ -192,7 +195,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [attendances, setAttendances] = useState<Attendance[]>([])
   const [routines, setRoutines] = useState<Routine[]>([])
   const [quickCards, setQuickCards] = useState<QuickCard[]>([])
-  const [subjects, setSubjects] = useState<string[]>([])
+  const [subjects, setSubjects] = useState<SubjectEntry[]>([])
   const [teachers, setTeachers] = useState<Teacher[]>([])
   const [center, setCenter] = useState<Center>(defaultCenter())
   const [receiptSeq, setReceiptSeq] = useState(0)
@@ -248,7 +251,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setAttendances((await db.attendance.toArray()).filter((a) => !a.deletedAt))
     setRoutines((await db.routines.toArray()).filter((r) => !r.deletedAt))
     setQuickCards((await db.quick.toArray()).filter((q) => !q.deletedAt))
-    setSubjects((await getKV<string[]>(K.SUBJECTS)) || [])
+    setSubjects(normalizeSubjects((await getKV<unknown>(K.SUBJECTS))))
     const loaded = (await getKV<Center>(K.CENTER)) || defaultCenter()
     // soft-migrate the legacy phone field: receipts no longer print it - if
     // the address block is empty, the old phone moves there (preserved as
@@ -857,14 +860,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
   )
 
   /** Add a subject to the master list (case-insensitive dedupe) - synced via
-   *  the meta file so every device's builder dropdown stays identical. */
+   *  the meta file so every device's dropdown stays identical. Adding a name
+   *  that was deleted resurrects it (newer timestamp wins the merge). */
   const addSubject = useCallback(
     async (name: string) => {
       const v = name.trim()
       if (!v) return
-      const cur = (await getKV<string[]>(K.SUBJECTS)) || []
-      if (cur.some((x) => x.toLowerCase() === v.toLowerCase())) return
-      const next = [...cur, v]
+      const cur = normalizeSubjects((await getKV<unknown>(K.SUBJECTS)))
+      if (cur.some((x) => x.name.toLowerCase() === v.toLowerCase() && !x.deletedAt)) return
+      const next = [
+        ...cur.filter((x) => x.name.toLowerCase() !== v.toLowerCase()),
+        { name: v, updatedAt: Date.now() },
+      ]
+      await setKV(K.SUBJECTS, next)
+      setSubjects(next)
+      await queueOp({ kind: 'pushJSON', file: 'meta' })
+      scheduleSync()
+    },
+    [scheduleSync],
+  )
+
+  /** Tombstone a subject from the master list - saved routines that already
+   *  reference it keep working, it just disappears from every dropdown. */
+  const deleteSubject = useCallback(
+    async (name: string) => {
+      const cur = normalizeSubjects((await getKV<unknown>(K.SUBJECTS)))
+      const now = Date.now()
+      const next = cur.map((x) =>
+        x.name.toLowerCase() === name.toLowerCase() ? { ...x, deletedAt: now, updatedAt: now } : x,
+      )
       await setKV(K.SUBJECTS, next)
       setSubjects(next)
       await queueOp({ kind: 'pushJSON', file: 'meta' })
@@ -981,6 +1005,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       saveQuickCard,
       deleteQuickCard,
       addSubject,
+      deleteSubject,
       updateCenter,
       setTheme,
       setPin,
@@ -1032,6 +1057,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       saveQuickCard,
       deleteQuickCard,
       addSubject,
+      deleteSubject,
       updateCenter,
       setTheme,
       setPin,

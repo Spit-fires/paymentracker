@@ -3,8 +3,8 @@ import { useApp } from '../state/AppContext'
 import { dayKey } from '../lib/format'
 import { routineBlock, hasBuilderFields } from '../lib/routine'
 import type { Routine } from '../types'
-import { Card, PageHeader, Button, Field, Input, Textarea, EmptyState, cx } from '../components/ui'
-import { IconClock, IconTrash, IconEdit, IconCheck, IconPlus } from '../components/Icons'
+import { Card, PageHeader, Button, Field, Input, Textarea, EmptyState, Modal, cx } from '../components/ui'
+import { IconClock, IconTrash, IconEdit, IconCheck } from '../components/Icons'
 
 /** tomorrow's local day key - routines are planned the evening before */
 function tomorrowKey(): string {
@@ -33,7 +33,7 @@ function openPicker(e: React.MouseEvent<HTMLInputElement>) {
 }
 
 export function Routines() {
-  const { students, routines, subjects, addSubject, saveRoutine, deleteRoutine, showToast } = useApp()
+  const { students, routines, subjects, addSubject, deleteSubject, saveRoutine, deleteRoutine, showToast } = useApp()
   const [day, setDay] = useState(tomorrowKey())
   const [batch, setBatch] = useState('')
   const [editing, setEditing] = useState<string | null>(null)
@@ -47,6 +47,21 @@ export function Routines() {
   const [note, setNote] = useState('')
   const [addingSubject, setAddingSubject] = useState(false)
   const [newSubject, setNewSubject] = useState('')
+
+  // manage-subjects modal (master list deletion)
+  const [manageOpen, setManageOpen] = useState(false)
+  const [confirmDelSubject, setConfirmDelSubject] = useState<string | null>(null)
+
+  // live master list (tombstoned entries hidden) - saved routines that
+  // reference a deleted subject keep working regardless
+  const liveSubjects = useMemo(
+    () => subjects.filter((s) => !s.deletedAt).map((s) => s.name).sort((a, b) => a.localeCompare(b)),
+    [subjects],
+  )
+  const availableSubjects = useMemo(
+    () => liveSubjects.filter((s) => !picked.includes(s)),
+    [liveSubjects, picked],
+  )
 
   const batches = useMemo(
     () => Array.from(new Set(students.map((s) => s.batch))).filter(Boolean).sort(),
@@ -117,7 +132,7 @@ export function Routines() {
   }
 
   const pickSubject = (s: string) => {
-    setPicked((p) => (p.includes(s) ? p.filter((x) => x !== s) : [...p, s]))
+    setPicked((p) => (p.includes(s) ? p : [...p, s]))
   }
 
   const submitNewSubject = async () => {
@@ -127,6 +142,14 @@ export function Routines() {
     setPicked((p) => (p.some((x) => x.toLowerCase() === v.toLowerCase()) ? p : [...p, v]))
     setNewSubject('')
     setAddingSubject(false)
+  }
+
+  const removeSubjectEverywhere = async (name: string) => {
+    if (confirmDelSubject !== name) return setConfirmDelSubject(name)
+    await deleteSubject(name)
+    setPicked((p) => p.filter((x) => x !== name))
+    setConfirmDelSubject(null)
+    showToast(`${name} deleted`, 'ok')
   }
 
   return (
@@ -217,72 +240,71 @@ export function Routines() {
             </button>
           </div>
 
-          {/* Subjects */}
-          <Field label="Subjects" hint="Tap to select - new subjects are saved for future routines.">
-            {subjects.length === 0 && !addingSubject && !picked.length ? (
-              <button
-                onClick={() => setAddingSubject(true)}
-                className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-teal/40 text-teal text-[13px] font-semibold py-2.5 active:scale-[0.99] transition"
-              >
-                <IconPlus className="w-3.5 h-3.5" /> Add a subject
-              </button>
-            ) : (
-              <div className="flex flex-wrap gap-1.5">
-                {[...subjects]
-                  .sort((a, b) => a.localeCompare(b))
-                  .map((s) => {
-                    const on = picked.includes(s)
-                    return (
-                      <button
-                        key={s}
-                        onClick={() => pickSubject(s)}
-                        className={cx(
-                          'px-3 py-1.5 rounded-full text-[12.5px] font-bold transition active:scale-[0.97] flex items-center gap-1',
-                          on
-                            ? 'bg-teal text-white'
-                            : 'bg-white dark:bg-card-dark border border-line dark:border-line-dark text-muted dark:text-muted-dark',
-                        )}
-                      >
-                        {on && <IconCheck className="w-3 h-3" />}
-                        {s}
-                      </button>
-                    )
-                  })}
-                {picked
-                  .filter((s) => !subjects.includes(s))
-                  .map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => pickSubject(s)}
-                      className="px-3 py-1.5 rounded-full text-[12.5px] font-bold bg-teal text-white flex items-center gap-1"
-                    >
-                      <IconCheck className="w-3 h-3" />
-                      {s}
-                    </button>
-                  ))}
-                {addingSubject ? (
-                  <div className="flex items-center gap-1.5 w-full">
-                    <Input
-                      value={newSubject}
-                      onChange={(e) => setNewSubject(e.target.value)}
-                      placeholder="Subject name"
-                      maxLength={40}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') void submitNewSubject()
-                      }}
-                    />
-                    <Button onClick={() => void submitNewSubject()} disabled={!newSubject.trim()}>
-                      Add
-                    </Button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setAddingSubject(true)}
-                    className="px-3 py-1.5 rounded-full text-[12.5px] font-semibold border border-dashed border-teal/40 text-teal flex items-center gap-1"
+          {/* Subjects - dropdown picker; picked subjects show as removable chips */}
+          <Field label="Subjects" hint="Pick from the dropdown - subjects you add are saved for future routines.">
+            {picked.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {picked.map((s) => (
+                  <span
+                    key={s}
+                    className="px-3 py-1.5 rounded-full text-[12.5px] font-bold bg-teal text-white flex items-center gap-1.5"
                   >
-                    <IconPlus className="w-3 h-3" /> Add
-                  </button>
-                )}
+                    {s}
+                    <button
+                      onClick={() => setPicked((p) => p.filter((x) => x !== s))}
+                      className="text-white/80 hover:text-white"
+                      aria-label={`Remove ${s} from this routine`}
+                    >
+                      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                        <path d="M18 6 6 18M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <select
+                value=""
+                onChange={(e) => {
+                  const v = e.target.value
+                  if (v === '__new') {
+                    setAddingSubject(true)
+                  } else if (v) {
+                    pickSubject(v)
+                  }
+                }}
+                className="flex-1 rounded-xl bg-white dark:bg-input-dark border border-line dark:border-line-dark px-3 py-2.5 text-[13.5px] font-semibold text-body dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-teal/25 appearance-none"
+              >
+                <option value="">Add subject…</option>
+                {availableSubjects.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+                <option value="__new">＋ New subject…</option>
+              </select>
+              <button
+                onClick={() => setManageOpen(true)}
+                className="text-[12px] font-semibold text-teal dark:text-teal-bright px-2 py-2 shrink-0"
+              >
+                Manage
+              </button>
+            </div>
+            {addingSubject && (
+              <div className="flex items-center gap-1.5 mt-2">
+                <Input
+                  value={newSubject}
+                  onChange={(e) => setNewSubject(e.target.value)}
+                  placeholder="Subject name"
+                  maxLength={40}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void submitNewSubject()
+                  }}
+                />
+                <Button onClick={() => void submitNewSubject()} disabled={!newSubject.trim()}>
+                  Add
+                </Button>
               </div>
             )}
           </Field>
@@ -354,6 +376,38 @@ export function Routines() {
           </Card>
         )}
       </div>
+
+      {/* Manage subjects - master list with delete (saved routines keep working) */}
+      <Modal open={manageOpen} onClose={() => { setManageOpen(false); setConfirmDelSubject(null) }} title="Subjects">
+        {liveSubjects.length === 0 ? (
+          <p className="text-[13px] text-muted dark:text-muted-dark py-4 text-center">
+            No subjects yet - add them from the builder dropdown.
+          </p>
+        ) : (
+          <div className="space-y-1">
+            {liveSubjects.map((s) => (
+              <div key={s} className="flex items-center gap-2 px-1 py-1">
+                <div className="flex-1 text-[14px] font-semibold text-ink dark:text-white">{s}</div>
+                <button
+                  onClick={() => void removeSubjectEverywhere(s)}
+                  className={cx(
+                    'w-9 h-9 grid place-items-center rounded-lg transition active:scale-90',
+                    confirmDelSubject === s ? 'bg-danger/10 text-danger' : 'text-faint hover:text-danger',
+                  )}
+                  aria-label={`Delete ${s}`}
+                >
+                  <IconTrash className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+            {confirmDelSubject && (
+              <p className="text-[12px] text-danger font-semibold px-1 pt-2">
+                Tap the trash again to delete “{confirmDelSubject}” - routines already using it keep working.
+              </p>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }

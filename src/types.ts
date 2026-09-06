@@ -171,6 +171,15 @@ export interface QuickCard {
   deletedAt?: number
 }
 
+/** Master subject list entry for the routine builder - lives in the meta
+ *  sync file. deletedAt tombstones remove a subject everywhere while saved
+ *  routines that already reference it keep working. */
+export interface SubjectEntry {
+  name: string
+  updatedAt?: number
+  deletedAt?: number
+}
+
 export interface Center {
   name: string
   tagline: string
