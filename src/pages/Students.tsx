@@ -154,14 +154,16 @@ export function Students() {
         const paid = studentPeriodBalance(payments, s.id, period)
         const fee = studentBalanceFee(s)
         // fully paid: paid something this month and nothing left owing
-        return studentPeriodPaidAny(payments, s.id, period) && Math.max(0, fee - paid) === 0
+        // (the manually-managed remaining due counts as owing)
+        return studentPeriodPaidAny(payments, s.id, period) && Math.max(0, fee - paid) + (s.remainingDue || 0) === 0
       })
     } else if (statusFilter === 'due') {
       list = list.filter((s) => {
         const paid = studentPeriodBalance(payments, s.id, period)
         const fee = studentBalanceFee(s)
-        // owes anything this month - includes partially paid students
-        return Math.max(0, fee - paid) > 0
+        // owes anything this month - includes partially paid students and the
+        // manually-managed remaining due
+        return Math.max(0, fee - paid) + (s.remainingDue || 0) > 0
       })
     }
     if (q.trim()) {
@@ -211,10 +213,12 @@ export function Students() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtered])
 
-  /** Payment status for this month: fully paid / partially paid / nothing paid. */
+  /** Payment status for this month: fully paid / partially paid / nothing paid.
+   *  The student's manually-managed remaining due adds on top of the monthly
+   *  due - a month-fully-paid student with extra due still shows as Due. */
   const statusOf = (s: Student): 'paid' | 'partial' | 'due' => {
     const paid = studentPeriodBalance(payments, s.id, period)
-    const due = Math.max(0, studentBalanceFee(s) - paid)
+    const due = Math.max(0, studentBalanceFee(s) - paid) + (s.remainingDue || 0)
     if (!studentPeriodPaidAny(payments, s.id, period)) return 'due'
     return due > 0 ? 'partial' : 'paid'
   }
@@ -281,6 +285,7 @@ export function Students() {
         defaultFee: v.defaultFee ? Number(v.defaultFee) : 0,
         realPayment: v.realPayment.trim() ? Number(v.realPayment) : undefined,
         commission: v.commission.trim() ? Number(v.commission) : undefined,
+        remainingDue: v.remainingDue.trim() ? Number(v.remainingDue) : undefined,
         notes: v.notes,
         photo: v.photo,
       })

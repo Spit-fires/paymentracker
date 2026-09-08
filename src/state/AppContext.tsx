@@ -55,6 +55,8 @@ export interface NewStudentInput {
   defaultFee: number
   realPayment?: number
   commission?: number
+  /** extra manually-managed due - defaults to 0 */
+  remainingDue?: number
   notes?: string
   photo?: Blob | null
 }
@@ -532,6 +534,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         defaultFee: input.defaultFee,
         realPayment: input.realPayment,
         commission: input.commission,
+        remainingDue: input.remainingDue,
         notes: input.notes?.trim(),
         photoBlob: input.photo || undefined,
         archived: false,

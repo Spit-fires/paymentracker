@@ -12,6 +12,7 @@ export interface FormValue {
   defaultFee: string
   realPayment: string
   commission: string
+  remainingDue: string
   notes: string
   photo: Blob | null
 }
@@ -29,6 +30,7 @@ export function initialForm(s?: Student): FormValue {
     defaultFee: s?.defaultFee ? String(s.defaultFee) : '',
     realPayment: s?.realPayment ? String(s.realPayment) : '',
     commission: s?.commission ? String(s.commission) : '',
+    remainingDue: s?.remainingDue ? String(s.remainingDue) : '',
     notes: s?.notes || '',
     photo: null,
   }
@@ -316,6 +318,20 @@ export function StudentForm({
           />
           <div className="text-[11.5px] text-muted dark:text-muted-dark mt-1">
             Optional · teacher's share · the center's balance = real payment − commission.
+          </div>
+        </Field>
+      </div>
+
+      <div className="w-1/2">
+        <Field label="Remaining Due (৳)">
+          <Input
+            value={f.remainingDue}
+            onChange={(e) => set('remainingDue', e.target.value)}
+            inputMode="numeric"
+            placeholder="0"
+          />
+          <div className="text-[11.5px] text-muted dark:text-muted-dark mt-1">
+            Extra due outside the monthly fee - you edit this by hand, payments never change it.
           </div>
         </Field>
       </div>

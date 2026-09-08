@@ -20,6 +20,10 @@ export interface Student {
   /** teacher's monthly share from this student - teacher-only, never printed;
    *  blank = 0. The center's balance fee = realPayment − commission. */
   commission?: number
+  /** extra manually-managed due outside the monthly fee system - defaults to
+   *  0, edited by the teacher, never auto-changed by payments. Added on top
+   *  of every due display. */
+  remainingDue?: number
   notes?: string
   photoFileId?: string
   photoBlob?: Blob

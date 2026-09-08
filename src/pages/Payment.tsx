@@ -137,6 +137,7 @@ export function Payment() {
     if (feeParam) {
       setFeeTitle('')
       setFeeOther(false)
+      setDue(student.remainingDue ? String(student.remainingDue) : '0')
       return
     }
     setAmount(String(autofillAmount(students, payments, student.id, period)))
@@ -144,6 +145,9 @@ export function Payment() {
     // month's real total - blank keeps it "same as slip"
     const real = realAutofillAmount(students, payments, student.id, period)
     if (real > 0) setRealAmount(String(real))
+    // the receipt due defaults to the student's manually-managed remaining due
+    // - pure display default, saving never edits the profile value
+    setDue(student.remainingDue ? String(student.remainingDue) : '0')
     // commission prefills from the student's monthly commission when there are
     // teachers to receive it - receipt edits keep their own values
     if (student.commission && teachers.length > 0) {
@@ -531,7 +535,7 @@ export function Payment() {
         {/* Due (partial payments) */}
         <Card className="!rounded-2xl p-4">
           <div className="text-[13px] font-semibold text-body/80 dark:text-muted-dark mb-1.5">
-            Due (remaining on this receipt) · defaults to ৳0
+            Due (remaining on this receipt) · defaults to the student's remaining due
           </div>
           <div className="relative">
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[18px] font-bold text-ink dark:text-white">

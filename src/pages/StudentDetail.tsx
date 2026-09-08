@@ -112,7 +112,8 @@ export function StudentDetail() {
   const paid = studentPeriodBalance(payments, student.id, period)
   const paidAny = studentPeriodPaidAny(payments, student.id, period)
   const fee = studentBalanceFee(student)
-  const due = Math.max(0, fee - paid)
+  const extraDue = student.remainingDue || 0
+  const due = Math.max(0, fee - paid) + extraDue
   const centerName = center.name || defaultCenter().name
 
   const onEdit = async (v: FormValue) => {
@@ -128,6 +129,7 @@ export function StudentDetail() {
         defaultFee: v.defaultFee ? Number(v.defaultFee) : 0,
         realPayment: v.realPayment.trim() ? Number(v.realPayment) : undefined,
         commission: v.commission.trim() ? Number(v.commission) : undefined,
+        remainingDue: v.remainingDue.trim() ? Number(v.remainingDue) : undefined,
         notes: v.notes,
         ...(v.photo ? { photoBlob: v.photo } : {}),
       })
@@ -280,6 +282,11 @@ export function StudentDetail() {
               <span className="text-[14px] font-semibold text-faint"> / {fmtTaka(fee)}</span>
             )}
           </div>
+          {extraDue > 0 && (
+            <div className="text-[11.5px] font-semibold text-muted dark:text-muted-dark mt-0.5">
+              Includes remaining due {fmtTaka(extraDue)}
+            </div>
+          )}
         </div>
 
         {student.notes && (

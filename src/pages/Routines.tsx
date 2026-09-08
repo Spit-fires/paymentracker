@@ -4,7 +4,7 @@ import { dayKey } from '../lib/format'
 import { routineBlock, hasBuilderFields } from '../lib/routine'
 import type { Routine } from '../types'
 import { Card, PageHeader, Button, Field, Input, Textarea, EmptyState, Modal, cx } from '../components/ui'
-import { IconClock, IconTrash, IconEdit, IconCheck } from '../components/Icons'
+import { IconClock, IconTrash, IconEdit, IconCheck, IconPlus } from '../components/Icons'
 
 /** tomorrow's local day key - routines are planned the evening before */
 function tomorrowKey(): string {
@@ -47,6 +47,7 @@ export function Routines() {
   const [note, setNote] = useState('')
   const [addingSubject, setAddingSubject] = useState(false)
   const [newSubject, setNewSubject] = useState('')
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   // manage-subjects modal (master list deletion)
   const [manageOpen, setManageOpen] = useState(false)
@@ -57,10 +58,6 @@ export function Routines() {
   const liveSubjects = useMemo(
     () => subjects.filter((s) => !s.deletedAt).map((s) => s.name).sort((a, b) => a.localeCompare(b)),
     [subjects],
-  )
-  const availableSubjects = useMemo(
-    () => liveSubjects.filter((s) => !picked.includes(s)),
-    [liveSubjects, picked],
   )
 
   const batches = useMemo(
@@ -264,26 +261,71 @@ export function Routines() {
               </div>
             )}
             <div className="flex items-center gap-2">
-              <select
-                value=""
-                onChange={(e) => {
-                  const v = e.target.value
-                  if (v === '__new') {
-                    setAddingSubject(true)
-                  } else if (v) {
-                    pickSubject(v)
-                  }
-                }}
-                className="flex-1 rounded-xl bg-white dark:bg-input-dark border border-line dark:border-line-dark px-3 py-2.5 text-[13.5px] font-semibold text-body dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-teal/25 appearance-none"
-              >
-                <option value="">Add subject…</option>
-                {availableSubjects.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-                <option value="__new">＋ New subject…</option>
-              </select>
+              <div className="relative flex-1">
+                <button
+                  type="button"
+                  onClick={() => setPickerOpen((v) => !v)}
+                  className="w-full flex items-center justify-between rounded-xl bg-white dark:bg-input-dark border border-line dark:border-line-dark px-3 py-2.5 text-[13.5px] font-semibold text-body dark:text-text-dark"
+                >
+                  <span>Add subject…</span>
+                  {picked.length > 0 && <span className="text-[11px] font-semibold text-teal">{picked.length} picked</span>}
+                </button>
+                {pickerOpen && (
+                  <>
+                    {/* outside tap closes the panel - taps inside never do */}
+                    <div className="fixed inset-0 z-10" onClick={() => setPickerOpen(false)} />
+                    <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-20 rounded-xl border border-line dark:border-line-dark bg-white dark:bg-card-dark shadow-[0_4px_12px_rgba(18,49,79,0.15)] p-1.5 max-h-64 overflow-y-auto">
+                      {liveSubjects.map((s) => {
+                        const on = picked.includes(s)
+                        return (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => pickSubject(s)}
+                            className="w-full flex items-center gap-2.5 px-2.5 h-9 rounded-md text-left text-[13px] font-semibold text-body dark:text-text-dark hover:bg-ink/5 dark:hover:bg-white/10"
+                          >
+                            <span
+                              className={cx(
+                                'w-4 h-4 rounded border grid place-items-center shrink-0',
+                                on ? 'bg-teal border-teal text-white' : 'border-line dark:border-line-dark text-transparent',
+                              )}
+                            >
+                              <IconCheck className="w-3 h-3" />
+                            </span>
+                            {s}
+                          </button>
+                        )
+                      })}
+                      {liveSubjects.length === 0 && (
+                        <p className="px-2.5 py-2 text-[12px] text-faint">No subjects yet - add one below.</p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setAddingSubject((v) => !v)}
+                        className="w-full flex items-center gap-2 px-2.5 h-9 rounded-md text-left text-[13px] font-semibold text-teal hover:bg-teal/10"
+                      >
+                        <IconPlus className="w-3.5 h-3.5" /> New subject…
+                      </button>
+                      {addingSubject && (
+                        <div className="flex items-center gap-1.5 p-1.5">
+                          <Input
+                            value={newSubject}
+                            onChange={(e) => setNewSubject(e.target.value)}
+                            placeholder="Subject name"
+                            maxLength={40}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') void submitNewSubject()
+                            }}
+                          />
+                          <Button onClick={() => void submitNewSubject()} disabled={!newSubject.trim()}>
+                            Add
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
               <button
                 onClick={() => setManageOpen(true)}
                 className="text-[12px] font-semibold text-teal dark:text-teal-bright px-2 py-2 shrink-0"
@@ -291,22 +333,6 @@ export function Routines() {
                 Manage
               </button>
             </div>
-            {addingSubject && (
-              <div className="flex items-center gap-1.5 mt-2">
-                <Input
-                  value={newSubject}
-                  onChange={(e) => setNewSubject(e.target.value)}
-                  placeholder="Subject name"
-                  maxLength={40}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') void submitNewSubject()
-                  }}
-                />
-                <Button onClick={() => void submitNewSubject()} disabled={!newSubject.trim()}>
-                  Add
-                </Button>
-              </div>
-            )}
           </Field>
 
           {/* Optional note */}

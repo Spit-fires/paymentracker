@@ -49,7 +49,8 @@ export function Dashboard() {
   const recordedStr = fmtTaka(Math.round(recordedDisp))
   const billed = rows.filter((r) => r.fee > 0)
   const paidCount = billed.filter((r) => r.paidAny).length
-  const totalDue = rows.reduce((s, r) => s + r.due, 0)
+  // every student's manually-managed remaining due adds on top of the monthly due
+  const totalDue = rows.reduce((s, r) => s + r.due + (r.student.remainingDue || 0), 0)
 
   // net per-student collection (balance = real payment − commission) - used
   // for the batch collected figures, matching the home "Collected" total.
@@ -76,7 +77,7 @@ export function Dashboard() {
         count: list.length,
         paid: list.filter((r) => r.paidAny).length,
         collected: list.reduce((s, r) => s + (balanceByStudent.get(r.student.id) || 0), 0),
-        due: list.reduce((s, r) => s + r.due, 0),
+        due: list.reduce((s, r) => s + r.due + (r.student.remainingDue || 0), 0),
       }))
       .sort((a, b) => a.batch.localeCompare(b.batch))
   }, [rows, balanceByStudent])
