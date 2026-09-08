@@ -129,7 +129,7 @@ export function Routines() {
   }
 
   const pickSubject = (s: string) => {
-    setPicked((p) => (p.includes(s) ? p : [...p, s]))
+    setPicked((p) => (p.includes(s) ? p.filter((x) => x !== s) : [...p, s]))
   }
 
   const submitNewSubject = async () => {
