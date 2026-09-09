@@ -84,6 +84,7 @@ export function Routines() {
     setNote('')
     setAddingSubject(false)
     setNewSubject('')
+    setPickerOpen(false)
   }
 
   const startEdit = (r: Routine) => {
@@ -92,7 +93,19 @@ export function Routines() {
     setTimeSplit(!!r.timeSplit)
     setTimeStart(r.timeStart || '')
     setTimeGirlsStart(r.timeGirlsStart || '')
-    setPicked(r.subjectList ? [...r.subjectList] : [])
+    // normalize saved picks to the master-list casing (heals records saved
+    // before the casing fix) and drop case-duplicates like ["math","Math"]
+    const seen = new Set<string>()
+    setPicked(
+      (r.subjectList || [])
+        .map((s) => liveSubjects.find((m) => m.toLowerCase() === s.toLowerCase()) ?? s)
+        .filter((s) => {
+          const k = s.toLowerCase()
+          if (seen.has(k)) return false
+          seen.add(k)
+          return true
+        }),
+    )
     // legacy free-form routines keep their text alive through the note field
     setNote(r.text?.trim() && !hasBuilderFields(r) ? r.text : r.note || '')
     setAddingSubject(false)
@@ -136,7 +149,11 @@ export function Routines() {
     const v = newSubject.trim()
     if (!v) return
     await addSubject(v)
-    setPicked((p) => (p.some((x) => x.toLowerCase() === v.toLowerCase()) ? p : [...p, v]))
+    // always store the master-list casing so panel checkmarks (exact match)
+    // stay in sync - otherwise "math" vs "Math" desyncs selection
+    const master = liveSubjects.find((s) => s.toLowerCase() === v.toLowerCase())
+    const name = master ?? v
+    setPicked((p) => (p.some((x) => x.toLowerCase() === name.toLowerCase()) ? p : [...p, name]))
     setNewSubject('')
     setAddingSubject(false)
   }
