@@ -254,8 +254,14 @@ export function Routines() {
             </button>
           </div>
 
-          {/* Subjects - dropdown picker; picked subjects show as removable chips */}
-          <Field label="Subjects" hint="Pick from the dropdown - subjects you add are saved for future routines.">
+          {/* Subjects - dropdown picker; picked subjects show as removable chips.
+              NOTE: plain div, NOT <Field> - Field renders a <label> and a
+              label forwards every tap onto its first button, which ate picks
+              (first chip's x got synthetically clicked) and closed the panel */}
+          <div>
+            <div className="text-[13px] font-semibold text-body/80 dark:text-muted-dark mb-1.5">
+              Subjects
+            </div>
             {picked.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mb-2">
                 {picked.map((s) => (
@@ -350,7 +356,10 @@ export function Routines() {
                 Manage
               </button>
             </div>
-          </Field>
+            <div className="text-[12px] text-muted mt-1 dark:text-muted-dark/80">
+              Pick from the dropdown - subjects you add are saved for future routines.
+            </div>
+          </div>
 
           {/* Optional note */}
           <Field label="Note" hint="Optional - anything else the class should know.">
