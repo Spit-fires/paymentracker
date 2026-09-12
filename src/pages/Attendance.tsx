@@ -1063,7 +1063,13 @@ function ReportView() {
             <div className="flex-1 min-w-0">
               <div className="text-[14px] font-bold text-ink dark:text-white truncate">{s.name}</div>
               <div className="text-[12px] text-muted dark:text-muted-dark tabular-nums">
-                W {working} · P {present} · A {absent} · L {leave}
+                {working === 0 ? (
+                  <span>No attendance taken</span>
+                ) : present + absent + leave === 0 ? (
+                  <span>Not marked</span>
+                ) : (
+                  <>W {working} · P {present} · A {absent} · L {leave}</>
+                )}
               </div>
             </div>
             <button
