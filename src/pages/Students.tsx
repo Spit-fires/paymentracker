@@ -3,7 +3,7 @@ import { Link, useNavigationType, useSearchParams } from 'react-router-dom'
 import { motion } from 'motion/react'
 import { useApp } from '../state/AppContext'
 import { studentPeriodPaidAny, studentPeriodBalance, studentBalanceFee } from '../lib/ledger'
-import { periodNow } from '../lib/format'
+import { periodNow, fmtTaka } from '../lib/format'
 import { K, getKV, setKV, db } from '../lib/db'
 import { getToken } from '../lib/token'
 import { Card, EmptyState, Modal, Button, useBlobUrl } from '../components/ui'
@@ -266,8 +266,15 @@ export function Students() {
                 </div>
               )}
             </div>
-            <div className={`text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0 ${CHIP[st]}`}>
-              {st === 'paid' ? 'Paid' : st === 'partial' ? 'Partially paid' : 'Due'}
+            <div className="flex flex-col items-end gap-1 shrink-0">
+              <div className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${CHIP[st]}`}>
+                {st === 'paid' ? 'Paid' : st === 'partial' ? 'Partially paid' : 'Due'}
+              </div>
+              {(s.realPayment ?? s.defaultFee) > 0 && (
+                <div className="text-[10.5px] font-semibold text-muted dark:text-muted-dark tabular-nums">
+                  Real {fmtTaka(s.realPayment ?? s.defaultFee)}
+                </div>
+              )}
             </div>
             <IconArrow className="w-4 h-4 text-faint dark:text-[#5f7a92]" />
           </Card>
