@@ -272,7 +272,7 @@ export function Students() {
               </div>
               {(s.realPayment ?? s.defaultFee) > 0 && (
                 <div className="text-[10.5px] font-semibold text-muted dark:text-muted-dark tabular-nums">
-                  Real {fmtTaka(s.realPayment ?? s.defaultFee)}
+                  {fmtTaka(s.realPayment ?? s.defaultFee)}
                 </div>
               )}
             </div>
