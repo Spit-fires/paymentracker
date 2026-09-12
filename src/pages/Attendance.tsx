@@ -1051,51 +1051,65 @@ function ReportView() {
         })
         const busyTick = ticking.has(`${s.id}_${batch}_${from}_${to}`)
         return (
-          <Card key={s.id} className="!rounded-xl p-3.5 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-[#e8f0f7] dark:bg-hover-dark grid place-items-center text-ink dark:text-accent-dark font-bold text-[13px] shrink-0">
-              {s.name
-                .split(' ')
-                .slice(0, 2)
-                .map((x) => x[0])
-                .join('')
-                .toUpperCase()}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-[14px] font-bold text-ink dark:text-white truncate">{s.name}</div>
-              <div className="text-[12px] text-muted dark:text-muted-dark tabular-nums">
-                {working === 0 ? (
-                  <span>No attendance taken</span>
-                ) : present + absent + leave === 0 ? (
-                  <span>Not marked</span>
-                ) : (
-                  <>W {working} · P {present} · A {absent} · L {leave}</>
-                )}
+          <Card key={s.id} className="!rounded-xl p-3.5">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-[#e8f0f7] dark:bg-hover-dark grid place-items-center text-ink dark:text-accent-dark font-bold text-[13px] shrink-0">
+                {s.name
+                  .split(' ')
+                  .slice(0, 2)
+                  .map((x) => x[0])
+                  .join('')
+                  .toUpperCase()}
               </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[14px] font-bold text-ink dark:text-white truncate">{s.name}</div>
+              </div>
+              <button
+                onClick={() => void onTick(s.id, !ticked)}
+                disabled={busyTick}
+                aria-label={ticked ? `Unmark ${s.name} as informed` : `Mark ${s.name} as informed`}
+                title="Private tick - marks this guardian as informed for the period"
+                className={cx(
+                  'w-9 h-9 rounded-xl grid place-items-center border-2 shrink-0 transition active:scale-95',
+                  ticked
+                    ? 'bg-emerald-500 border-emerald-500 text-white'
+                    : 'border-line dark:border-line-dark text-transparent',
+                  busyTick && 'opacity-50',
+                )}
+              >
+                <IconCheck className="w-4.5 h-4.5" />
+              </button>
+              <Button
+                variant="soft"
+                size="sm"
+                disabled={!phone}
+                title={phone ? undefined : 'Add a phone number to send WhatsApp messages'}
+                onClick={() => openExternal(waLink(phone, msg))}
+              >
+                <IconWhatsApp className="w-4 h-4" /> Message
+              </Button>
             </div>
-            <button
-              onClick={() => void onTick(s.id, !ticked)}
-              disabled={busyTick}
-              aria-label={ticked ? `Unmark ${s.name} as informed` : `Mark ${s.name} as informed`}
-              title="Private tick - marks this guardian as informed for the period"
-              className={cx(
-                'w-9 h-9 rounded-xl grid place-items-center border-2 shrink-0 transition active:scale-95',
-                ticked
-                  ? 'bg-emerald-500 border-emerald-500 text-white'
-                  : 'border-line dark:border-line-dark text-transparent',
-                busyTick && 'opacity-50',
-              )}
-            >
-              <IconCheck className="w-4.5 h-4.5" />
-            </button>
-            <Button
-              variant="soft"
-              size="sm"
-              disabled={!phone}
-              title={phone ? undefined : 'Add a phone number to send WhatsApp messages'}
-              onClick={() => openExternal(waLink(phone, msg))}
-            >
-              <IconWhatsApp className="w-4 h-4" /> Message
-            </Button>
+            {working === 0 || present + absent + leave === 0 ? (
+              <div className="mt-2.5 text-[12px] text-muted dark:text-muted-dark">
+                {working === 0 ? 'No attendance taken in this period' : 'Not marked in this period'}
+              </div>
+            ) : (
+              <div className="mt-2.5 grid grid-cols-4 gap-1 rounded-xl bg-[#f6f8fa] dark:bg-input-dark px-2 py-2 text-center">
+                {(
+                  [
+                    ['Working', working, 'text-ink dark:text-white'],
+                    ['Present', present, 'text-emerald-600 dark:text-emerald-400'],
+                    ['Absent', absent, 'text-danger'],
+                    ['Leave', leave, 'text-amber-600 dark:text-amber-400'],
+                  ] as Array<[string, number, string]>
+                ).map(([label, v, cls]) => (
+                  <div key={label}>
+                    <div className={`text-[17px] font-bold tabular-nums leading-tight ${cls}`}>{v}</div>
+                    <div className="text-[9.5px] font-semibold uppercase tracking-wider text-faint">{label}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
         )
       })}
