@@ -1,5 +1,5 @@
 import { DriveClient } from './drive'
-import { db, getKV, setKV, queueOp, getStudents, getPayments, getPostings, getAttendance, getRoutines, getQuickCards, K } from './db'
+import { db, getKV, setKV, queueOp, getStudents, getPayments, getPostings, getAttendance, getRoutines, getQuickCards, getAttReports, K } from './db'
 import { fmtDate, dayKey } from './format'
 import { log } from './logs'
 import { postingLedger } from './ledger'
@@ -13,6 +13,7 @@ import type {
   Attendance,
   Routine,
   QuickCard,
+  AttReport,
   SubjectEntry,
   Center,
   Session,
@@ -73,7 +74,7 @@ function cleanPayment(p: Payment) {
   return rest
 }
 
-async function buildJSON(file: 'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick'): Promise<string> {
+async function buildJSON(file: 'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick' | 'attrep'): Promise<string> {
   if (file === 'students') {
     const students = (await getStudents()).map(cleanStudent)
     return JSON.stringify({ version: 1, updatedAt: Date.now(), students })
@@ -101,6 +102,11 @@ async function buildJSON(file: 'students' | 'payments' | 'meta' | 'postings' | '
     const quick = await getQuickCards()
     return JSON.stringify({ version: 1, updatedAt: Date.now(), quick })
   }
+  if (file === 'attrep') {
+    // attendance report ticks - no Blob fields, raw records serialize as-is
+    const attrep = await getAttReports()
+    return JSON.stringify({ version: 1, updatedAt: Date.now(), attrep })
+  }
   const center = (await getKV<Center>(K.CENTER)) || defaultCenter()
   const receiptSeq = (await getKV<number>(K.RECEIPT_SEQ)) || 0
   const teachers = (await getKV<Teacher[]>(K.TEACHERS)) || []
@@ -123,6 +129,8 @@ export function defaultCenter(): Center {
     feeReceiptMsg: '{student} এর {fee} পরিশোধের রশিদ দেখতে নিচের লিংকে ক্লিক করুন। {link}',
     attendanceMsg:
       'Assalamu alaikum {student},\n\nYou were marked absent on {date} for {batch} at {center}. Please let us know if everything is okay. Thank you!',
+    attReportMsg:
+      'Assalamu alaikum, here is {student}\u2019s attendance report for {batch} ({from} \u2013 {to}): {present} present out of {working} working days ({absent} absent, {leave} leave). \u2014 {center}',
     routineMsg:
       'Assalamu alaikum {student},\n\nHere is your next class schedule for {batch} at {center}:\n\n{routine day}, {routine date}\nTime: {time}\nSubjects: {subjects}\n{note}\n\nThank you!',
   }
@@ -332,7 +340,7 @@ export async function flushOutbox(): Promise<void> {
 
 /** signature of the user-editable fields - used to break same-timestamp ties */
 function studentSig(s: Student): string {
-  return JSON.stringify([s.name, s.phone || '', s.phone2 || '', s.batch, s.school || '', s.ssacId || '', s.defaultFee, s.realPayment ?? null, s.commission ?? null, s.remainingDue ?? 0, s.notes || '', s.archived, s.deletedAt ?? null])
+  return JSON.stringify([s.name, s.phone || '', s.phone2 || '', s.batch, s.school || '', s.ssacId || '', s.defaultFee, s.realPayment ?? null, s.commission ?? null, s.remainingDue ?? 0, s.admissionDate || '', s.notes || '', s.archived, s.deletedAt ?? null])
 }
 function paymentSig(p: Payment): string {
   return JSON.stringify([
@@ -382,6 +390,9 @@ function routineSig(r: Routine): string {
 }
 function quickSig(q: QuickCard): string {
   return JSON.stringify([q.kind, q.title, q.desc || '', q.url || '', q.noteHtml || '', q.deletedAt ?? null])
+}
+function attRepSig(r: AttReport): string {
+  return JSON.stringify([r.studentId, r.batch, r.from, r.to, r.ticked, r.deletedAt ?? null])
 }
 
 /** The subject master list was briefly a plain string[] - normalize both
@@ -438,7 +449,7 @@ function mergeTeachers(local: Teacher[], remote: Teacher[]): Teacher[] {
  */
 export async function pull(): Promise<{
   changed: boolean
-  needPush: Array<'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick'>
+  needPush: Array<'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick' | 'attrep'>
 }> {
   const drive = await getKV<DriveRefs>(K.DRIVE)
   if (!drive?.rootFolderId) return { changed: false, needPush: [] }
@@ -456,18 +467,18 @@ export async function pull(): Promise<{
   // processed them, so their baseline must be 0, never lastPulledAt. With the
   // legacy fallback a snapshot older than the fleet's latest meta write would
   // be silently skipped forever (the exact bug class that hid tombstones).
-  const baseAt = (f: 'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick') =>
-    f === 'postings' || f === 'attendance' || f === 'routines' || f === 'quick'
+  const baseAt = (f: 'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick' | 'attrep') =>
+    f === 'postings' || f === 'attendance' || f === 'routines' || f === 'quick' || f === 'attrep'
       ? (pulledAt[f] ?? 0)
       : (pulledAt[f] ?? session.lastPulledAt) || 0
   let changed = false
   let pullDirty = false
   let latest = session.lastPulledAt
-  const needPush: Array<'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick'> = []
+  const needPush: Array<'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick' | 'attrep'> = []
   const stamps = { ...(drive.stamps || {}) }
   let stampDirty = false
 
-  const files: Array<['students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick', string | undefined]> = [
+  const files: Array<['students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick' | 'attrep', string | undefined]> = [
     ['students', drive.fileIds.students],
     ['payments', drive.fileIds.payments],
     ['meta', drive.fileIds.meta],
@@ -475,6 +486,7 @@ export async function pull(): Promise<{
     ['attendance', drive.fileIds.attendance],
     ['routines', drive.fileIds.routines],
     ['quick', drive.fileIds.quick],
+    ['attrep', drive.fileIds.attrep],
   ]
   // run two passes: the second is nearly free (in-memory stamps skip
   // unchanged files) and catches files that another device rewrote while
@@ -936,6 +948,61 @@ export async function pull(): Promise<{
             await db.quick.bulkPut(merged)
           })
           changed = true
+        } else if (file === 'attrep' && Array.isArray(j.attrep)) {
+          // mirrors the quick merge - tombstones, then missing records
+          // (absence is NEVER a delete), then LWW per report slice
+          await db.transaction('rw', db.attrep, async () => {
+            const local = new Map((await db.attrep.toArray()).map((r) => [r.id, r]))
+            const remoteIds = new Set(j.attrep.map((r: AttReport) => r.id))
+            // 1) tombstones: purge locally unless we edited the record after
+            //    the remote delete - a newer local edit resurrects it via re-push
+            for (const r of j.attrep) {
+              if (!r.deletedAt) continue
+              const cur = local.get(r.id)
+              if (!cur) continue
+              if ((cur.updatedAt || 0) > (r.deletedAt || 0)) {
+                if (!needPush.includes('attrep')) needPush.push('attrep')
+                continue
+              }
+              // keep the tombstone locally instead of purging: a device that
+              // forgets the delete would re-broadcast the record on its next
+              // whole-file push and resurrect it everywhere
+              await db.attrep.put(r)
+              local.set(r.id, r)
+            }
+            // 2) records missing from the file: absence is NEVER a delete -
+            //    deletes are explicit tombstones above. Missing = the author's
+            //    snapshot predates it → re-push to converge
+            for (const loc of local.values()) {
+              if (remoteIds.has(loc.id)) continue
+              if (!needPush.includes('attrep')) needPush.push('attrep')
+            }
+            // 3) plain records: keep local when fresher than our last pull
+            //    or newer than the remote record; otherwise take remote
+            const merged = j.attrep
+              .filter((r: AttReport) => !r.deletedAt)
+              .map((r: AttReport) => {
+                const cur = local.get(r.id)
+                if (!cur) return r
+                // a local tombstone always beats a stale remote copy - re-push
+                // so every device converges on the tombstone
+                if (cur.deletedAt && !r.deletedAt) {
+                  if (!needPush.includes('attrep')) needPush.push('attrep')
+                  return cur
+                }
+                const keepLocal =
+                  (cur.updatedAt || 0) > baseAt('attrep') || (cur.updatedAt || 0) >= (r.updatedAt || 0)
+                const div =
+                  (cur.updatedAt || 0) > (r.updatedAt || 0) ||
+                  ((cur.updatedAt || 0) === (r.updatedAt || 0) && attRepSig(cur) !== attRepSig(r))
+                if (keepLocal && div) {
+                  if (!needPush.includes('attrep')) needPush.push('attrep')
+                }
+                return keepLocal ? cur : r
+              })
+            await db.attrep.bulkPut(merged)
+          })
+          changed = true
         } else if (file === 'meta' && j.center) {
           await setKV(K.CENTER, { ...((await getKV<Center>(K.CENTER)) || {}), ...j.center })
           const seq = Math.max(j.receiptSeq || 0, (await getKV<number>(K.RECEIPT_SEQ)) || 0)
@@ -1098,6 +1165,25 @@ export async function ensureDriveStructure(): Promise<DriveRefs> {
         log('sync', 'Created _quick.json (schema upgrade)')
         return drive
       }
+      // schema upgrade: installs that predate attendance reports have no
+      // _attrep.json ref - create it now so report ticks sync across the fleet
+      if (!existing.fileIds.attrep) {
+        const files = await c.list(`'${existing.rootFolderId}' in parents and trashed=false`)
+        const hit = files.find((f) => f.name === '_attrep.json')
+        const attrep =
+          hit?.id ||
+          (await c.createFile(
+            existing.rootFolderId,
+            '_attrep.json',
+            'application/json',
+            JSON.stringify({ version: 1, updatedAt: 0 }),
+            { pt: '_attrep.json' },
+          ))
+        const drive = { ...existing, fileIds: { ...existing.fileIds, attrep } }
+        await setKV(K.DRIVE, drive)
+        log('sync', 'Created _attrep.json (schema upgrade)')
+        return drive
+      }
       return existing
     } catch (e) {
       if (!isNotFound(e)) throw e
@@ -1149,6 +1235,7 @@ export async function ensureDriveStructure(): Promise<DriveRefs> {
       attendance: await mk('_attendance.json'),
       routines: await mk('_routines.json'),
       quick: await mk('_quick.json'),
+      attrep: await mk('_attrep.json'),
     },
   }
   await setKV(K.DRIVE, drive)

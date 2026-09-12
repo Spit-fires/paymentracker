@@ -480,10 +480,21 @@ export function Settings() {
               placeholder={defaultCenter().routineMsg}
             />
           </Field>
+          <Field
+            label="Attendance report message"
+            hint="Sent from the Message button in the Attendance Report tab, one guardian at a time. {from}/{to} are the period, {working} the working days, {present} {absent} {leave} the student's counts, {date} today."
+          >
+            <Textarea
+              value={form.attReportMsg ?? defaultCenter().attReportMsg ?? ''}
+              onChange={(e) => setForm({ ...form, attReportMsg: e.target.value })}
+              rows={4}
+              placeholder={defaultCenter().attReportMsg}
+            />
+          </Field>
           <p className="text-[11.5px] text-faint">
             Available tokens:{" "}
             <span className="font-mono">
-              {"{student} {period} {fee} {amount} {center} {link} {date} {batch} {time} {subjects} {note} {routine date} {routine day}"}
+              {"{student} {period} {fee} {amount} {center} {link} {date} {batch} {time} {subjects} {note} {from} {to} {working} {present} {absent} {leave} {routine date} {routine day}"}
             </span>{" "}
             - leave a field empty to keep the default message. <span className="font-mono">{"{routine}"}</span> is outdated - only old free-text routines fill it; use {"{time}"}, {"{subjects}"} and {"{note}"} instead.
           </p>

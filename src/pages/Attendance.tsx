@@ -21,7 +21,7 @@ import type { AttendanceStatus, Routine } from '../types'
 
 ChartJS.register(BarController, BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 
-type Tab = 'take' | 'clear' | 'stats'
+type Tab = 'take' | 'clear' | 'stats' | 'report'
 type Scope = 'student' | 'batch' | 'day'
 
 const STATUSES: AttendanceStatus[] = ['present', 'absent', 'leave']
@@ -912,22 +912,215 @@ function StatsView() {
   )
 }
 
+/** First day of the current month as a local day key - the report period
+ *  defaults to month-to-date. */
+function monthStartKey(): string {
+  const d = new Date()
+  return dayKey(new Date(d.getFullYear(), d.getMonth(), 1))
+}
+
+/** Guardian attendance report for one class over a date range. Working days
+ *  are days in the range with attendance taken for the class; each student's
+ *  present/absent/leave counts come from their own marks in the range. */
+function ReportView() {
+  const { students, attendances, attReports, center, saveAttReport } = useApp()
+  const [batch, setBatch] = useState('')
+  const [from, setFrom] = useState(monthStartKey())
+  const [to, setTo] = useState(todayKey())
+  const [ticking, setTicking] = useState<ReadonlySet<string>>(new Set())
+
+  const batches = useMemo(
+    () => Array.from(new Set(students.filter((s) => !s.archived).map((s) => s.batch))).filter(Boolean).sort(),
+    [students],
+  )
+
+  const valid = !!batch && !!from && !!to && from <= to
+
+  // distinct days in the range with marks taken for this class
+  const working = useMemo(() => {
+    if (!valid) return 0
+    const days = new Set<string>()
+    for (const a of attendances) {
+      if (a.deletedAt || a.batch !== batch) continue
+      if (a.day < from || a.day > to) continue
+      days.add(a.day)
+    }
+    return days.size
+  }, [attendances, batch, from, to, valid])
+
+  const rows = useMemo(() => {
+    if (!valid) return []
+    return students
+      .filter((s) => !s.archived && s.batch === batch)
+      .map((s) => {
+        let present = 0
+        let absent = 0
+        let leave = 0
+        for (const a of attendances) {
+          if (a.deletedAt || a.studentId !== s.id || a.day < from || a.day > to) continue
+          if (a.status === 'present') present++
+          else if (a.status === 'absent') absent++
+          else if (a.status === 'leave') leave++
+        }
+        const rep = attReports.find((r) => r.id === `${s.id}_${batch}_${from}_${to}`)
+        return { s, present, absent, leave, ticked: !!rep?.ticked }
+      })
+      .sort((a, b) => a.s.name.localeCompare(b.s.name))
+  }, [students, attendances, attReports, batch, from, to, valid])
+
+  const template = (center.attReportMsg || defaultCenter().attReportMsg || '').trim()
+
+  const onTick = async (studentId: string, ticked: boolean) => {
+    const id = `${studentId}_${batch}_${from}_${to}`
+    if (ticking.has(id)) return
+    setTicking((prev) => new Set(prev).add(id))
+    try {
+      await saveAttReport(studentId, batch, from, to, ticked)
+    } finally {
+      setTicking((prev) => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+    }
+  }
+
+  return (
+    <div className="px-4 space-y-3 pb-6">
+      <Card className="!rounded-2xl p-4 space-y-3">
+        {batches.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {batches.map((b) => (
+              <button
+                key={b}
+                onClick={() => setBatch(batch === b ? '' : b)}
+                className={cx(
+                  'shrink-0 rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold transition',
+                  batch === b
+                    ? 'bg-ink text-white'
+                    : 'bg-white dark:bg-card-dark text-body/70 dark:text-muted-dark border border-line dark:border-line-dark',
+                )}
+              >
+                {b}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-2">
+          <label className="block">
+            <div className="text-[11.5px] font-semibold text-muted dark:text-muted-dark mb-1">From</div>
+            <Input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} />
+          </label>
+          <label className="block">
+            <div className="text-[11.5px] font-semibold text-muted dark:text-muted-dark mb-1">To</div>
+            <Input type="date" value={to} min={from} max={todayKey()} onChange={(e) => setTo(e.target.value)} />
+          </label>
+        </div>
+
+        <div className="text-[12px] text-muted dark:text-muted-dark leading-snug">
+          {batch
+            ? `${working} working day${working === 1 ? '' : 's'} · ${rows.length} student${rows.length === 1 ? '' : 's'}`
+            : 'Pick a class to see its report.'}
+        </div>
+      </Card>
+
+      {!valid && batch && (
+        <Card className="!rounded-2xl">
+          <EmptyState
+            icon={<IconClipboardCheck className="w-7 h-7" />}
+            title="Pick a valid period"
+            subtitle="The start date must be on or before the end date."
+          />
+        </Card>
+      )}
+
+      {rows.map(({ s, present, absent, leave, ticked }) => {
+        const phone = s.phone || s.phone2 || ''
+        const msg = fillMessage(template, {
+          student: s.name,
+          center: center.name || 'our center',
+          batch,
+          from: fmtDateLong(isoDayToMs(from)),
+          to: fmtDateLong(isoDayToMs(to)),
+          working,
+          present,
+          absent,
+          leave,
+          date: fmtDateLong(Date.now()),
+        })
+        const busyTick = ticking.has(`${s.id}_${batch}_${from}_${to}`)
+        return (
+          <Card key={s.id} className="!rounded-xl p-3.5 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-[#e8f0f7] dark:bg-hover-dark grid place-items-center text-ink dark:text-accent-dark font-bold text-[13px] shrink-0">
+              {s.name
+                .split(' ')
+                .slice(0, 2)
+                .map((x) => x[0])
+                .join('')
+                .toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[14px] font-bold text-ink dark:text-white truncate">{s.name}</div>
+              <div className="text-[12px] text-muted dark:text-muted-dark tabular-nums">
+                W {working} · P {present} · A {absent} · L {leave}
+              </div>
+            </div>
+            <button
+              onClick={() => void onTick(s.id, !ticked)}
+              disabled={busyTick}
+              aria-label={ticked ? `Unmark ${s.name} as informed` : `Mark ${s.name} as informed`}
+              title="Private tick - marks this guardian as informed for the period"
+              className={cx(
+                'w-9 h-9 rounded-xl grid place-items-center border-2 shrink-0 transition active:scale-95',
+                ticked
+                  ? 'bg-emerald-500 border-emerald-500 text-white'
+                  : 'border-line dark:border-line-dark text-transparent',
+                busyTick && 'opacity-50',
+              )}
+            >
+              <IconCheck className="w-4.5 h-4.5" />
+            </button>
+            <Button
+              variant="soft"
+              size="sm"
+              disabled={!phone}
+              title={phone ? undefined : 'Add a phone number to send WhatsApp messages'}
+              onClick={() => openExternal(waLink(phone, msg))}
+            >
+              <IconWhatsApp className="w-4 h-4" /> Message
+            </Button>
+          </Card>
+        )
+      })}
+    </div>
+  )
+}
+
 export function Attendance() {
   const { center } = useApp()
   const [params, setParams] = useSearchParams()
-  const tab: Tab = params.get('tab') === 'clear' ? 'clear' : params.get('tab') === 'stats' ? 'stats' : 'take'
+  const tab: Tab =
+    params.get('tab') === 'clear'
+      ? 'clear'
+      : params.get('tab') === 'stats'
+        ? 'stats'
+        : params.get('tab') === 'report'
+          ? 'report'
+          : 'take'
   const setTab = (t: Tab) => setParams(t === 'take' ? {} : { tab: t }, { replace: true })
 
   return (
     <div className="pb-4">
       <PageHeader title="Attendance" subtitle={center.name || 'UTSAHO EDUCARE'} />
       <div className="px-4">
-        <div className="grid grid-cols-3 gap-1.5 p-1 rounded-2xl bg-[#eef2f6] dark:bg-input-dark">
+        <div className="grid grid-cols-4 gap-1.5 p-1 rounded-2xl bg-[#eef2f6] dark:bg-input-dark">
           {(
             [
-              ['take', 'Take attendance'],
-              ['clear', 'Absent Inform'],
-              ['stats', 'Statistics'],
+              ['take', 'Take'],
+              ['clear', 'Inform'],
+              ['stats', 'Stats'],
+              ['report', 'Report'],
             ] as Array<[Tab, string]>
           ).map(([t, label]) => (
             <button
@@ -950,6 +1143,7 @@ export function Attendance() {
         {tab === 'take' && <TakeView />}
         {tab === 'clear' && <ClearView />}
         {tab === 'stats' && <StatsView />}
+        {tab === 'report' && <ReportView />}
       </div>
     </div>
   )

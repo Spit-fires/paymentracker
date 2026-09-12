@@ -24,6 +24,9 @@ export interface Student {
    *  0, edited by the teacher, never auto-changed by payments. Added on top
    *  of every due display. */
   remainingDue?: number
+  /** admission day, 'YYYY-MM-DD' - defaults to the adding day for new
+   *  students; old records stay blank until the teacher sets them */
+  admissionDate?: string
   notes?: string
   photoFileId?: string
   photoBlob?: Blob
@@ -124,6 +127,24 @@ export interface Attendance {
   deletedAt?: number
 }
 
+/** Guardian-informed tick for one attendance-report slice - one record per
+ *  student per class per period. The tick marks that the period report was
+ *  sent to the guardian; synced via _attrep.json. */
+export interface AttReport {
+  /** deterministic: `${studentId}_${batch}_${from}_${to}` */
+  id: string
+  studentId: string
+  batch: string
+  /** period start, local day key 'YYYY-MM-DD' */
+  from: string
+  /** period end, local day key 'YYYY-MM-DD' */
+  to: string
+  ticked: boolean
+  updatedAt: number
+  /** tombstone - set (instead of removing) when deleted; syncs deletes across devices */
+  deletedAt?: number
+}
+
 /** One routine (class schedule) per batch per day. The id is deterministic
  *  (`day_batch`), so re-saving a day+batch updates instead of duplicating and
  *  two devices editing the same slot merge cleanly via the LWW machinery.
@@ -211,6 +232,9 @@ export interface Center {
   feeReceiptMsg?: string
   /** WhatsApp absent-student template; tokens: {student} {date} {batch} {center} */
   attendanceMsg?: string
+  /** WhatsApp attendance-report template; tokens: {student} {center} {batch}
+   *  {from} {to} {working} {present} {absent} {leave} {date} */
+  attReportMsg?: string
   /** WhatsApp routine-send template; tokens: {student} {date} {batch} {center} {time} {subjects} {note} {routine} {routine date} {routine day} */
   routineMsg?: string
   /** custom PAID stamp image as a dataURL, uploaded in Settings */
@@ -233,7 +257,7 @@ export interface DriveRefs {
   studentsFolderId?: string
   /** Google account that owns this folder - refs are only trusted for that account. */
   ownerEmail?: string
-  fileIds: { students?: string; payments?: string; meta?: string; postings?: string; attendance?: string; routines?: string; quick?: string }
+  fileIds: { students?: string; payments?: string; meta?: string; postings?: string; attendance?: string; routines?: string; quick?: string; attrep?: string }
   /** modifiedTime of each JSON file at last sync - lets pull() skip downloads */
   stamps?: Record<string, string>
 }
@@ -251,11 +275,11 @@ export interface Session {
   theme: 'light' | 'dark'
   lastPulledAt: number
   /** per-file: timestamp of the last snapshot each JSON file was fully processed from */
-  pulledAt?: Partial<Record<'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick', number>>
+  pulledAt?: Partial<Record<'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick' | 'attrep', number>>
 }
 
 export type OutboxOp =
-  | { kind: 'pushJSON'; file: 'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick' }
+  | { kind: 'pushJSON'; file: 'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick' | 'attrep' }
   | {
       kind: 'uploadMedia'
       type: 'photo' | 'receipt'

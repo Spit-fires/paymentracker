@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie'
-import type { Student, Payment, Posting, Attendance, Routine, QuickCard, OutboxEntry, OutboxOp } from '../types'
+import type { Student, Payment, Posting, Attendance, Routine, QuickCard, AttReport, OutboxEntry, OutboxOp } from '../types'
 
 export const K = {
   CENTER: 'center',
@@ -65,6 +65,7 @@ class PTDatabase extends Dexie {
   attendance!: Table<Attendance, string>
   routines!: Table<Routine, string>
   quick!: Table<QuickCard, string>
+  attrep!: Table<AttReport, string>
   outbox!: Table<OutboxEntry, number>
 
   constructor() {
@@ -109,6 +110,18 @@ class PTDatabase extends Dexie {
       quick: 'id',
       outbox: '++id, at',
     })
+    // v6 adds the attendance report ticks (guardian-informed markers per
+    // student per class per period)
+    this.version(6).stores({
+      students: 'id, batch, archived',
+      payments: 'id, studentId, receiptNo, period',
+      postings: 'id',
+      attendance: 'id, studentId, day, batch',
+      routines: 'id, day, batch',
+      quick: 'id',
+      attrep: 'id',
+      outbox: '++id, at',
+    })
   }
 }
 
@@ -136,6 +149,10 @@ export async function getRoutines(): Promise<Routine[]> {
 
 export async function getQuickCards(): Promise<QuickCard[]> {
   return db.quick.toArray()
+}
+
+export async function getAttReports(): Promise<AttReport[]> {
+  return db.attrep.toArray()
 }
 
 export async function queueOp(op: OutboxOp): Promise<void> {

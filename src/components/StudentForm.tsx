@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Student } from '../types'
+import { todayKey } from '../lib/format'
 import { Field, Input, Textarea, Button } from './ui'
 
 export interface FormValue {
@@ -13,6 +14,7 @@ export interface FormValue {
   realPayment: string
   commission: string
   remainingDue: string
+  admissionDate: string
   notes: string
   photo: Blob | null
 }
@@ -31,6 +33,8 @@ export function initialForm(s?: Student): FormValue {
     realPayment: s?.realPayment ? String(s.realPayment) : '',
     commission: s?.commission ? String(s.commission) : '',
     remainingDue: s?.remainingDue ? String(s.remainingDue) : '',
+    // new students default to today; old records stay blank until set
+    admissionDate: s ? s.admissionDate || '' : todayKey(),
     notes: s?.notes || '',
     photo: null,
   }
@@ -282,6 +286,10 @@ export function StudentForm({
           />
         </Field>
       )}
+
+      <Field label="Admission date">
+        <Input type="date" value={f.admissionDate} onChange={(e) => set('admissionDate', e.target.value)} />
+      </Field>
 
       <div className="w-1/2">
         <Field label="Default fee (৳)">

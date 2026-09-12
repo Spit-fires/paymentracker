@@ -130,6 +130,7 @@ export function StudentDetail() {
         realPayment: v.realPayment.trim() ? Number(v.realPayment) : undefined,
         commission: v.commission.trim() ? Number(v.commission) : undefined,
         remainingDue: v.remainingDue.trim() ? Number(v.remainingDue) : undefined,
+        admissionDate: v.admissionDate || undefined,
         notes: v.notes,
         ...(v.photo ? { photoBlob: v.photo } : {}),
       })
@@ -253,6 +254,11 @@ export function StudentDetail() {
               <div className="text-[11.5px] font-semibold text-ink/70 dark:text-white/70 mt-1">
                 {student.school}
                 {student.school === 'SSAC' && student.ssacId ? ` · ${student.ssacId}` : ''}
+              </div>
+            )}
+            {student.admissionDate && (
+              <div className="text-[11.5px] text-muted dark:text-muted-dark mt-1">
+                Admitted {fmtDate(new Date(student.admissionDate + 'T12:00:00').getTime())}
               </div>
             )}
           </div>

@@ -16,6 +16,7 @@ import type {
   AttendanceStatus,
   Routine,
   QuickCard,
+  AttReport,
   SubjectEntry,
   Center,
   Session,
@@ -57,6 +58,8 @@ export interface NewStudentInput {
   commission?: number
   /** extra manually-managed due - defaults to 0 */
   remainingDue?: number
+  /** admission day 'YYYY-MM-DD' - defaults to the adding day */
+  admissionDate?: string
   notes?: string
   photo?: Blob | null
 }
@@ -133,6 +136,9 @@ interface Ctx {
   quickCards: QuickCard[]
   saveQuickCard: (card: QuickCard) => Promise<void>
   deleteQuickCard: (id: string) => Promise<void>
+  /** guardian-informed ticks for attendance report slices */
+  attReports: AttReport[]
+  saveAttReport: (studentId: string, batch: string, from: string, to: string, ticked: boolean) => Promise<void>
   /** master subject list for the routine builder - synced via meta */
   subjects: SubjectEntry[]
   addSubject: (name: string) => Promise<void>
@@ -197,6 +203,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [attendances, setAttendances] = useState<Attendance[]>([])
   const [routines, setRoutines] = useState<Routine[]>([])
   const [quickCards, setQuickCards] = useState<QuickCard[]>([])
+  const [attReports, setAttReports] = useState<AttReport[]>([])
   const [subjects, setSubjects] = useState<SubjectEntry[]>([])
   const [teachers, setTeachers] = useState<Teacher[]>([])
   const [center, setCenter] = useState<Center>(defaultCenter())
@@ -253,6 +260,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setAttendances((await db.attendance.toArray()).filter((a) => !a.deletedAt))
     setRoutines((await db.routines.toArray()).filter((r) => !r.deletedAt))
     setQuickCards((await db.quick.toArray()).filter((q) => !q.deletedAt))
+    setAttReports((await db.attrep.toArray()).filter((r) => !r.deletedAt))
     setSubjects(normalizeSubjects((await getKV<unknown>(K.SUBJECTS))))
     const loaded = (await getKV<Center>(K.CENTER)) || defaultCenter()
     // soft-migrate the legacy phone field: receipts no longer print it - if
@@ -535,6 +543,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         realPayment: input.realPayment,
         commission: input.commission,
         remainingDue: input.remainingDue,
+        admissionDate: input.admissionDate,
         notes: input.notes?.trim(),
         photoBlob: input.photo || undefined,
         archived: false,
@@ -937,6 +946,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [refreshData, scheduleSync],
   )
 
+  /** Upsert a guardian-informed tick for one report slice (student + class +
+   *  period). Deterministic id so re-ticking updates instead of duplicating. */
+  const saveAttReport = useCallback(
+    async (studentId: string, batch: string, from: string, to: string, ticked: boolean) => {
+      const id = `${studentId}_${batch}_${from}_${to}`
+      await db.attrep.put({ id, studentId, batch, from, to, ticked, updatedAt: Date.now() })
+      await queueOp({ kind: 'pushJSON', file: 'attrep' })
+      await refreshData()
+      scheduleSync()
+    },
+    [refreshData, scheduleSync],
+  )
+
   const updateCenter = useCallback(
     async (c: Center) => {
       await setKV(K.CENTER, c)
@@ -980,6 +1002,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       attendances,
       routines,
       quickCards,
+      attReports,
       subjects,
       teachers,
       center,
@@ -1007,6 +1030,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       deleteRoutine,
       saveQuickCard,
       deleteQuickCard,
+      saveAttReport,
       addSubject,
       deleteSubject,
       updateCenter,
@@ -1032,6 +1056,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       attendances,
       routines,
       quickCards,
+      attReports,
       subjects,
       teachers,
       center,
@@ -1059,6 +1084,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       deleteRoutine,
       saveQuickCard,
       deleteQuickCard,
+      saveAttReport,
       addSubject,
       deleteSubject,
       updateCenter,

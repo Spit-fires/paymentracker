@@ -260,6 +260,11 @@ export function Students() {
                 {s.school ? ` · ${s.school}` : ''}
                 {s.school === 'SSAC' && s.ssacId ? ` · ${s.ssacId}` : ''}
               </div>
+              {s.notes?.trim() && (
+                <div className="text-[11.5px] text-faint dark:text-[#5f7a92] truncate">
+                  {s.notes.trim()}
+                </div>
+              )}
             </div>
             <div className={`text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0 ${CHIP[st]}`}>
               {st === 'paid' ? 'Paid' : st === 'partial' ? 'Partially paid' : 'Due'}
@@ -286,6 +291,7 @@ export function Students() {
         realPayment: v.realPayment.trim() ? Number(v.realPayment) : undefined,
         commission: v.commission.trim() ? Number(v.commission) : undefined,
         remainingDue: v.remainingDue.trim() ? Number(v.remainingDue) : undefined,
+        admissionDate: v.admissionDate || undefined,
         notes: v.notes,
         photo: v.photo,
       })
