@@ -2,12 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'motion/react'
 import { useApp } from '../state/AppContext'
-import { fmtTaka, fmtDate, periodNow, periodLabel } from '../lib/format'
+import { fmtTaka, fmtDate, periodNow, periodLabel, fmtInvoiceNo, invoiceDailySeq } from '../lib/format'
 import { isMonthly, feesForPeriod, feeTotals } from '../lib/ledger'
 import { getKV, setKV, K } from '../lib/db'
-import { Card, PageHeader, EmptyState, cx } from '../components/ui'
+import { Card, PageHeader, EmptyState, Button, cx } from '../components/ui'
 import { PostingPanel } from '../components/PostingPanel'
-import { IconBook, IconSearch, IconUsers, IconCheck, IconReceipt } from '../components/Icons'
+import { IconBook, IconSearch, IconUsers, IconCheck, IconReceipt, IconDownload } from '../components/Icons'
 import type { Payment } from '../types'
 
 type Tab = 'ledger' | 'commissions' | 'postings' | 'fee'
@@ -21,6 +21,13 @@ interface AcctFilters {
 
 const num = (v?: number) => (typeof v === 'number' && isFinite(v) ? v : 0)
 
+/** CSV cell - same formula-injection guard as the Settings export */
+function csvCell(v: string | number): string {
+  let s = String(v ?? '')
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+
 function shiftPeriod(p: string, delta: number): string {
   const [y, m] = p.split('-').map(Number)
   const d = new Date(y, m - 1 + delta, 1)
@@ -28,7 +35,7 @@ function shiftPeriod(p: string, delta: number): string {
 }
 
 export function Accounting() {
-  const { payments, students, teachers, center, updatePayment } = useApp()
+  const { payments, students, teachers, center, updatePayment, showToast } = useApp()
   const [params, setParams] = useSearchParams()
   const tab =
     params.get('tab') === 'commissions'
@@ -188,6 +195,37 @@ export function Accounting() {
   )
 
   const setTab = (t: Tab) => setParams(t === 'ledger' ? {} : { tab: t }, { replace: true })
+
+  /** Export exactly the filtered ledger rows on screen (search + batch +
+   *  date range all applied), mirroring the table columns + totals row. */
+  const exportLedgerCSV = () => {
+    if (!ledgerRows.length) return showToast('No entries to export', 'err')
+    const header = ['Invoice No', 'Date', 'Student', 'Batch', 'Mode', 'Slip', 'Real', 'Balance']
+    const lines = ledgerRows.map((p) => {
+      const s = studentMap.get(p.studentId)
+      const real = num(p.realAmount ?? p.amount)
+      return [
+        fmtInvoiceNo(p.date, p.dailySeq ?? invoiceDailySeq(p, payments)),
+        new Date(p.date).toISOString().slice(0, 10),
+        s?.name || '',
+        s?.batch || '',
+        p.mode,
+        num(p.amount),
+        real,
+        real - num(p.commission),
+      ]
+    })
+    lines.push(['Total', '', '', '', '', totals.slip, totals.real, totals.balance])
+    const csv = [header.join(','), ...lines.map((r) => r.map((c) => csvCell(c)).join(','))].join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = from && to ? `ledger-${from}_to_${to}.csv` : from ? `ledger-from-${from}.csv` : to ? `ledger-to-${to}.csv` : 'ledger-all.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+    showToast('CSV exported', 'ok')
+  }
 
   return (
     <div className="pb-4">
@@ -355,6 +393,10 @@ export function Accounting() {
               />
             </Card>
           ) : (
+            <>
+            <Button variant="secondary" full size="lg" className="mb-2.5" onClick={exportLedgerCSV}>
+              <IconDownload className="w-5 h-5" /> Export CSV{from || to ? ` (${from || '…'} → ${to || '…'})` : ''}
+            </Button>
             <Card className="!rounded-xl overflow-hidden">
               <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-2 px-3 py-2.5 text-[11px] font-bold uppercase tracking-wider text-faint border-b border-line dark:border-line-dark">
                 <div>Student - Batch</div>
@@ -413,6 +455,7 @@ export function Accounting() {
                 </div>
               </div>
             </Card>
+            </>
           )}
         </div>
         </motion.div>

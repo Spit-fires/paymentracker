@@ -191,6 +191,8 @@ export interface QuickCard {
   /** note cards - rich text HTML (same sanitizer as receipt rules) */
   noteHtml?: string
   createdAt: number
+  /** manual sort position - cards without it fall back to newest-first */
+  order?: number
   updatedAt: number
   /** tombstone - set (instead of removing) when deleted; syncs deletes across devices */
   deletedAt?: number

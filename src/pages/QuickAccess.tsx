@@ -19,10 +19,18 @@ export function QuickAccess() {
   const { quickCards, saveQuickCard, deleteQuickCard, showToast } = useApp()
   const navigate = useNavigate()
 
+  // ordered cards first (ascending), then unordered newest-first - cards
+  // created before reordering existed have no `order` and keep old behavior
   const sorted = useMemo(
-    () => [...quickCards].sort((a, b) => b.createdAt - a.createdAt),
+    () =>
+      [...quickCards].sort(
+        (a, b) => (a.order ?? Infinity) - (b.order ?? Infinity) || b.createdAt - a.createdAt,
+      ),
     [quickCards],
   )
+
+  // reorder mode - row taps become up/down moves instead of open/edit
+  const [reordering, setReordering] = useState(false)
 
   // add/edit form
   const [formOpen, setFormOpen] = useState(false)
@@ -74,6 +82,9 @@ export function QuickAccess() {
     if (kind === 'link' && !normalizeUrl(url)) return showToast('Enter a link (e.g. https://…)', 'err')
     setBusy(true)
     try {
+      // new cards go on top: below the smallest existing order, or unordered
+      // (newest-first fallback) when nobody has reordered yet
+      const orders = quickCards.map((c) => c.order).filter((o): o is number => o != null)
       await saveQuickCard({
         id: editing?.id || newId(),
         kind,
@@ -82,6 +93,7 @@ export function QuickAccess() {
         // switching a card's kind keeps its hidden note text so flipping back restores it
         url: kind === 'link' ? normalizeUrl(url) : undefined,
         noteHtml: editing?.noteHtml,
+        order: editing ? editing.order : orders.length ? Math.min(...orders) - 1000 : undefined,
         createdAt: editing?.createdAt ?? Date.now(),
         updatedAt: Date.now(),
       })
@@ -116,6 +128,45 @@ export function QuickAccess() {
     setFormOpen(false)
   }
 
+  /** Seed every card with an order matching the current display (one-time;
+   *  later moves are single fractional writes, synced like any edit). */
+  const seedOrder = async (list: QuickCard[]) => {
+    for (let i = 0; i < list.length; i++) {
+      const c = list[i]
+      if (c.order === (i + 1) * 1000) continue
+      await saveQuickCard({ ...c, order: (i + 1) * 1000 })
+    }
+  }
+
+  const toggleReorder = async () => {
+    if (!reordering && sorted.some((c) => c.order == null)) {
+      await seedOrder(sorted)
+    }
+    setReordering((v) => !v)
+  }
+
+  /** Move one step; renumbers everything only if floats run out of room. */
+  const move = async (id: string, dir: -1 | 1) => {
+    const i = sorted.findIndex((c) => c.id === id)
+    const j = i + dir
+    if (i < 0 || j < 0 || j >= sorted.length) return
+    const arr = [...sorted]
+    const [c] = arr.splice(i, 1)
+    arr.splice(j, 0, c)
+    const prev = arr[j - 1]?.order
+    const next = arr[j + 1]?.order
+    let order: number
+    if (prev == null && next == null) order = 1000
+    else if (prev == null) order = next! - 1000
+    else if (next == null) order = prev + 1000
+    else order = (prev + next) / 2
+    if (!isFinite(order) || order === prev || order === next) {
+      await seedOrder(arr)
+      return
+    }
+    await saveQuickCard({ ...c, order })
+  }
+
   return (
     <div className="pb-4">
       <PageHeader
@@ -124,15 +175,30 @@ export function QuickAccess() {
         back
         onBack={() => navigate(-1)}
         right={
-          <button
-            onClick={openAdd}
-            className="w-10 h-10 shrink-0 grid place-items-center rounded-full bg-ink text-white dark:bg-ink-soft active:scale-95 transition"
-            aria-label="Add card"
-          >
-            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {sorted.length > 1 && (
+              <button
+                onClick={() => void toggleReorder()}
+                className={cx(
+                  'h-10 px-3.5 rounded-full text-[13px] font-bold active:scale-95 transition',
+                  reordering
+                    ? 'bg-ink text-white dark:bg-ink-soft'
+                    : 'bg-white dark:bg-card-dark border border-line dark:border-line-dark text-body dark:text-text-dark',
+                )}
+              >
+                {reordering ? 'Done' : 'Reorder'}
+              </button>
+            )}
+            <button
+              onClick={openAdd}
+              className="w-10 h-10 shrink-0 grid place-items-center rounded-full bg-ink text-white dark:bg-ink-soft active:scale-95 transition"
+              aria-label="Add card"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </button>
+          </div>
         }
       />
 
@@ -151,7 +217,7 @@ export function QuickAccess() {
         </Card>
       ) : (
         <div className="px-4 space-y-2">
-          {sorted.map((c) => (
+          {sorted.map((c, i) => (
             <Card key={c.id} className="!rounded-xl p-3.5 flex items-center gap-3">
               <div
                 className={cx(
@@ -163,20 +229,49 @@ export function QuickAccess() {
               >
                 {c.kind === 'link' ? <IconLink className="w-5 h-5" /> : <IconNote className="w-5 h-5" />}
               </div>
-              <button className="flex-1 min-w-0 text-left" onClick={() => openCard(c)}>
+              <button
+                className="flex-1 min-w-0 text-left"
+                disabled={reordering}
+                onClick={() => openCard(c)}
+              >
                 <div className="text-[14.5px] font-bold text-ink dark:text-white truncate">{c.title}</div>
                 <div className="text-[12px] text-muted dark:text-muted-dark truncate">
                   {c.desc?.trim() || (c.kind === 'link' ? c.url : 'Rich text note')}
                 </div>
                 <div className="text-[10.5px] text-faint mt-0.5">Added {fmtDate(c.createdAt)}</div>
               </button>
-              <button
-                onClick={() => openEdit(c)}
-                className="w-9 h-9 grid place-items-center rounded-lg text-faint hover:text-teal active:scale-90 transition shrink-0"
-                aria-label="Edit card"
-              >
-                <IconEdit className="w-4.5 h-4.5" />
-              </button>
+              {reordering ? (
+                <div className="flex flex-col gap-1 shrink-0">
+                  <button
+                    onClick={() => void move(c.id, -1)}
+                    disabled={i === 0}
+                    className="w-9 h-8 grid place-items-center rounded-lg bg-white dark:bg-card-dark border border-line dark:border-line-dark text-body dark:text-text-dark active:scale-90 transition disabled:opacity-30"
+                    aria-label={`Move ${c.title} up`}
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M18 15l-6-6-6 6" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => void move(c.id, 1)}
+                    disabled={i === sorted.length - 1}
+                    className="w-9 h-8 grid place-items-center rounded-lg bg-white dark:bg-card-dark border border-line dark:border-line-dark text-body dark:text-text-dark active:scale-90 transition disabled:opacity-30"
+                    aria-label={`Move ${c.title} down`}
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M6 9l6 6 6-6" />
+                    </svg>
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => openEdit(c)}
+                  className="w-9 h-9 grid place-items-center rounded-lg text-faint hover:text-teal active:scale-90 transition shrink-0"
+                  aria-label="Edit card"
+                >
+                  <IconEdit className="w-4.5 h-4.5" />
+                </button>
+              )}
             </Card>
           ))}
         </div>

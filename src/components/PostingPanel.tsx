@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useApp } from '../state/AppContext'
 import { postingLedger, postingTotal, readyToPost, totalAllTime } from '../lib/ledger'
-import { fmtTaka, fmtDate } from '../lib/format'
+import { fmtTaka, fmtDate, periodNow, periodLabel } from '../lib/format'
 import { Card, Button, Modal, Field, Input, Select, EmptyState, cx } from './ui'
 import { IconPlus, IconBook } from './Icons'
 import type { Posting, ReceivedBy } from '../types'
@@ -32,6 +32,18 @@ export function PostingPanel() {
   const posted = postingTotal(postings)
   const ready = readyToPost(payments, postings)
   const rows = postingLedger(payments, postings)
+
+  /** optional month view - null = all time (default); the all-time summary
+   *  and Ready footer never change, only the handover list narrows */
+  const [month, setMonth] = useState<string | null>(null)
+  const stepMonth = (delta: number) => {
+    const base = month ?? periodNow()
+    const [y, m] = base.split('-').map(Number)
+    const d = new Date(y, m - 1 + delta, 1)
+    setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+  }
+  const visibleRows = month ? rows.filter(({ posting }) => isoDay(posting.date).slice(0, 7) === month) : rows
+  const monthPosted = month ? visibleRows.reduce((s, { posting }) => s + posting.amount, 0) : 0
 
   const openNew = () => {
     setEditingId(null)
@@ -125,11 +137,45 @@ export function PostingPanel() {
         <IconPlus className="w-5 h-5" /> New posting
       </Button>
 
-      {rows.length === 0 ? (
+      {/* Optional month view - tap the label to reset to all time */}
+      <div className="flex items-center justify-between rounded-xl bg-white dark:bg-card-dark border border-line dark:border-line-dark px-3 py-2">
+        <button
+          onClick={() => stepMonth(-1)}
+          className="w-9 h-9 grid place-items-center rounded-lg text-body dark:text-text-dark text-[18px] active:scale-95 transition"
+          aria-label="Previous month"
+        >
+          ‹
+        </button>
+        <button
+          onClick={() => setMonth(null)}
+          className="text-[14px] font-semibold text-ink dark:text-white"
+          title={month ? 'Tap to show all time' : undefined}
+        >
+          {month ? periodLabel(month) : 'All time'}
+        </button>
+        <button
+          onClick={() => stepMonth(1)}
+          className="w-9 h-9 grid place-items-center rounded-lg text-body dark:text-text-dark text-[18px] active:scale-95 transition"
+          aria-label="Next month"
+        >
+          ›
+        </button>
+      </div>
+
+      {month && (
+        <div className="flex items-center justify-between rounded-xl bg-cream dark:bg-input-dark border border-line dark:border-line-dark px-3.5 py-2.5">
+          <div className="text-[12.5px] font-semibold text-muted dark:text-muted-dark">
+            Posted in {periodLabel(month)}
+          </div>
+          <div className="text-[15px] font-bold text-danger tabular-nums">{fmtTaka(monthPosted)}</div>
+        </div>
+      )}
+
+      {visibleRows.length === 0 ? (
         <Card className="!rounded-2xl">
           <EmptyState
             icon={<IconBook className="w-7 h-7" />}
-            title="No postings yet"
+            title={month ? `No postings in ${periodLabel(month)}` : 'No postings yet'}
             subtitle="Record cash handovers here - each posting subtracts from the collected amount."
           />
         </Card>
@@ -141,7 +187,7 @@ export function PostingPanel() {
             <div className="text-right">Received By</div>
           </div>
           <div className="max-h-[46dvh] overflow-y-auto">
-            {rows.map(({ posting }) => (
+            {visibleRows.map(({ posting }) => (
               <button
                 key={posting.id}
                 onClick={() => openEdit(posting)}

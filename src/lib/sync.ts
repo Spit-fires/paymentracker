@@ -389,7 +389,7 @@ function routineSig(r: Routine): string {
   ])
 }
 function quickSig(q: QuickCard): string {
-  return JSON.stringify([q.kind, q.title, q.desc || '', q.url || '', q.noteHtml || '', q.deletedAt ?? null])
+  return JSON.stringify([q.kind, q.title, q.desc || '', q.url || '', q.noteHtml || '', q.order ?? null, q.deletedAt ?? null])
 }
 function attRepSig(r: AttReport): string {
   return JSON.stringify([r.studentId, r.batch, r.from, r.to, r.ticked, r.deletedAt ?? null])

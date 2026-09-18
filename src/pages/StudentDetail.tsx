@@ -15,6 +15,7 @@ import {
   IconReceipt,
   IconArchive,
   IconPhone,
+  IconPrint,
 } from '../components/Icons'
 import { defaultCenter } from '../lib/sync'
 import { routineTimeLabel, routineSubjectsLabel, routineNote, routineHasContent } from '../lib/routine'
@@ -27,6 +28,7 @@ export function StudentDetail() {
   const {
     students,
     payments,
+    attendances,
     center,
     routines,
     refreshData,
@@ -90,6 +92,35 @@ export function StudentDetail() {
         .filter((p) => p.studentId === id)
         .sort((a, b) => b.date - a.date || b.receiptNo - a.receiptNo),
     [payments, id],
+  )
+
+  /** personal attendance, newest first, grouped by month for the printout */
+  const attMonths = useMemo(() => {
+    const marks = attendances
+      .filter((a) => a.studentId === id)
+      .sort((a, b) => (a.day < b.day ? 1 : -1))
+    const map = new Map<string, typeof marks>()
+    for (const a of marks) {
+      const key = a.day.slice(0, 7)
+      const arr = map.get(key)
+      if (arr) arr.push(a)
+      else map.set(key, [a])
+    }
+    return [...map.entries()].map(([month, list]) => ({
+      month,
+      list,
+      present: list.filter((a) => a.status === 'present').length,
+      absent: list.filter((a) => a.status === 'absent').length,
+      leave: list.filter((a) => a.status === 'leave').length,
+    }))
+  }, [attendances, id])
+  const attTotal = useMemo(
+    () => ({
+      present: attMonths.reduce((s, m) => s + m.present, 0),
+      absent: attMonths.reduce((s, m) => s + m.absent, 0),
+      leave: attMonths.reduce((s, m) => s + m.leave, 0),
+    }),
+    [attMonths],
   )
 
   if (!student) {
@@ -227,9 +258,9 @@ export function StudentDetail() {
       <Card className="mx-4 !rounded-2xl p-4">
         <div className="flex items-center gap-4">
           {photoUrl ? (
-            <img src={photoUrl} alt="" className="w-16 h-16 rounded-2xl object-cover" />
+            <img src={photoUrl} alt="" className="w-24 h-[72px] rounded-2xl object-cover" />
           ) : (
-            <div className="w-16 h-16 rounded-2xl bg-ink dark:bg-ink-soft grid place-items-center text-white text-[22px] font-bold shrink-0">
+            <div className="w-24 h-[72px] rounded-2xl bg-ink dark:bg-ink-soft grid place-items-center text-white text-[22px] font-bold shrink-0">
               {student.name
                 .split(' ')
                 .slice(0, 2)
@@ -344,6 +375,14 @@ export function StudentDetail() {
           >
             <IconWhatsApp className="w-4.5 h-4.5" /> WhatsApp
           </Button>
+          <Button
+            variant="secondary"
+            size="lg"
+            className="col-span-2 no-print"
+            onClick={() => window.print()}
+          >
+            <IconPrint className="w-5 h-5" /> Print attendance
+          </Button>
         </div>
 
         <div className="flex items-center justify-between mt-4 pt-3 border-t border-line dark:border-line-dark">
@@ -452,6 +491,47 @@ export function StudentDetail() {
           </Button>
         </div>
       </Modal>
+
+      {/* Print-only personal attendance */}
+      <div className="print-area" style={{ display: 'none' }}>
+        <div style={{ fontFamily: "'Segoe UI', system-ui, sans-serif", color: '#1c2936' }}>
+          <div style={{ fontSize: 20, fontWeight: 800 }}>{student.name} — Attendance</div>
+          <div style={{ fontSize: 12, color: '#7c7668', marginTop: 2 }}>
+            {student.batch || 'No batch'} · {center.name || 'UTSAHO EDUCARE'}
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 700, marginTop: 8 }}>
+            Total — Present {attTotal.present} · Absent {attTotal.absent} · Leave {attTotal.leave}
+          </div>
+          {attMonths.map((m) => (
+            <div key={m.month} style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 14, fontWeight: 800, borderBottom: '1px solid #1c2936', paddingBottom: 2 }}>
+                {periodLabel(m.month)} — P {m.present} · A {m.absent} · L {m.leave}
+              </div>
+              {m.list.map((a) => {
+                const ms = new Date(a.day + 'T12:00:00').getTime()
+                return (
+                  <div
+                    key={a.id}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      fontSize: 12,
+                      padding: '3px 0',
+                      borderBottom: '1px dotted #ccc',
+                    }}
+                  >
+                    <span>{fmtDateLong(ms)}</span>
+                    <span style={{ fontWeight: 700 }}>
+                      {a.status === 'present' ? 'Present' : a.status === 'absent' ? 'Absent' : 'Leave'}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          ))}
+          {attMonths.length === 0 && <div style={{ fontSize: 13, marginTop: 8 }}>No attendance recorded.</div>}
+        </div>
+      </div>
     </div>
   )
 }
