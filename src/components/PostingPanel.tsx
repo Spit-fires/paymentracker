@@ -137,7 +137,7 @@ export function PostingPanel() {
         <IconPlus className="w-5 h-5" /> New posting
       </Button>
 
-      {/* Optional month view - tap the label to reset to all time */}
+      {/* Optional month view - tap the label or All time to reset */}
       <div className="flex items-center justify-between rounded-xl bg-white dark:bg-card-dark border border-line dark:border-line-dark px-3 py-2">
         <button
           onClick={() => stepMonth(-1)}
@@ -161,6 +161,11 @@ export function PostingPanel() {
           ›
         </button>
       </div>
+      {month && (
+        <Button variant="secondary" full onClick={() => setMonth(null)}>
+          ✕ Show all time
+        </Button>
+      )}
 
       {month && (
         <div className="flex items-center justify-between rounded-xl bg-cream dark:bg-input-dark border border-line dark:border-line-dark px-3.5 py-2.5">
