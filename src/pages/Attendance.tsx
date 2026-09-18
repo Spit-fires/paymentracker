@@ -12,7 +12,7 @@ import {
   Legend,
 } from 'chart.js'
 import { useApp } from '../state/AppContext'
-import { fmtDateLong, fmtWeekday, fillMessage, todayKey, dayKey, addDays } from '../lib/format'
+import { fmtDateLong, fmtWeekday, fillMessage, todayKey, dayKey, addDays, periodLabel } from '../lib/format'
 import { routineTimeLabel, routineSubjectsLabel, routineNote, routineHasContent } from '../lib/routine'
 import { defaultCenter } from '../lib/sync'
 import { getKV, setKV, K } from '../lib/db'
@@ -543,7 +543,7 @@ function ClearView() {
 }
 
 function StatsView() {
-  const { students, attendances } = useApp()
+  const { students, attendances, center, showToast } = useApp()
   const [scope, setScope] = useState<Scope>('student')
   const [studentId, setStudentId] = useState('')
   const [studentQuery, setStudentQuery] = useState('')
@@ -551,6 +551,11 @@ function StatsView() {
   const [day, setDay] = useState(todayKey())
   const [ready, setReady] = useState(false)
   const [datesFor, setDatesFor] = useState<AttendanceStatus | null>(null)
+  // personal export range for the selected student
+  const [repFrom, setRepFrom] = useState(monthStartKey())
+  const [repTo, setRepTo] = useState(todayKey())
+  const [pngBusy, setPngBusy] = useState(false)
+  const sheetRef = useRef<HTMLDivElement>(null)
   const dark = document.documentElement.classList.contains('dark')
 
   const studentOptions = useMemo(
@@ -618,6 +623,67 @@ function StatsView() {
     return { counts: c, total: rows.length }
   }, [studentId, attendances])
 
+  /* ---------- Personal export for the selected student + date range ---------- */
+  const selStudent = studentId ? studentOptions.find((s) => s.id === studentId) : undefined
+  const repValid = !!selStudent && !!repFrom && !!repTo && repFrom <= repTo
+  const repMonths = useMemo(() => {
+    if (!repValid) return [] as AttMonth[]
+    const marks = attendances
+      .filter((a) => a.studentId === studentId && a.day >= repFrom && a.day <= repTo)
+      .sort((a, b) => (a.day < b.day ? 1 : -1))
+    const map = new Map<string, typeof marks>()
+    for (const a of marks) {
+      const key = a.day.slice(0, 7)
+      const arr = map.get(key)
+      if (arr) arr.push(a)
+      else map.set(key, [a])
+    }
+    return [...map.entries()].map(([month, list]) => ({
+      month,
+      list,
+      present: list.filter((a) => a.status === 'present').length,
+      absent: list.filter((a) => a.status === 'absent').length,
+      leave: list.filter((a) => a.status === 'leave').length,
+    }))
+  }, [attendances, studentId, repFrom, repTo, repValid])
+  const repTotal = useMemo(
+    () => ({
+      present: repMonths.reduce((s, m) => s + m.present, 0),
+      absent: repMonths.reduce((s, m) => s + m.absent, 0),
+      leave: repMonths.reduce((s, m) => s + m.leave, 0),
+    }),
+    [repMonths],
+  )
+  const repFileName = selStudent
+    ? `attendance-${selStudent.name.trim().replace(/\s+/g, '-').replace(/[^\w-]/g, '') || 'student'}-${repFrom}_to_${repTo}.png`
+    : 'attendance.png'
+
+  const onSavePng = async () => {
+    const el = sheetRef.current
+    if (!el) return
+    setPngBusy(true)
+    try {
+      let dataUrl: string
+      try {
+        dataUrl = await domToPng(el, { scale: 2 })
+      } catch {
+        dataUrl = await htmlToImageToPng(el, { pixelRatio: 2, cacheBust: true })
+      }
+      const blob = await fetch(dataUrl).then((r) => r.blob())
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = repFileName
+      a.click()
+      URL.revokeObjectURL(url)
+      showToast('PNG saved', 'ok')
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Could not export PNG', 'err')
+    } finally {
+      setPngBusy(false)
+    }
+  }
+
   /* ---------- Batch scope ---------- */  /* ---------- Batch scope ---------- */
   const days = useMemo(() => {
     const out: string[] = []
@@ -683,7 +749,8 @@ function StatsView() {
   }, [attendances, students, day])
 
   return (
-    <div className="px-4 space-y-3 pb-6">
+    <>
+    <div className="px-4 space-y-3 pb-6 no-print">
       <div className="grid grid-cols-3 gap-1.5 p-1 rounded-2xl bg-[#eef2f6] dark:bg-input-dark">
         {(
           [
@@ -780,6 +847,24 @@ function StatsView() {
                 </div>
                 <Bars labels={studentSeries.labels} data={studentSeries.data} dark={dark} />
               </Card>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block">
+                  <div className="text-[11.5px] font-semibold text-muted dark:text-muted-dark mb-1">From</div>
+                  <Input type="date" value={repFrom} max={repTo} onChange={(e) => setRepFrom(e.target.value)} />
+                </label>
+                <label className="block">
+                  <div className="text-[11.5px] font-semibold text-muted dark:text-muted-dark mb-1">To</div>
+                  <Input type="date" value={repTo} min={repFrom} max={todayKey()} onChange={(e) => setRepTo(e.target.value)} />
+                </label>
+              </div>
+              <div className="grid grid-cols-2 gap-2.5 no-print">
+                <Button variant="secondary" size="lg" onClick={() => window.print()} disabled={!repValid}>
+                  <IconPrint className="w-5 h-5" /> Print
+                </Button>
+                <Button variant="secondary" size="lg" onClick={() => void onSavePng()} disabled={!repValid || pngBusy}>
+                  {pngBusy ? <Spinner className="w-5 h-5" /> : <IconDownload className="w-5 h-5" />} {pngBusy ? 'Saving…' : 'Save PNG'}
+                </Button>
+              </div>
             </>
           )}
         </>
@@ -910,7 +995,40 @@ function StatsView() {
           )}
         </Modal>
       )}
-    </div>
+      </div>
+
+      {/* Print-only personal attendance for the selected range */}
+      {selStudent && (
+        <div className="print-area" style={{ display: 'none' }}>
+          <StudentAttSheet
+            name={selStudent.name}
+            batch={selStudent.batch}
+            centerName={center.name || 'UTSAHO EDUCARE'}
+            fromLabel={fmtDateLong(isoDayToMs(repFrom))}
+            toLabel={fmtDateLong(isoDayToMs(repTo))}
+            months={repMonths}
+            total={repTotal}
+          />
+        </div>
+      )}
+
+      {/* Off-screen copy for PNG export (capture libs need a rendered node) */}
+      {selStudent && (
+        <div aria-hidden style={{ position: 'fixed', left: -2000, top: 0, pointerEvents: 'none' }}>
+          <div ref={sheetRef}>
+            <StudentAttSheet
+              name={selStudent.name}
+              batch={selStudent.batch}
+              centerName={center.name || 'UTSAHO EDUCARE'}
+              fromLabel={fmtDateLong(isoDayToMs(repFrom))}
+              toLabel={fmtDateLong(isoDayToMs(repTo))}
+              months={repMonths}
+              total={repTotal}
+            />
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 
@@ -924,75 +1042,81 @@ function monthStartKey(): string {
 /** Guardian attendance report for one class over a date range. Working days
  *  are days in the range with attendance taken for the class; each student's
  *  present/absent/leave counts come from their own marks in the range. */
-interface ReportRow {
-  name: string
+interface AttMonth {
+  month: string
+  list: Array<{ id: string; day: string; status: string }>
   present: number
   absent: number
   leave: number
 }
 
-/** Class attendance report sheet - rendered once for printing and once
- *  off-screen for PNG export, so both outputs always match. */
-function ReportSheet({
+/** Personal attendance sheet for one student over a date range - rendered
+ *  once for printing and once off-screen for PNG export, so both outputs
+ *  always match. */
+function StudentAttSheet({
+  name,
   batch,
   centerName,
   fromLabel,
   toLabel,
-  working,
-  rows,
+  months,
+  total,
 }: {
+  name: string
   batch: string
   centerName: string
   fromLabel: string
   toLabel: string
-  working: number
-  rows: ReportRow[]
+  months: AttMonth[]
+  total: { present: number; absent: number; leave: number }
 }) {
-  const t = rows.reduce(
-    (s, r) => ({ present: s.present + r.present, absent: s.absent + r.absent, leave: s.leave + r.leave }),
-    { present: 0, absent: 0, leave: 0 },
-  )
   return (
     <div style={{ fontFamily: "'Segoe UI', system-ui, sans-serif", color: '#1c2936', background: '#ffffff', padding: 20, width: 520 }}>
-      <div style={{ fontSize: 20, fontWeight: 800 }}>{batch} — Attendance report</div>
+      <div style={{ fontSize: 20, fontWeight: 800 }}>{name} — Attendance</div>
       <div style={{ fontSize: 12, color: '#7c7668', marginTop: 2 }}>
-        {fromLabel} – {toLabel} · {centerName}
+        {batch || 'No batch'} · {fromLabel} – {toLabel} · {centerName}
       </div>
       <div style={{ fontSize: 13, fontWeight: 700, marginTop: 8 }}>
-        {working} working day{working === 1 ? '' : 's'} — Present {t.present} · Absent {t.absent} · Leave {t.leave}
+        Total — Present {total.present} · Absent {total.absent} · Leave {total.leave}
       </div>
-      <div style={{ marginTop: 12 }}>
-        <div style={{ display: 'flex', fontSize: 11, fontWeight: 800, borderBottom: '1px solid #1c2936', paddingBottom: 4 }}>
-          <span style={{ flex: 1 }}>Student</span>
-          <span style={{ width: 36, textAlign: 'center' }}>P</span>
-          <span style={{ width: 36, textAlign: 'center' }}>A</span>
-          <span style={{ width: 36, textAlign: 'center' }}>L</span>
-        </div>
-        {rows.map((r) => (
-          <div
-            key={r.name}
-            style={{ display: 'flex', fontSize: 12, padding: '4px 0', borderBottom: '1px dotted #ccc', alignItems: 'center' }}
-          >
-            <span style={{ flex: 1, fontWeight: 600 }}>{r.name}</span>
-            <span style={{ width: 36, textAlign: 'center' }}>{r.present}</span>
-            <span style={{ width: 36, textAlign: 'center' }}>{r.absent}</span>
-            <span style={{ width: 36, textAlign: 'center' }}>{r.leave}</span>
+      {months.map((m) => (
+        <div key={m.month} style={{ marginTop: 12 }}>
+          <div style={{ fontSize: 14, fontWeight: 800, borderBottom: '1px solid #1c2936', paddingBottom: 2 }}>
+            {periodLabel(m.month)} — P {m.present} · A {m.absent} · L {m.leave}
           </div>
-        ))}
-      </div>
-      {rows.length === 0 && <div style={{ fontSize: 13, marginTop: 8 }}>No students in this report.</div>}
+          {m.list.map((a) => {
+            const ms = new Date(a.day + 'T12:00:00').getTime()
+            return (
+              <div
+                key={a.id}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontSize: 12,
+                  padding: '3px 0',
+                  borderBottom: '1px dotted #ccc',
+                }}
+              >
+                <span>{fmtDateLong(ms)}</span>
+                <span style={{ fontWeight: 700 }}>
+                  {a.status === 'present' ? 'Present' : a.status === 'absent' ? 'Absent' : 'Leave'}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      ))}
+      {months.length === 0 && <div style={{ fontSize: 13, marginTop: 8 }}>No attendance recorded in this period.</div>}
     </div>
   )
 }
 
 function ReportView() {
-  const { students, attendances, attReports, center, saveAttReport, showToast } = useApp()
+  const { students, attendances, attReports, center, saveAttReport } = useApp()
   const [batch, setBatch] = useState('')
   const [from, setFrom] = useState(monthStartKey())
   const [to, setTo] = useState(todayKey())
   const [ticking, setTicking] = useState<ReadonlySet<string>>(new Set())
-  const [pngBusy, setPngBusy] = useState(false)
-  const sheetRef = useRef<HTMLDivElement>(null)
 
   const batches = useMemo(
     () => Array.from(new Set(students.filter((s) => !s.archived).map((s) => s.batch))).filter(Boolean).sort(),
@@ -1050,48 +1174,6 @@ function ReportView() {
     }
   }
 
-  const sheetRows: ReportRow[] = rows.map(({ s, present, absent, leave }) => ({
-    name: s.name,
-    present,
-    absent,
-    leave,
-  }))
-  const sheetProps = {
-    batch,
-    centerName: center.name || 'UTSAHO EDUCARE',
-    fromLabel: fmtDateLong(isoDayToMs(from)),
-    toLabel: fmtDateLong(isoDayToMs(to)),
-    working,
-    rows: sheetRows,
-  }
-  const reportFileName = `attendance-report-${batch.trim().replace(/\s+/g, '-').replace(/[^\w-]/g, '') || 'class'}-${from}_to_${to}.png`
-
-  const onSavePng = async () => {
-    const el = sheetRef.current
-    if (!el) return
-    setPngBusy(true)
-    try {
-      let dataUrl: string
-      try {
-        dataUrl = await domToPng(el, { scale: 2 })
-      } catch {
-        dataUrl = await htmlToImageToPng(el, { pixelRatio: 2, cacheBust: true })
-      }
-      const blob = await fetch(dataUrl).then((r) => r.blob())
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = reportFileName
-      a.click()
-      URL.revokeObjectURL(url)
-      showToast('PNG saved', 'ok')
-    } catch (e) {
-      showToast(e instanceof Error ? e.message : 'Could not export PNG', 'err')
-    } finally {
-      setPngBusy(false)
-    }
-  }
-
   return (
     <div className="px-4 space-y-3 pb-6">
       <Card className="!rounded-2xl p-4 space-y-3">
@@ -1140,17 +1222,6 @@ function ReportView() {
             subtitle="The start date must be on or before the end date."
           />
         </Card>
-      )}
-
-      {valid && rows.length > 0 && (
-        <div className="grid grid-cols-2 gap-2.5 no-print">
-          <Button variant="secondary" size="lg" onClick={() => window.print()}>
-            <IconPrint className="w-5 h-5" /> Print
-          </Button>
-          <Button variant="secondary" size="lg" onClick={() => void onSavePng()} disabled={pngBusy}>
-            {pngBusy ? <Spinner className="w-5 h-5" /> : <IconDownload className="w-5 h-5" />} {pngBusy ? 'Saving…' : 'Save PNG'}
-          </Button>
-        </div>
       )}
 
       {rows.map(({ s, present, absent, leave, ticked }) => {
@@ -1231,18 +1302,6 @@ function ReportView() {
           </Card>
         )
       })}
-
-      {/* Print-only class report */}
-      <div className="print-area" style={{ display: 'none' }}>
-        <ReportSheet {...sheetProps} />
-      </div>
-
-      {/* Off-screen copy for PNG export (capture libs need a rendered node) */}
-      <div aria-hidden style={{ position: 'fixed', left: -2000, top: 0, pointerEvents: 'none' }}>
-        <div ref={sheetRef}>
-          <ReportSheet {...sheetProps} />
-        </div>
-      </div>
     </div>
   )
 }
@@ -1262,8 +1321,10 @@ export function Attendance() {
 
   return (
     <div className="pb-4">
-      <PageHeader title="Attendance" subtitle={center.name || 'UTSAHO EDUCARE'} />
-      <div className="px-4">
+      <div className="no-print">
+        <PageHeader title="Attendance" subtitle={center.name || 'UTSAHO EDUCARE'} />
+      </div>
+      <div className="px-4 no-print">
         <div className="grid grid-cols-4 gap-1.5 p-1 rounded-2xl bg-[#eef2f6] dark:bg-input-dark">
           {(
             [
