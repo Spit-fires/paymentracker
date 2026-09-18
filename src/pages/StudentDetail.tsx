@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { toPng as htmlToImageToPng } from 'html-to-image'
-import { domToPng } from 'modern-screenshot'
 import { useApp } from '../state/AppContext'
 import { studentPeriodBalance, studentBalanceFee, studentPeriodPaidAny } from '../lib/ledger'
 import { fmtTaka, periodNow, periodLabel, payingForDisplay, fmtDate, fillMessage, todayKey, addDays, fmtWeekday, fmtDateLong, fmtInvoiceNo, invoiceDailySeq } from '../lib/format'
 import { getKV, K, db } from '../lib/db'
 import { getToken } from '../lib/token'
-import { Card, Button, Modal, EmptyState, SectionLabel, PageHeader, Spinner, useBlobUrl } from '../components/ui'
+import { Card, Button, Modal, EmptyState, SectionLabel, PageHeader, useBlobUrl } from '../components/ui'
 import { StudentForm, type FormValue } from '../components/StudentForm'
 import {
   IconEdit,
@@ -17,77 +15,11 @@ import {
   IconReceipt,
   IconArchive,
   IconPhone,
-  IconPrint,
-  IconDownload,
 } from '../components/Icons'
 import { defaultCenter } from '../lib/sync'
 import { routineTimeLabel, routineSubjectsLabel, routineNote, routineHasContent } from '../lib/routine'
 import { waLink, waPhone, openExternal } from '../lib/phone'
 import type { Routine } from '../types'
-
-interface AttMonth {
-  month: string
-  list: Array<{ id: string; day: string; status: string }>
-  present: number
-  absent: number
-  leave: number
-}
-
-/** Personal attendance sheet - rendered once for printing and once off-screen
- *  for PNG export, so both outputs always match. */
-function AttendanceSheet({
-  name,
-  batch,
-  centerName,
-  months,
-  total,
-}: {
-  name: string
-  batch: string
-  centerName: string
-  months: AttMonth[]
-  total: { present: number; absent: number; leave: number }
-}) {
-  return (
-    <div style={{ fontFamily: "'Segoe UI', system-ui, sans-serif", color: '#1c2936', background: '#ffffff', padding: 20, width: 520 }}>
-      <div style={{ fontSize: 20, fontWeight: 800 }}>{name} — Attendance</div>
-      <div style={{ fontSize: 12, color: '#7c7668', marginTop: 2 }}>
-        {batch || 'No batch'} · {centerName}
-      </div>
-      <div style={{ fontSize: 13, fontWeight: 700, marginTop: 8 }}>
-        Total — Present {total.present} · Absent {total.absent} · Leave {total.leave}
-      </div>
-      {months.map((m) => (
-        <div key={m.month} style={{ marginTop: 12 }}>
-          <div style={{ fontSize: 14, fontWeight: 800, borderBottom: '1px solid #1c2936', paddingBottom: 2 }}>
-            {periodLabel(m.month)} — P {m.present} · A {m.absent} · L {m.leave}
-          </div>
-          {m.list.map((a) => {
-            const ms = new Date(a.day + 'T12:00:00').getTime()
-            return (
-              <div
-                key={a.id}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  fontSize: 12,
-                  padding: '3px 0',
-                  borderBottom: '1px dotted #ccc',
-                }}
-              >
-                <span>{fmtDateLong(ms)}</span>
-                <span style={{ fontWeight: 700 }}>
-                  {a.status === 'present' ? 'Present' : a.status === 'absent' ? 'Absent' : 'Leave'}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-      ))}
-      {months.length === 0 && <div style={{ fontSize: 13, marginTop: 8 }}>No attendance recorded.</div>}
-    </div>
-  )
-}
 
 export function StudentDetail() {
   const { id } = useParams<{ id: string }>()
@@ -95,7 +27,6 @@ export function StudentDetail() {
   const {
     students,
     payments,
-    attendances,
     center,
     routines,
     refreshData,
@@ -111,8 +42,6 @@ export function StudentDetail() {
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [pngBusy, setPngBusy] = useState(false)
-  const sheetRef = useRef<HTMLDivElement>(null)
 
   const period = periodNow()
 
@@ -161,35 +90,6 @@ export function StudentDetail() {
         .filter((p) => p.studentId === id)
         .sort((a, b) => b.date - a.date || b.receiptNo - a.receiptNo),
     [payments, id],
-  )
-
-  /** personal attendance, newest first, grouped by month for the printout */
-  const attMonths = useMemo(() => {
-    const marks = attendances
-      .filter((a) => a.studentId === id)
-      .sort((a, b) => (a.day < b.day ? 1 : -1))
-    const map = new Map<string, typeof marks>()
-    for (const a of marks) {
-      const key = a.day.slice(0, 7)
-      const arr = map.get(key)
-      if (arr) arr.push(a)
-      else map.set(key, [a])
-    }
-    return [...map.entries()].map(([month, list]) => ({
-      month,
-      list,
-      present: list.filter((a) => a.status === 'present').length,
-      absent: list.filter((a) => a.status === 'absent').length,
-      leave: list.filter((a) => a.status === 'leave').length,
-    }))
-  }, [attendances, id])
-  const attTotal = useMemo(
-    () => ({
-      present: attMonths.reduce((s, m) => s + m.present, 0),
-      absent: attMonths.reduce((s, m) => s + m.absent, 0),
-      leave: attMonths.reduce((s, m) => s + m.leave, 0),
-    }),
-    [attMonths],
   )
 
   if (!student) {
@@ -304,34 +204,6 @@ export function StudentDetail() {
   const onDeletePayment = async (paymentId: string) => {
     await deletePayment(paymentId)
     showToast('Receipt deleted', 'ok')
-  }
-
-  const attFileName = `attendance-${student.name.trim().replace(/\s+/g, '-').replace(/[^\w-]/g, '') || 'student'}-${new Date().toISOString().slice(0, 10)}.png`
-
-  const onSaveAttPng = async () => {
-    const el = sheetRef.current
-    if (!el) return
-    setPngBusy(true)
-    try {
-      let dataUrl: string
-      try {
-        dataUrl = await domToPng(el, { scale: 2 })
-      } catch {
-        dataUrl = await htmlToImageToPng(el, { pixelRatio: 2, cacheBust: true })
-      }
-      const blob = await fetch(dataUrl).then((r) => r.blob())
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = attFileName
-      a.click()
-      URL.revokeObjectURL(url)
-      showToast('PNG saved', 'ok')
-    } catch (e) {
-      showToast(e instanceof Error ? e.message : 'Could not export PNG', 'err')
-    } finally {
-      setPngBusy(false)
-    }
   }
 
   const allPaid = due === 0 && (fee > 0 || paidAny)
@@ -472,23 +344,6 @@ export function StudentDetail() {
           >
             <IconWhatsApp className="w-4.5 h-4.5" /> WhatsApp
           </Button>
-          <Button
-            variant="secondary"
-            size="lg"
-            className="no-print"
-            onClick={() => window.print()}
-          >
-            <IconPrint className="w-5 h-5" /> Print
-          </Button>
-          <Button
-            variant="secondary"
-            size="lg"
-            className="no-print"
-            onClick={() => void onSaveAttPng()}
-            disabled={pngBusy}
-          >
-            {pngBusy ? <Spinner className="w-5 h-5" /> : <IconDownload className="w-5 h-5" />} {pngBusy ? 'Saving…' : 'Save PNG'}
-          </Button>
         </div>
 
         <div className="flex items-center justify-between mt-4 pt-3 border-t border-line dark:border-line-dark">
@@ -597,30 +452,6 @@ export function StudentDetail() {
           </Button>
         </div>
       </Modal>
-
-      {/* Print-only personal attendance */}
-      <div className="print-area" style={{ display: 'none' }}>
-        <AttendanceSheet
-          name={student.name}
-          batch={student.batch}
-          centerName={center.name || 'UTSAHO EDUCARE'}
-          months={attMonths}
-          total={attTotal}
-        />
-      </div>
-
-      {/* Off-screen copy for PNG export (capture libs need a rendered node) */}
-      <div aria-hidden style={{ position: 'fixed', left: -2000, top: 0, pointerEvents: 'none' }}>
-        <div ref={sheetRef}>
-          <AttendanceSheet
-            name={student.name}
-            batch={student.batch}
-            centerName={center.name || 'UTSAHO EDUCARE'}
-            months={attMonths}
-            total={attTotal}
-          />
-        </div>
-      </div>
     </div>
   )
 }
