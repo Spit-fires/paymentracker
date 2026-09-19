@@ -39,7 +39,7 @@ function StudentAvatar({ s }: { s: { name: string; photoBlob?: Blob } }) {
   const url = useBlobUrl(s.photoBlob)
   if (url) return <img src={url} alt="" className="w-12 h-9 rounded-lg object-cover shrink-0" />
   return (
-    <div className="w-12 h-9 rounded-lg bg-[#e8f0f7] dark:bg-hover-dark grid place-items-center text-ink dark:text-accent-dark font-bold text-[13px] shrink-0">
+    <div className="w-9 h-12 rounded-lg bg-[#e8f0f7] dark:bg-hover-dark grid place-items-center text-ink dark:text-accent-dark font-bold text-[13px] shrink-0">
       {s.name
         .split(' ')
         .slice(0, 2)
