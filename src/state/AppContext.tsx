@@ -220,59 +220,71 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const refreshData = useCallback(async () => {
-    setStudents((await loadTable(db.students)).filter((s) => !s.deletedAt))
+    setStudents((await loadTable(db.students, 'students')).filter((s) => !s.deletedAt))
     // backfill per-day invoice sequence for old receipts that predate the field
     // + one-time PNG eviction for receipts already on Drive. Both are guarded:
     // maintenance writes must never abort a refresh and blank the lists.
     let paymentState: Payment[] = []
     try {
-      const all = await loadTable(db.payments)
+      const all = await loadTable(db.payments, 'payments')
       const active = all.filter((p) => !p.deletedAt)
       const missing = active.filter((p) => p.dailySeq == null)
       if (missing.length) {
-        const byDay = new Map<string, Payment[]>()
-        for (const p of active) {
-          const d = dayKey(new Date(p.date))
-          const arr = byDay.get(d) || []
-          arr.push(p)
-          byDay.set(d, arr)
-        }
-        const toPut: Payment[] = []
-        for (const [, list] of byDay) {
-          list.sort((a, b) => a.receiptNo - b.receiptNo)
-          const used = new Set(list.filter((p) => p.dailySeq != null).map((p) => p.dailySeq!))
-          let next = used.size ? Math.max(...used) + 1 : 1
-          for (const p of list) {
-            if (p.dailySeq == null) {
-              while (used.has(next)) next++
-              p.dailySeq = next
-              used.add(next)
-              toPut.push(p)
-              next++
+        try {
+          const byDay = new Map<string, Payment[]>()
+          for (const p of active) {
+            const d = dayKey(new Date(p.date))
+            const arr = byDay.get(d) || []
+            arr.push(p)
+            byDay.set(d, arr)
+          }
+          const toPut: Payment[] = []
+          for (const [, list] of byDay) {
+            list.sort((a, b) => a.receiptNo - b.receiptNo)
+            const used = new Set(list.filter((p) => p.dailySeq != null).map((p) => p.dailySeq!))
+            let next = used.size ? Math.max(...used) + 1 : 1
+            for (const p of list) {
+              if (p.dailySeq == null) {
+                while (used.has(next)) next++
+                p.dailySeq = next
+                used.add(next)
+                toPut.push(p)
+                next++
+              }
             }
           }
-        }
-        if (toPut.length) {
-          await db.payments.bulkPut(toPut)
-          await queueOp({ kind: 'pushJSON', file: 'payments' })
+          if (toPut.length) {
+            await db.payments.bulkPut(toPut)
+            await queueOp({ kind: 'pushJSON', file: 'payments' })
+            log('info', `Receipt dailySeq backfill wrote ${toPut.length} record(s)`)
+          }
+        } catch (e) {
+          log('warn', 'Receipt dailySeq backfill skipped', e instanceof Error ? e.message : undefined)
         }
       }
       // receipts already on Drive don't need their local PNG copy (ReceiptView
       // re-captures on demand) - strip them so IndexedDB stops growing
       const uploadedWithBlob = all.filter((p) => !p.deletedAt && p.pngFileId && p.pngBlob)
-      for (const p of uploadedWithBlob) {
-        const { pngBlob: _dropped, ...rest } = p
-        await db.payments.put(rest)
+      if (uploadedWithBlob.length) {
+        try {
+          for (const p of uploadedWithBlob) {
+            const { pngBlob: _dropped, ...rest } = p
+            await db.payments.put(rest)
+          }
+          log('info', `Evicted ${uploadedWithBlob.length} uploaded receipt PNG(s) from local storage`)
+        } catch (e) {
+          log('warn', 'Receipt PNG eviction skipped', e instanceof Error ? e.message : undefined)
+        }
       }
       // keep blobs out of React state: lists only need metadata, ReceiptView
       // and sharing re-capture/regenerate PNGs on demand
       paymentState = active.map(({ pngBlob: _b, ...rest }) => rest)
     } catch (e) {
-      log('error', `Payment refresh failed: ${e instanceof Error ? e.message : e}`)
+      log('error', 'Payment refresh failed', e instanceof Error ? e.message : undefined)
       // maintenance writes failed (e.g. quota) but the data itself may still
       // be readable - re-read so the lists show instead of going blank
       try {
-        paymentState = (await loadTable(db.payments))
+        paymentState = (await loadTable(db.payments, 'payments'))
           .filter((p) => !p.deletedAt)
           .map(({ pngBlob: _b, ...rest }) => rest)
       } catch {
@@ -280,11 +292,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     }
     setPayments(paymentState)
-    setPostings((await loadTable(db.postings)).filter((p) => !p.deletedAt))
-    setAttendances((await loadTable(db.attendance)).filter((a) => !a.deletedAt))
-    setRoutines((await loadTable(db.routines)).filter((r) => !r.deletedAt))
-    setQuickCards((await loadTable(db.quick)).filter((q) => !q.deletedAt))
-    setAttReports((await loadTable(db.attrep)).filter((r) => !r.deletedAt))
+    setPostings((await loadTable(db.postings, 'postings')).filter((p) => !p.deletedAt))
+    setAttendances((await loadTable(db.attendance, 'attendance')).filter((a) => !a.deletedAt))
+    setRoutines((await loadTable(db.routines, 'routines')).filter((r) => !r.deletedAt))
+    setQuickCards((await loadTable(db.quick, 'quick')).filter((q) => !q.deletedAt))
+    setAttReports((await loadTable(db.attrep, 'attrep')).filter((r) => !r.deletedAt))
     setSubjects(normalizeSubjects((await getKV<unknown>(K.SUBJECTS))))
     const loaded = (await getKV<Center>(K.CENTER)) || defaultCenter()
     // soft-migrate the legacy phone field: receipts no longer print it - if

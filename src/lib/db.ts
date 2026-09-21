@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie'
 import type { Student, Payment, Posting, Attendance, Routine, QuickCard, AttReport, OutboxEntry, OutboxOp } from '../types'
+import { log } from './logs'
 
 export const K = {
   CENTER: 'center',
@@ -129,12 +130,14 @@ export const db = new PTDatabase()
 
 /** Read a whole table, but never let one poisoned record (torn blob write,
  *  corruption) blank an entire list - on failure, retry record-by-record
- *  and return everything that still parses. */
-export async function loadTable<T>(table: Table<T, string>): Promise<T[]> {
+ *  and return everything that still parses. Every step is logged exactly. */
+export async function loadTable<T>(table: Table<T, string>, label: string): Promise<T[]> {
   try {
     return await table.toArray()
-  } catch {
+  } catch (e) {
+    log('warn', `Table '${label}' bulk read failed, retrying record-by-record`, e instanceof Error ? e.message : undefined)
     const out: T[] = []
+    let skipped = 0
     try {
       const keys = await table.toCollection().primaryKeys()
       for (const k of keys) {
@@ -142,11 +145,16 @@ export async function loadTable<T>(table: Table<T, string>): Promise<T[]> {
           const r = await table.get(k as string)
           if (r !== undefined) out.push(r)
         } catch {
-          /* skip the poisoned record, keep going */
+          skipped++
         }
       }
     } catch {
       /* ignore */
+    }
+    if (skipped > 0) {
+      log('warn', `Table '${label}': skipped ${skipped} unreadable record(s)`, `recovered ${out.length}`)
+    } else {
+      log('info', `Table '${label}' recovered fully on retry`, `recovered ${out.length}`)
     }
     return out
   }

@@ -672,6 +672,7 @@ export function Settings() {
                   l.level === 'warn' ? 'text-amber' :
                   l.level === 'sync' ? 'text-teal' : 'text-muted'
                 }>[{l.level}]</span>{' '}
+                {l.count != null && l.count > 1 && <span className="font-bold">×{l.count} </span>}
                 <span className="text-ink dark:text-white">{l.msg}</span>
                 {l.detail && <span className="text-faint"> ({l.detail})</span>}
               </div>
