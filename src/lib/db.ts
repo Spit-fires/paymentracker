@@ -127,6 +127,31 @@ class PTDatabase extends Dexie {
 
 export const db = new PTDatabase()
 
+/** Read a whole table, but never let one poisoned record (torn blob write,
+ *  corruption) blank an entire list - on failure, retry record-by-record
+ *  and return everything that still parses. */
+export async function loadTable<T>(table: Table<T, string>): Promise<T[]> {
+  try {
+    return await table.toArray()
+  } catch {
+    const out: T[] = []
+    try {
+      const keys = await table.toCollection().primaryKeys()
+      for (const k of keys) {
+        try {
+          const r = await table.get(k as string)
+          if (r !== undefined) out.push(r)
+        } catch {
+          /* skip the poisoned record, keep going */
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    return out
+  }
+}
+
 export async function getStudents(): Promise<Student[]> {
   return db.students.toArray()
 }

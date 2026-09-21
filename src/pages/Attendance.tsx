@@ -1107,6 +1107,16 @@ function StudentAttSheet({
         </div>
       ))}
       {months.length === 0 && <div style={{ fontSize: 13, marginTop: 8 }}>No attendance recorded in this period.</div>}
+      {months.length > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 56 }}>
+          <div style={{ borderTop: '1px solid #1c2936', width: 170, paddingTop: 4, fontSize: 12, fontWeight: 700 }}>
+            Director Signature
+          </div>
+          <div style={{ borderTop: '1px solid #1c2936', width: 170, paddingTop: 4, fontSize: 12, fontWeight: 700, textAlign: 'right' }}>
+            Guardian Signature
+          </div>
+        </div>
+      )}
     </div>
   )
 }

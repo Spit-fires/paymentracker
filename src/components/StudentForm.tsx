@@ -105,14 +105,37 @@ export function StudentForm({
 
   const set = <K extends keyof FormValue>(k: K, v: FormValue[K]) => setF((p) => ({ ...p, [k]: v }))
 
-  const pickPhoto = (file?: File | null) => {
-    if (!file) return
-    if (!file.type.startsWith('image/')) return
+  const setPhotoBlob = (blob: Blob) => {
     if (previewUrl.current) URL.revokeObjectURL(previewUrl.current)
-    const blob = file
     set('photo', blob)
     previewUrl.current = URL.createObjectURL(blob)
     setPreview(previewUrl.current)
+  }
+
+  const pickPhoto = async (file?: File | null) => {
+    if (!file) return
+    if (!file.type.startsWith('image/')) return
+    // downscale to a max 800px JPEG so a phone camera photo (often 3-12MB)
+    // doesn't bloat IndexedDB - avatars only ever render tiny
+    try {
+      const bmp = await createImageBitmap(file)
+      const MAX = 800
+      const scale = Math.min(1, MAX / Math.max(bmp.width, bmp.height))
+      const w = Math.max(1, Math.round(bmp.width * scale))
+      const h = Math.max(1, Math.round(bmp.height * scale))
+      const canvas = document.createElement('canvas')
+      canvas.width = w
+      canvas.height = h
+      const ctx = canvas.getContext('2d')
+      if (!ctx) throw new Error('no 2d context')
+      ctx.drawImage(bmp, 0, 0, w, h)
+      bmp.close()
+      const small = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/jpeg', 0.85))
+      if (!small) throw new Error('encode failed')
+      setPhotoBlob(small)
+    } catch {
+      setPhotoBlob(file)
+    }
   }
 
   // strip a bare "+880" prefix the teacher left untouched - never save it

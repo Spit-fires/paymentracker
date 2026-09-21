@@ -25,7 +25,7 @@ import type {
   Teacher,
   ReceivedBy,
 } from '../types'
-import { db, getKV, setKV, queueOp, K } from '../lib/db'
+import { db, getKV, setKV, queueOp, loadTable, K } from '../lib/db'
 import { signIn, silentSignIn, revoke, lastSilentError, type TokenResult } from '../lib/auth'
 import {
   ensureDriveStructure,
@@ -220,10 +220,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const refreshData = useCallback(async () => {
-    setStudents((await db.students.toArray()).filter((s) => !s.deletedAt))
+    setStudents((await loadTable(db.students)).filter((s) => !s.deletedAt))
     // backfill per-day invoice sequence for old receipts that predate the field
-    {
-      const all = await db.payments.toArray()
+    // + one-time PNG eviction for receipts already on Drive. Both are guarded:
+    // maintenance writes must never abort a refresh and blank the lists.
+    let paymentState: Payment[] = []
+    try {
+      const all = await loadTable(db.payments)
       const active = all.filter((p) => !p.deletedAt)
       const missing = active.filter((p) => p.dailySeq == null)
       if (missing.length) {
@@ -254,23 +257,49 @@ export function AppProvider({ children }: { children: ReactNode }) {
           await queueOp({ kind: 'pushJSON', file: 'payments' })
         }
       }
+      // receipts already on Drive don't need their local PNG copy (ReceiptView
+      // re-captures on demand) - strip them so IndexedDB stops growing
+      const uploadedWithBlob = all.filter((p) => !p.deletedAt && p.pngFileId && p.pngBlob)
+      for (const p of uploadedWithBlob) {
+        const { pngBlob: _dropped, ...rest } = p
+        await db.payments.put(rest)
+      }
+      // keep blobs out of React state: lists only need metadata, ReceiptView
+      // and sharing re-capture/regenerate PNGs on demand
+      paymentState = active.map(({ pngBlob: _b, ...rest }) => rest)
+    } catch (e) {
+      log('error', `Payment refresh failed: ${e instanceof Error ? e.message : e}`)
+      // maintenance writes failed (e.g. quota) but the data itself may still
+      // be readable - re-read so the lists show instead of going blank
+      try {
+        paymentState = (await loadTable(db.payments))
+          .filter((p) => !p.deletedAt)
+          .map(({ pngBlob: _b, ...rest }) => rest)
+      } catch {
+        /* stays empty */
+      }
     }
-    setPayments((await db.payments.toArray()).filter((p) => !p.deletedAt))
-    setPostings((await db.postings.toArray()).filter((p) => !p.deletedAt))
-    setAttendances((await db.attendance.toArray()).filter((a) => !a.deletedAt))
-    setRoutines((await db.routines.toArray()).filter((r) => !r.deletedAt))
-    setQuickCards((await db.quick.toArray()).filter((q) => !q.deletedAt))
-    setAttReports((await db.attrep.toArray()).filter((r) => !r.deletedAt))
+    setPayments(paymentState)
+    setPostings((await loadTable(db.postings)).filter((p) => !p.deletedAt))
+    setAttendances((await loadTable(db.attendance)).filter((a) => !a.deletedAt))
+    setRoutines((await loadTable(db.routines)).filter((r) => !r.deletedAt))
+    setQuickCards((await loadTable(db.quick)).filter((q) => !q.deletedAt))
+    setAttReports((await loadTable(db.attrep)).filter((r) => !r.deletedAt))
     setSubjects(normalizeSubjects((await getKV<unknown>(K.SUBJECTS))))
     const loaded = (await getKV<Center>(K.CENTER)) || defaultCenter()
     // soft-migrate the legacy phone field: receipts no longer print it - if
     // the address block is empty, the old phone moves there (preserved as
     // rich HTML when it was one), otherwise the phone is dropped. The pending
     // meta op flushes on the next sync tick.
-    const migrated = migrateLegacyPhone(loaded)
-    if (migrated !== loaded) {
-      await setKV(K.CENTER, migrated)
-      await queueOp({ kind: 'pushJSON', file: 'meta' })
+    let migrated = loaded
+    try {
+      migrated = migrateLegacyPhone(loaded)
+      if (migrated !== loaded) {
+        await setKV(K.CENTER, migrated)
+        await queueOp({ kind: 'pushJSON', file: 'meta' })
+      }
+    } catch (e) {
+      log('error', `Center migration failed: ${e instanceof Error ? e.message : e}`)
     }
     setCenter(migrated)
     setTeachers(((await getKV<Teacher[]>(K.TEACHERS)) || []).filter((t) => !t.deletedAt))
@@ -410,6 +439,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (session?.pinHash && session.user) setLocked(true)
       if (session?.theme) document.documentElement.classList.toggle('dark', session.theme === 'dark')
       await refreshData()
+      // storage health (boot only): log used-vs-quota so bloat is visible in
+      // Settings logs long before it can break reads; warn once past 85%
+      try {
+        const est = await navigator.storage?.estimate?.()
+        if (est && est.quota) {
+          const usedMB = Math.round((est.usage || 0) / 1048576)
+          const quotaMB = Math.round(est.quota / 1048576)
+          log('sync', `Storage: ${usedMB}MB / ${quotaMB}MB`)
+          if ((est.usage || 0) / est.quota > 0.85) {
+            showToast(`Storage almost full (${usedMB}/${quotaMB}MB) - old data may stop loading`, 'err')
+          }
+        }
+      } catch {
+        /* unsupported - ignore */
+      }
       if (cid && session?.user) {
         if (!navigator.onLine) {
           // offline: keep the session, data lives locally anyway
@@ -625,7 +669,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // it silently vanishing from the shared file
         await db.students.put({ ...s, deletedAt: now, updatedAt: now })
         for (const p of theirPayments) {
-          await db.payments.put({ ...p, deletedAt: now, updatedAt: now })
+          // tombstoned receipts never need their PNG again (Drive copy is
+          // deleted post-push) - drop the blob so dead weight doesn't linger
+          const { pngBlob: _dropped, ...rest } = p
+          await db.payments.put({ ...rest, deletedAt: now, updatedAt: now })
         }
       })
       await queueOp({ kind: 'pushJSON', file: 'students' })
@@ -738,7 +785,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // receipt must stay intact for the other devices. queueMediaDeletes
       // (flushOutbox) removes the PNG only after the push has succeeded.
       const now = Date.now()
-      const tombstone = { ...cur, deletedAt: now, updatedAt: now }
+      // dead receipts never need their PNG again (Drive copy is deleted
+      // post-push) - drop the blob so it doesn't linger in IndexedDB
+      const { pngBlob: _dropped, ...rest } = cur
+      const tombstone = { ...rest, deletedAt: now, updatedAt: now }
       if (cur.pngFileId) tombstone.pendingMedia = cur.pngFileId
       await db.payments.put(tombstone)
       await queueOp({ kind: 'pushJSON', file: 'payments' })

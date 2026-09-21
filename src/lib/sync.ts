@@ -269,6 +269,13 @@ async function applyOp(op: OutboxOp): Promise<void> {
         await queueOp({ kind: 'pushJSON', file: 'students' })
       } else if (op.paymentId) {
         await db.payments.update(op.paymentId, { pngFileId: id })
+        // the PNG now lives on Drive - drop the local blob copy so IndexedDB
+        // stops growing with every receipt (ReceiptView re-captures on demand)
+        const rec = await db.payments.get(op.paymentId)
+        if (rec?.pngBlob) {
+          const { pngBlob: _dropped, ...rest } = rec
+          await db.payments.put(rest)
+        }
         await queueOp({ kind: 'pushJSON', file: 'payments' })
         // make the receipt publicly viewable so the WhatsApp link works
         try {

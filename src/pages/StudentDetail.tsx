@@ -227,9 +227,9 @@ export function StudentDetail() {
       <Card className="mx-4 !rounded-2xl p-4">
         <div className="flex items-center gap-4">
           {photoUrl ? (
-            <img src={photoUrl} alt="" className="w-24 h-[72px] rounded-2xl object-cover" />
+            <img src={photoUrl} alt="" className="w-[60px] h-20 rounded-2xl object-cover" />
           ) : (
-            <div className="w-24 h-[72px] rounded-2xl bg-ink dark:bg-ink-soft grid place-items-center text-white text-[22px] font-bold shrink-0">
+            <div className="w-[60px] h-20 rounded-2xl bg-ink dark:bg-ink-soft grid place-items-center text-white text-[22px] font-bold shrink-0">
               {student.name
                 .split(' ')
                 .slice(0, 2)
