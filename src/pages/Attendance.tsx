@@ -15,9 +15,10 @@ import { useApp } from '../state/AppContext'
 import { fmtDateLong, fmtWeekday, fillMessage, todayKey, dayKey, addDays, periodLabel } from '../lib/format'
 import { routineTimeLabel, routineSubjectsLabel, routineNote, routineHasContent } from '../lib/routine'
 import { defaultCenter } from '../lib/sync'
-import { getKV, setKV, K } from '../lib/db'
+import { getKV, setKV, K, db } from '../lib/db'
+import { getToken } from '../lib/token'
 import { waLink, openExternal } from '../lib/phone'
-import { Card, PageHeader, EmptyState, Button, Select, Input, Modal, Spinner, cx } from '../components/ui'
+import { Card, PageHeader, EmptyState, Button, Select, Input, Modal, Spinner, cx, useBlobUrl } from '../components/ui'
 import { IconClipboardCheck, IconWhatsApp, IconCheck, IconPrint, IconDownload } from '../components/Icons'
 import type { AttendanceStatus, Routine } from '../types'
 
@@ -543,7 +544,7 @@ function ClearView() {
 }
 
 function StatsView() {
-  const { students, attendances, center, showToast } = useApp()
+  const { students, attendances, center, showToast, refreshData } = useApp()
   const [scope, setScope] = useState<Scope>('student')
   const [studentId, setStudentId] = useState('')
   const [studentQuery, setStudentQuery] = useState('')
@@ -625,6 +626,38 @@ function StatsView() {
 
   /* ---------- Personal export for the selected student + date range ---------- */
   const selStudent = studentId ? studentOptions.find((s) => s.id === studentId) : undefined
+  const photoUrl = useBlobUrl(selStudent?.photoBlob)
+  // pull the photo from Drive only when the local copy is missing (sync clears
+  // stale blobs when photoFileId changes), so the print sheet's top-right
+  // photo appears even if this device never opened the profile
+  useEffect(() => {
+    const st = selStudent
+    if (!st || !st.photoFileId || st.photoBlob) return
+    let alive = true
+    ;(async () => {
+      const drive = await getKV(K.DRIVE)
+      if (!drive) return
+      const token = getToken()
+      if (!token) return
+      try {
+        const res = await fetch(
+          `https://www.googleapis.com/drive/v3/files/${st.photoFileId}?alt=media`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        )
+        if (res.ok && alive) {
+          const blob = await res.blob()
+          await db.students.update(st.id, { photoBlob: blob })
+          await refreshData()
+        }
+      } catch {
+        /* offline */
+      }
+    })()
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selStudent?.id, selStudent?.photoFileId, selStudent?.photoBlob])
   const repValid = !!selStudent && !!repFrom && !!repTo && repFrom <= repTo
   const repMonths = useMemo(() => {
     if (!repValid) return [] as AttMonth[]
@@ -1004,6 +1037,7 @@ function StatsView() {
             name={selStudent.name}
             batch={selStudent.batch}
             centerName={center.name || 'UTSAHO EDUCARE'}
+            photoUrl={photoUrl}
             fromLabel={fmtDateLong(isoDayToMs(repFrom))}
             toLabel={fmtDateLong(isoDayToMs(repTo))}
             months={repMonths}
@@ -1020,6 +1054,7 @@ function StatsView() {
               name={selStudent.name}
               batch={selStudent.batch}
               centerName={center.name || 'UTSAHO EDUCARE'}
+              photoUrl={photoUrl}
               fromLabel={fmtDateLong(isoDayToMs(repFrom))}
               toLabel={fmtDateLong(isoDayToMs(repTo))}
               months={repMonths}
@@ -1057,6 +1092,7 @@ function StudentAttSheet({
   name,
   batch,
   centerName,
+  photoUrl,
   fromLabel,
   toLabel,
   months,
@@ -1065,6 +1101,7 @@ function StudentAttSheet({
   name: string
   batch: string
   centerName: string
+  photoUrl?: string | null
   fromLabel: string
   toLabel: string
   months: AttMonth[]
@@ -1072,12 +1109,26 @@ function StudentAttSheet({
 }) {
   return (
     <div style={{ fontFamily: "'Segoe UI', system-ui, sans-serif", color: '#1c2936', background: '#ffffff', padding: 20, width: 520 }}>
-      <div style={{ fontSize: 20, fontWeight: 800 }}>{name} — Attendance</div>
-      <div style={{ fontSize: 12, color: '#7c7668', marginTop: 2 }}>
-        {batch || 'No batch'} · {fromLabel} – {toLabel} · {centerName}
-      </div>
-      <div style={{ fontSize: 13, fontWeight: 700, marginTop: 8 }}>
-        Total — Present {total.present} · Absent {total.absent} · Leave {total.leave}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 20, fontWeight: 800 }}>{centerName}</div>
+          <div style={{ fontSize: 15, fontWeight: 700, marginTop: 3 }}>{name} — Attendance</div>
+          <div style={{ fontSize: 12, color: '#7c7668', marginTop: 2 }}>
+            {batch || 'No batch'} · {fromLabel} – {toLabel}
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 700, marginTop: 8 }}>
+            Total — Present {total.present} · Absent {total.absent} · Leave {total.leave}
+          </div>
+        </div>
+        {photoUrl ? (
+          <img
+            src={photoUrl}
+            alt={name}
+            style={{ width: 60, height: 80, objectFit: 'contain', flexShrink: 0, border: '1px solid #e5e0d5' }}
+          />
+        ) : (
+          <div style={{ width: 60, height: 80, flexShrink: 0 }} />
+        )}
       </div>
       {months.map((m) => (
         <div key={m.month} style={{ marginTop: 12 }}>
@@ -1086,6 +1137,7 @@ function StudentAttSheet({
           </div>
           {m.list.map((a) => {
             const ms = new Date(a.day + 'T12:00:00').getTime()
+            const absent = a.status === 'absent'
             return (
               <div
                 key={a.id}
@@ -1093,13 +1145,19 @@ function StudentAttSheet({
                   display: 'flex',
                   justifyContent: 'space-between',
                   fontSize: 12,
-                  padding: '3px 0',
-                  borderBottom: '1px dotted #ccc',
+                  padding: absent ? '3px 6px' : '3px 0',
+                  marginTop: absent ? 3 : 0,
+                  marginBottom: absent ? 3 : 0,
+                  border: absent ? '1.5px solid #000' : undefined,
+                  borderBottom: absent ? '1.5px solid #000' : '1px dotted #ccc',
+                  borderRadius: absent ? 4 : 0,
                 }}
               >
-                <span>{fmtDateLong(ms)}</span>
+                <span>
+                  {fmtWeekday(ms)}, {fmtDateLong(ms)}
+                </span>
                 <span style={{ fontWeight: 700 }}>
-                  {a.status === 'present' ? 'Present' : a.status === 'absent' ? 'Absent' : 'Leave'}
+                  {a.status === 'present' ? 'Present' : absent ? 'Absent' : 'Leave'}
                 </span>
               </div>
             )
