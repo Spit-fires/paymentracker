@@ -20,7 +20,7 @@ import { getToken } from '../lib/token'
 import { waLink, openExternal } from '../lib/phone'
 import { Card, PageHeader, EmptyState, Button, Select, Input, Modal, Spinner, cx, useBlobUrl } from '../components/ui'
 import { IconClipboardCheck, IconWhatsApp, IconCheck, IconPrint, IconDownload } from '../components/Icons'
-import type { AttendanceStatus, Routine } from '../types'
+import type { AttendanceStatus, Routine, Attendance, Student } from '../types'
 
 ChartJS.register(BarController, BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 
@@ -556,6 +556,9 @@ function StatsView() {
   const [repFrom, setRepFrom] = useState(monthStartKey())
   const [repTo, setRepTo] = useState(todayKey())
   const [pngBusy, setPngBusy] = useState(false)
+  // batch print: pick students, then print one sheet per student
+  const [printOpen, setPrintOpen] = useState(false)
+  const [printIds, setPrintIds] = useState<string[]>([])
   const sheetRef = useRef<HTMLDivElement>(null)
   const dark = document.documentElement.classList.contains('dark')
 
@@ -661,32 +664,9 @@ function StatsView() {
   const repValid = !!selStudent && !!repFrom && !!repTo && repFrom <= repTo
   const repMonths = useMemo(() => {
     if (!repValid) return [] as AttMonth[]
-    const marks = attendances
-      .filter((a) => a.studentId === studentId && a.day >= repFrom && a.day <= repTo)
-      .sort((a, b) => (a.day < b.day ? 1 : -1))
-    const map = new Map<string, typeof marks>()
-    for (const a of marks) {
-      const key = a.day.slice(0, 7)
-      const arr = map.get(key)
-      if (arr) arr.push(a)
-      else map.set(key, [a])
-    }
-    return [...map.entries()].map(([month, list]) => ({
-      month,
-      list,
-      present: list.filter((a) => a.status === 'present').length,
-      absent: list.filter((a) => a.status === 'absent').length,
-      leave: list.filter((a) => a.status === 'leave').length,
-    }))
+    return buildRepMonths(attendances, studentId, repFrom, repTo)
   }, [attendances, studentId, repFrom, repTo, repValid])
-  const repTotal = useMemo(
-    () => ({
-      present: repMonths.reduce((s, m) => s + m.present, 0),
-      absent: repMonths.reduce((s, m) => s + m.absent, 0),
-      leave: repMonths.reduce((s, m) => s + m.leave, 0),
-    }),
-    [repMonths],
-  )
+  const repTotal = useMemo(() => repTotalOf(repMonths), [repMonths])
   const repFileName = selStudent
     ? `attendance-${selStudent.name.trim().replace(/\s+/g, '-').replace(/[^\w-]/g, '') || 'student'}-${repFrom}_to_${repTo}.png`
     : 'attendance.png'
@@ -754,6 +734,25 @@ function StatsView() {
     for (const a of rows) if (a.status) c[a.status]++
     return { counts: c, total: rows.length }
   }, [batch, attendances, students])
+
+  /* ---------- Batch print (one sheet per student) ---------- */
+  const batchStudents = useMemo(
+    () => studentOptions.filter((s) => !s.archived && s.batch === batch),
+    [studentOptions, batch],
+  )
+  const batchPrintValid = !!repFrom && !!repTo && repFrom <= repTo
+  const openBatchPrint = () => {
+    setPrintIds(batchStudents.map((s) => s.id)) // everyone pre-checked
+    setPrintOpen(true)
+  }
+  const closeBatchPrint = () => {
+    setPrintOpen(false)
+    setPrintIds([])
+  }
+  const printSheets = useMemo(
+    () => printIds.map((id) => studentOptions.find((s) => s.id === id)).filter((s): s is Student => !!s),
+    [printIds, studentOptions],
+  )
 
   /* ---------- Date drilldown (chip → exact dates) ---------- */
   const dateRows = useMemo(() => {
@@ -949,6 +948,9 @@ function StatsView() {
                   </div>
                 )}
               </div>
+              <Button variant="secondary" size="lg" full onClick={openBatchPrint} disabled={!batchStudents.length}>
+                <IconPrint className="w-5 h-5" /> Print every student's attendance
+              </Button>
             </>
           )}
         </>
@@ -1028,10 +1030,71 @@ function StatsView() {
           )}
         </Modal>
       )}
+      {/* Batch print picker: everyone pre-checked, print = one sheet per page */}
+      {printOpen && (
+        <Modal open onClose={closeBatchPrint} title={`Print attendance · ${batch || 'Batch'}`}>
+          <div className="space-y-3.5">
+            <div className="grid grid-cols-2 gap-2.5">
+              <label className="block">
+                <div className="text-[11.5px] font-semibold text-muted dark:text-muted-dark mb-1">From</div>
+                <Input type="date" value={repFrom} max={repTo} onChange={(e) => setRepFrom(e.target.value)} />
+              </label>
+              <label className="block">
+                <div className="text-[11.5px] font-semibold text-muted dark:text-muted-dark mb-1">To</div>
+                <Input type="date" value={repTo} min={repFrom} max={todayKey()} onChange={(e) => setRepTo(e.target.value)} />
+              </label>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="text-[12.5px] font-bold text-ink dark:text-white">
+                {printIds.length} of {batchStudents.length} selected
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setPrintIds(batchStudents.map((s) => s.id))}
+                  className="text-[12px] font-bold text-teal"
+                >
+                  All
+                </button>
+                <button onClick={() => setPrintIds([])} className="text-[12px] font-bold text-muted dark:text-muted-dark">
+                  None
+                </button>
+              </div>
+            </div>
+            <div className="max-h-[42dvh] overflow-y-auto">
+              {batchStudents.map((s) => (
+                <label
+                  key={s.id}
+                  className="flex items-center gap-3 py-2 cursor-pointer border-t border-line/60 first:border-t-0 dark:border-line-dark/60"
+                >
+                  <input
+                    type="checkbox"
+                    checked={printIds.includes(s.id)}
+                    onChange={(e) =>
+                      setPrintIds((prev) =>
+                        e.target.checked ? [...prev, s.id] : prev.filter((id) => id !== s.id),
+                      )
+                    }
+                    className="w-4 h-4 accent-teal shrink-0"
+                  />
+                  <span className="text-[14px] font-semibold text-ink dark:text-white truncate">{s.name}</span>
+                </label>
+              ))}
+              {!batchStudents.length && (
+                <div className="text-[13px] text-center text-muted dark:text-muted-dark py-5">
+                  No students in this batch.
+                </div>
+              )}
+            </div>
+            <Button full size="lg" onClick={() => window.print()} disabled={!printIds.length || !batchPrintValid}>
+              <IconPrint className="w-5 h-5" /> Print {printIds.length} {printIds.length === 1 ? 'sheet' : 'sheets'}
+            </Button>
+          </div>
+        </Modal>
+      )}
       </div>
 
       {/* Print-only personal attendance for the selected range */}
-      {selStudent && (
+      {scope === 'student' && selStudent && (
         <div className="print-area" style={{ display: 'none' }}>
           <StudentAttSheet
             name={selStudent.name}
@@ -1043,6 +1106,29 @@ function StatsView() {
             months={repMonths}
             total={repTotal}
           />
+        </div>
+      )}
+
+      {/* Print-only batch sheets: one student per page */}
+      {scope === 'batch' && printSheets.length > 0 && (
+        <div className="print-area" style={{ display: 'none' }}>
+          {printSheets.map((st, i) => (
+            <div
+              key={st.id}
+              style={{
+                breakInside: 'avoid',
+                breakAfter: i < printSheets.length - 1 ? 'page' : 'auto',
+              }}
+            >
+              <BatchPrintSheet
+                student={st}
+                centerName={center.name || 'UTSAHO EDUCARE'}
+                attendances={attendances}
+                from={repFrom}
+                to={repTo}
+              />
+            </div>
+          ))}
         </div>
       )}
 
@@ -1176,6 +1262,70 @@ function StudentAttSheet({
         </div>
       )}
     </div>
+  )
+}
+
+/** Attendance marks for one student in [from, to], grouped by month. */
+function buildRepMonths(attendances: Attendance[], studentId: string, from: string, to: string): AttMonth[] {
+  const marks = attendances
+    .filter((a) => a.studentId === studentId && a.day >= from && a.day <= to)
+    .sort((a, b) => (a.day < b.day ? 1 : -1))
+  const map = new Map<string, typeof marks>()
+  for (const a of marks) {
+    const key = a.day.slice(0, 7)
+    const arr = map.get(key)
+    if (arr) arr.push(a)
+    else map.set(key, [a])
+  }
+  return [...map.entries()].map(([month, list]) => ({
+    month,
+    list,
+    present: list.filter((a) => a.status === 'present').length,
+    absent: list.filter((a) => a.status === 'absent').length,
+    leave: list.filter((a) => a.status === 'leave').length,
+  }))
+}
+
+function repTotalOf(months: AttMonth[]) {
+  return {
+    present: months.reduce((s, m) => s + m.present, 0),
+    absent: months.reduce((s, m) => s + m.absent, 0),
+    leave: months.reduce((s, m) => s + m.leave, 0),
+  }
+}
+
+/** One student's sheet inside the batch print - same sheet as individual
+ *  printing, computing that student's own months/total/photo for the range. */
+function BatchPrintSheet({
+  student,
+  centerName,
+  attendances,
+  from,
+  to,
+}: {
+  student: Student
+  centerName: string
+  attendances: Attendance[]
+  from: string
+  to: string
+}) {
+  const photoUrl = useBlobUrl(student.photoBlob)
+  const months = useMemo(
+    () => buildRepMonths(attendances, student.id, from, to),
+    [attendances, student.id, from, to],
+  )
+  const total = useMemo(() => repTotalOf(months), [months])
+  return (
+    <StudentAttSheet
+      name={student.name}
+      batch={student.batch}
+      centerName={centerName}
+      photoUrl={photoUrl}
+      fromLabel={fmtDateLong(isoDayToMs(from))}
+      toLabel={fmtDateLong(isoDayToMs(to))}
+      months={months}
+      total={total}
+    />
   )
 }
 
