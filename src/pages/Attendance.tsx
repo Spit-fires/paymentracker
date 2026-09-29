@@ -1109,17 +1109,12 @@ function StatsView() {
         </div>
       )}
 
-      {/* Print-only batch sheets: one student per page */}
+      {/* Print-only batch sheets: new student starts a new page; a long sheet
+          may flow across pages with its header repeated by the thead */}
       {scope === 'batch' && printSheets.length > 0 && (
         <div className="print-area" style={{ display: 'none' }}>
           {printSheets.map((st, i) => (
-            <div
-              key={st.id}
-              style={{
-                breakInside: 'avoid',
-                breakAfter: i < printSheets.length - 1 ? 'page' : 'auto',
-              }}
-            >
+            <div key={st.id} style={{ breakAfter: i < printSheets.length - 1 ? 'page' : 'auto' }}>
               <BatchPrintSheet
                 student={st}
                 centerName={center.name || 'UTSAHO EDUCARE'}
@@ -1194,74 +1189,115 @@ function StudentAttSheet({
   total: { present: number; absent: number; leave: number }
 }) {
   return (
-    <div style={{ fontFamily: "'Segoe UI', system-ui, sans-serif", color: '#1c2936', background: '#ffffff', padding: 20, width: 520 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 20, fontWeight: 800 }}>{centerName}</div>
-          <div style={{ fontSize: 15, fontWeight: 700, marginTop: 3 }}>{name} — Attendance</div>
-          <div style={{ fontSize: 12, color: '#7c7668', marginTop: 2 }}>
-            {batch || 'No batch'} · {fromLabel} – {toLabel}
-          </div>
-          <div style={{ fontSize: 13, fontWeight: 700, marginTop: 8 }}>
-            Total — Present {total.present} · Absent {total.absent} · Leave {total.leave}
-          </div>
-        </div>
-        {photoUrl ? (
-          <img
-            src={photoUrl}
-            alt={name}
-            style={{ width: 60, height: 80, objectFit: 'contain', flexShrink: 0, border: '1px solid #e5e0d5' }}
-          />
-        ) : (
-          <div style={{ width: 60, height: 80, flexShrink: 0 }} />
-        )}
-      </div>
-      {months.map((m) => (
-        <div key={m.month} style={{ marginTop: 12 }}>
-          <div style={{ fontSize: 14, fontWeight: 800, borderBottom: '1px solid #1c2936', paddingBottom: 2 }}>
-            {periodLabel(m.month)} — P {m.present} · A {m.absent} · L {m.leave}
-          </div>
-          {m.list.map((a) => {
-            const ms = new Date(a.day + 'T12:00:00').getTime()
-            const absent = a.status === 'absent'
-            return (
-              <div
-                key={a.id}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  fontSize: 12,
-                  padding: absent ? '3px 6px' : '3px 0',
-                  marginTop: absent ? 3 : 0,
-                  marginBottom: absent ? 3 : 0,
-                  border: absent ? '1.5px solid #000' : undefined,
-                  borderBottom: absent ? '1.5px solid #000' : '1px dotted #ccc',
-                  borderRadius: absent ? 4 : 0,
-                }}
-              >
-                <span>
-                  {fmtWeekday(ms)}, {fmtDateLong(ms)}
-                </span>
-                <span style={{ fontWeight: 700 }}>
-                  {a.status === 'present' ? 'Present' : absent ? 'Absent' : 'Leave'}
-                </span>
+    <table
+      style={{
+        fontFamily: "'Segoe UI', system-ui, sans-serif",
+        color: '#1c2936',
+        background: '#ffffff',
+        width: 520,
+        borderCollapse: 'collapse',
+      }}
+    >
+      {/* thead repeats on every printed page, so long sheets that spill past
+          one page still carry center name, student, range and totals on top */}
+      <thead>
+        <tr>
+          <th
+            style={{
+              padding: '20px 20px 0',
+              textAlign: 'left',
+              verticalAlign: 'top',
+              fontWeight: 'normal',
+              background: '#ffffff',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 20, fontWeight: 800 }}>{centerName}</div>
+                <div style={{ fontSize: 15, fontWeight: 700, marginTop: 3 }}>{name} — Attendance</div>
+                <div style={{ fontSize: 12, color: '#7c7668', marginTop: 2 }}>
+                  {batch || 'No batch'} · {fromLabel} – {toLabel}
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 700, marginTop: 8 }}>
+                  Total — Present {total.present} · Absent {total.absent} · Leave {total.leave}
+                </div>
               </div>
-            )
-          })}
-        </div>
-      ))}
-      {months.length === 0 && <div style={{ fontSize: 13, marginTop: 8 }}>No attendance recorded in this period.</div>}
-      {months.length > 0 && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 56 }}>
-          <div style={{ borderTop: '1px solid #1c2936', width: 170, paddingTop: 4, fontSize: 12, fontWeight: 700 }}>
-            Director Signature
-          </div>
-          <div style={{ borderTop: '1px solid #1c2936', width: 170, paddingTop: 4, fontSize: 12, fontWeight: 700, textAlign: 'right' }}>
-            Guardian Signature
-          </div>
-        </div>
-      )}
-    </div>
+              {photoUrl ? (
+                <img
+                  src={photoUrl}
+                  alt={name}
+                  style={{ width: 60, height: 80, objectFit: 'contain', flexShrink: 0, border: '1px solid #e5e0d5' }}
+                />
+              ) : (
+                <div style={{ width: 60, height: 80, flexShrink: 0 }} />
+              )}
+            </div>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style={{ padding: '0 20px 20px', verticalAlign: 'top' }}>
+            {months.map((m) => (
+              <div key={m.month} style={{ marginTop: 12 }}>
+                <div
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 800,
+                    borderBottom: '1px solid #1c2936',
+                    paddingBottom: 2,
+                    breakInside: 'avoid',
+                  }}
+                >
+                  {periodLabel(m.month)} — P {m.present} · A {m.absent} · L {m.leave}
+                </div>
+                {m.list.map((a) => {
+                  const ms = new Date(a.day + 'T12:00:00').getTime()
+                  const absent = a.status === 'absent'
+                  return (
+                    <div
+                      key={a.id}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        fontSize: 12,
+                        padding: absent ? '3px 6px' : '3px 0',
+                        marginTop: absent ? 3 : 0,
+                        marginBottom: absent ? 3 : 0,
+                        border: absent ? '1.5px solid #000' : undefined,
+                        borderBottom: absent ? '1.5px solid #000' : '1px dotted #ccc',
+                        borderRadius: absent ? 4 : 0,
+                        breakInside: 'avoid',
+                      }}
+                    >
+                      <span>
+                        {fmtWeekday(ms)}, {fmtDateLong(ms)}
+                      </span>
+                      <span style={{ fontWeight: 700 }}>
+                        {a.status === 'present' ? 'Present' : absent ? 'Absent' : 'Leave'}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            ))}
+            {months.length === 0 && (
+              <div style={{ fontSize: 13, marginTop: 8 }}>No attendance recorded in this period.</div>
+            )}
+            {months.length > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 56 }}>
+                <div style={{ borderTop: '1px solid #1c2936', width: 170, paddingTop: 4, fontSize: 12, fontWeight: 700 }}>
+                  Director Signature
+                </div>
+                <div style={{ borderTop: '1px solid #1c2936', width: 170, paddingTop: 4, fontSize: 12, fontWeight: 700, textAlign: 'right' }}>
+                  Guardian Signature
+                </div>
+              </div>
+            )}
+          </td>
+        </tr>
+      </tbody>
+    </table>
   )
 }
 
