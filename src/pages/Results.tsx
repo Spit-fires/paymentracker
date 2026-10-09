@@ -46,7 +46,7 @@ export function Results() {
   const [sessSaved, setSessSaved] = useState(() => !!getSsacSession())
   const stopRef = useRef(false)
   // name-mismatch PDFs stay in memory so "save anyway" needs no re-fetch
-  const pendingBlobs = useRef(new Map<string, { blob: Blob; siteName: string }>())
+  const pendingBlobs = useRef(new Map<string, { blob: Blob; siteName: string; resolvedSid?: string }>())
 
   // default batch: first one with mappings, else first batch at all
   useEffect(() => {
@@ -181,12 +181,14 @@ export function Results() {
           errors++
         } else if (!namesMatch(st.name, res.siteName)) {
           // wrong-sid footgun: never save a stranger's report silently
-          pendingBlobs.current.set(st.id, { blob: res.pdf, siteName: res.siteName })
+          pendingBlobs.current.set(st.id, { blob: res.pdf, siteName: res.siteName, resolvedSid: res.resolvedSid })
           setPhase(st.id, { kind: 'mismatch', msg: res.siteName || 'unnamed' })
           log('warn', `Result name mismatch for ${st.name}`, `site says "${res.siteName}"`)
           mismatched++
         } else {
-          await storePdf(st, mapping, sid, res.pdf)
+          // stored values are printed student IDs - the proxy retries with
+          // the resolved system id and reports it back; freeze that sid
+          await storePdf(st, mapping, res.resolvedSid || sid, res.pdf)
           saved++
         }
       } catch (e) {
@@ -225,7 +227,7 @@ export function Results() {
     if (!mapping || running) return
     const pend = pendingBlobs.current.get(st.id)
     if (!pend) return
-    const sid = st.ssacId?.trim() || ''
+    const sid = pend.resolvedSid || st.ssacId?.trim() || ''
     try {
       await storePdf(st, mapping, sid, pend.blob, `saved despite name mismatch (site: ${pend.siteName})`)
       pendingBlobs.current.delete(st.id)

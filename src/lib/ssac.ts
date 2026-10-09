@@ -22,7 +22,7 @@ export function extractSid(url: string): string | null {
 }
 
 export type ProxyResult =
-  | { status: 'ok'; pdf: Blob; siteName: string }
+  | { status: 'ok'; pdf: Blob; siteName: string; resolvedSid?: string }
   | { status: 'empty'; siteName: string }
   | { status: 'error'; reason: string }
 
@@ -42,10 +42,12 @@ export async function fetchResultPdf(examId: string, sid: string, cookie?: strin
     if (ctype.includes('application/pdf')) {
       const pdf = await res.blob()
       if (pdf.size < 15000) return { status: 'error', reason: 'PDF too small - render failed' }
+      const resolved = res.headers.get('x-resolved-sid') || undefined
       return {
         status: 'ok',
         pdf,
         siteName: decodeURIComponent(res.headers.get('x-student-name') || ''),
+        ...(resolved ? { resolvedSid: resolved } : {}),
       }
     }
     const j = (await res.json().catch(() => null)) as {
