@@ -40,6 +40,8 @@ export function Results() {
   const [running, setRunning] = useState(false)
   const [phases, setPhases] = useState<Record<string, Phase>>({})
   const [summary, setSummary] = useState('')
+  // re-runs skip already-saved PDFs (overwrite happens only when re-fetched)
+  const [redownload, setRedownload] = useState(false)
   // school-site session cookie (teacher pastes once) - the CMS only renders
   // marks for logged-in sessions; stored on this device only, never synced
   const [sessInput, setSessInput] = useState(() => getSsacSession())
@@ -127,6 +129,10 @@ export function Results() {
     setPhase(st.id, { kind: 'saved' })
   }
 
+  /** 3 students at once - the proxy renders each in its own invocation, and
+   *  the shared rate limit still caps total throughput. */
+  const CONCURRENCY = 3
+
   const run = async (onlyIds?: string[]) => {
     if (!mapping || running) return
     if (!checked.length && !onlyIds?.length) {
@@ -140,6 +146,7 @@ export function Results() {
     const stored = getSsacCreds()
     const creds =
       stored.user.trim() || stored.pass ? { user: stored.user.trim(), pass: stored.pass } : undefined
+    const forceAll = redownload || !!onlyIds
     const targets = batchStudents.filter((s) =>
       onlyIds ? onlyIds.includes(s.id) : checked.includes(s.id),
     )
@@ -148,14 +155,13 @@ export function Results() {
     let errors = 0
     let skipped = 0
     let mismatched = 0
-    for (let i = 0; i < targets.length; i++) {
-      const st = targets[i]
-      if (stopRef.current) break
+    let alreadySaved = 0
+    const processOne = async (st: Student) => {
       const sid = st.ssacId?.trim()
       if (!sid) {
         setPhase(st.id, { kind: 'skipped' })
         skipped++
-        continue
+        return
       }
       setPhase(st.id, { kind: 'fetching' })
       try {
@@ -213,11 +219,35 @@ export function Results() {
         log('warn', `Result store failed for ${st.name}`, reason)
         errors++
       }
-      if (i < targets.length - 1) await sleep(GAP_MS)
     }
+    // reruns skip what's already saved (overwrite only happens on re-fetch);
+    // retry runs and the re-download toggle force everything through
+    const queue = targets.filter((st) => {
+      if (forceAll) return true
+      const row = resultFor(st.id, mapping.examId)
+      if (row?.status === 'ok' && row.fileId) {
+        alreadySaved++
+        return false
+      }
+      return true
+    })
+    const workers = Array.from(
+      { length: Math.min(CONCURRENCY, queue.length) },
+      async (_, w) => {
+        if (w > 0) await sleep(1200 * w) // stagger starts, no thundering herd
+        while (!stopRef.current) {
+          const st = queue.shift()
+          if (!st) break
+          await processOne(st)
+          await sleep(GAP_MS)
+        }
+      },
+    )
+    await Promise.all(workers)
     const stopped = stopRef.current
     const line =
       `${saved} saved · ${empty} empty · ${mismatched} mismatched · ${errors} errors · ${skipped} skipped` +
+      (alreadySaved ? ` · ${alreadySaved} already saved` : '') +
       (stopped ? ' · stopped' : '')
     setSummary(line)
     log('sync', `Result run finished (${mapping.examLabel})`, line)
@@ -425,9 +455,23 @@ export function Results() {
         )}
 
         <div className="text-[11.5px] text-muted dark:text-muted-dark mt-3 leading-relaxed">
-          Students without an SSAC ID are skipped automatically. Runs go one student at a time
-          with pauses - be nice to the school server, and keep this screen open during a run.
+          Students without an SSAC ID are skipped automatically, as are PDFs already
+          saved (re-runs overwrite only what is re-fetched). Runs go 3 students at a
+          time with pauses - be nice to the school server, and keep this screen open
+          during a run.
         </div>
+        <label className="flex items-center gap-2 mt-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={redownload}
+            disabled={running}
+            onChange={(e) => setRedownload(e.target.checked)}
+            className="w-4 h-4 accent-teal shrink-0"
+          />
+          <span className="text-[12px] font-semibold text-muted dark:text-muted-dark">
+            Re-download already-saved PDFs too
+          </span>
+        </label>
 
         <div className="space-y-2.5 mt-3">
           <Button

@@ -171,6 +171,21 @@ async function loadReport(page: Page, url: string): Promise<ReportInfo> {
   } catch {
     /* fonts are best-effort - the PDF still renders without them */
   }
+  // the site's print CSS pins its signature footer `position: fixed`, which
+  // repeats on every page and overlaps body content in headless prints, and
+  // its `zoom: 80%` is ignored so the 1200px table clips off the right edge.
+  // Static footer + deterministic scale fixes both by construction.
+  await page
+    .evaluate(() => {
+      const st = document.createElement('style')
+      st.media = 'print'
+      st.textContent = [
+        '#footer_SIG { position: static !important; bottom: auto !important; width: auto !important; break-inside: avoid; }',
+        'body { zoom: 1 !important; }',
+      ].join('\n')
+      document.head.appendChild(st)
+    })
+    .catch(() => null)
   await page.waitForNetworkIdle({ timeout: 10000 }).catch(() => null)
   await page
     .waitForFunction(() => /Result Publish Date:\s*\d/.test(document.body.innerText || ''), {
@@ -408,7 +423,15 @@ export default async function handler(req: Req, res: Res): Promise<void> {
       })
       return
     }
-    const pdf = await page.pdf({ format: 'A4', landscape: true, printBackground: true })
+    // scale 0.8 mirrors the site's own print zoom: the 1200px table becomes
+    // 960px and fits landscape A4 (1047px printable) instead of clipping
+    const pdf = await page.pdf({
+      format: 'A4',
+      landscape: true,
+      printBackground: true,
+      scale: 0.8,
+      margin: { top: '10mm', bottom: '10mm', left: '10mm', right: '10mm' },
+    })
     if (pdf.length < MIN_PDF_BYTES) {
       res.status(200).json({ status: 'error', reason: 'rendered PDF suspiciously small - site may have changed' })
       return
