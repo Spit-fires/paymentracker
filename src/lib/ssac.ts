@@ -35,12 +35,21 @@ export type ProxyResult =
  *  are slow; the caller paces students sequentially with gaps. Pass the
  *  teacher's school-site session cookie when set - the CMS appears to render
  *  marks only for authenticated sessions. */
-export async function fetchResultPdf(examId: string, sid: string, cookie?: string): Promise<ProxyResult> {
+export async function fetchResultPdf(
+  examId: string,
+  sid: string,
+  cookie?: string,
+  creds?: { user: string; pass: string },
+): Promise<ProxyResult> {
   const ctrl = new AbortController()
   const timer = window.setTimeout(() => ctrl.abort(), 90000)
   try {
     const headers: Record<string, string> = { 'x-pt-key': PT_API_KEY }
     if (cookie) headers['x-ssac-cookie'] = cookie
+    // school-login overwrite from app settings - the proxy falls back to its
+    // hardcoded defaults for whichever field is blank
+    if (creds?.user) headers['x-ssac-user'] = creds.user
+    if (creds?.pass) headers['x-ssac-pass'] = creds.pass
     const res = await fetch(
       `/api/ssac-pdf?exam_id=${encodeURIComponent(examId)}&sid=${encodeURIComponent(sid)}`,
       { signal: ctrl.signal, headers },
@@ -113,6 +122,8 @@ export function resultFileName(examLabel: string, examId: string): string {  con
 }
 
 const SESS_KEY = 'pt_ssac_sess'
+const SESS_USER_KEY = 'pt_ssac_user'
+const SESS_PASS_KEY = 'pt_ssac_pass'
 
 /** Teacher's school-site session cookie. Local-only (never synced, never
  *  logged) - it only ever travels to ssaac.edu.bd via the render proxy. */
@@ -128,6 +139,31 @@ export function setSsacSession(v: string): void {
   try {
     if (v) localStorage.setItem(SESS_KEY, v)
     else localStorage.removeItem(SESS_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
+/** School-login overwrite from app settings. Device-local only (never
+ *  synced, never logged) - sent per request, wins over the hardcoded
+ *  defaults field by field. */
+export function getSsacCreds(): { user: string; pass: string } {
+  try {
+    return {
+      user: localStorage.getItem(SESS_USER_KEY) || '',
+      pass: localStorage.getItem(SESS_PASS_KEY) || '',
+    }
+  } catch {
+    return { user: '', pass: '' }
+  }
+}
+
+export function setSsacCreds(user: string, pass: string): void {
+  try {
+    if (user) localStorage.setItem(SESS_USER_KEY, user)
+    else localStorage.removeItem(SESS_USER_KEY)
+    if (pass) localStorage.setItem(SESS_PASS_KEY, pass)
+    else localStorage.removeItem(SESS_PASS_KEY)
   } catch {
     /* ignore */
   }

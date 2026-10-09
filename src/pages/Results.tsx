@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../state/AppContext'
-import { fetchResultPdf, namesMatch, resultFileName, extractExamId, extractSid, getSsacSession, setSsacSession } from '../lib/ssac'
+import { fetchResultPdf, namesMatch, resultFileName, extractExamId, extractSid, getSsacSession, setSsacSession, getSsacCreds, setSsacCreds } from '../lib/ssac'
 import { saveResultFile } from '../lib/sync'
 import { log } from '../lib/logs'
 import { Card, PageHeader, EmptyState, Button, Select, Input, Spinner, cx } from '../components/ui'
@@ -44,6 +44,11 @@ export function Results() {
   // marks for logged-in sessions; stored on this device only, never synced
   const [sessInput, setSessInput] = useState(() => getSsacSession())
   const [sessSaved, setSessSaved] = useState(() => !!getSsacSession())
+  // school-login overwrite (username + password) - wins over the hardcoded
+  // defaults field by field; same device-only storage
+  const [credUser, setCredUser] = useState(() => getSsacCreds().user)
+  const [credPass, setCredPass] = useState(() => getSsacCreds().pass)
+  const [credSaved, setCredSaved] = useState(() => !!(getSsacCreds().user || getSsacCreds().pass))
   const stopRef = useRef(false)
   // name-mismatch PDFs stay in memory so "save anyway" needs no re-fetch
   const pendingBlobs = useRef(new Map<string, { blob: Blob; siteName: string; resolvedSid?: string }>())
@@ -132,6 +137,9 @@ export function Results() {
     stopRef.current = false
     setSummary('')
     const sessCookie = getSsacSession().trim() || undefined
+    const stored = getSsacCreds()
+    const creds =
+      stored.user.trim() || stored.pass ? { user: stored.user.trim(), pass: stored.pass } : undefined
     const targets = batchStudents.filter((s) =>
       onlyIds ? onlyIds.includes(s.id) : checked.includes(s.id),
     )
@@ -151,7 +159,7 @@ export function Results() {
       }
       setPhase(st.id, { kind: 'fetching' })
       try {
-        const res = await fetchResultPdf(mapping.examId, sid, sessCookie)
+        const res = await fetchResultPdf(mapping.examId, sid, sessCookie, creds)
         if (res.status === 'empty') {
           await upsertExamResult({
             id: `${st.id}_${mapping.examId}`,
@@ -271,28 +279,59 @@ export function Results() {
 
       <Card className="!rounded-2xl p-4">
         <div className="text-[13px] font-bold text-ink dark:text-white mb-1">
-          School login session {sessSaved && <span className="text-teal">· saved</span>}
+          School login{' '}
+          {(sessSaved || credSaved) && <span className="text-teal">· override saved</span>}
         </div>
         <div className="text-[11.5px] text-muted dark:text-muted-dark mb-2.5 leading-relaxed">
-          The server logs itself into the school site - nothing to do here unless downloads
-          come back empty. Then log into ssaac.edu.bd in another tab and paste the session
-          cookie (DevTools → Application → Cookies → ssaac.edu.bd → PHPSESSID value) as an
-          override. Your paste stays on this device only.
+          The server logs itself in with built-in school credentials. Overwrite them here
+          only if they change - username and password save together and win field by field.
+          The session paste below is a live override for emergencies. Everything here stays
+          on this device only, never synced.
+        </div>
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <label className="block">
+            <div className="text-[11.5px] font-semibold text-muted dark:text-muted-dark mb-1">
+              Username
+            </div>
+            <Input
+              value={credUser}
+              onChange={(e) => setCredUser(e.target.value)}
+              placeholder="School username"
+              autoComplete="off"
+              inputMode="numeric"
+            />
+          </label>
+          <label className="block">
+            <div className="text-[11.5px] font-semibold text-muted dark:text-muted-dark mb-1">
+              Password
+            </div>
+            <Input
+              type="password"
+              value={credPass}
+              onChange={(e) => setCredPass(e.target.value)}
+              placeholder="School password"
+              autoComplete="off"
+            />
+          </label>
         </div>
         <div className="flex gap-2">
           <Input
             type="password"
             value={sessInput}
             onChange={(e) => setSessInput(e.target.value)}
-            placeholder="Paste PHPSESSID value"
+            placeholder="Paste PHPSESSID value (live override)"
             autoComplete="off"
           />
           <Button
             variant="secondary"
             onClick={() => {
               setSsacSession(sessInput.trim())
-              setSessSaved(!!sessInput.trim())
-              showToast(sessInput.trim() ? 'Session saved on this device' : 'Session cleared', 'ok')
+              setSsacCreds(credUser.trim(), credPass)
+              const hasSess = !!sessInput.trim()
+              const hasCred = !!(credUser.trim() || credPass)
+              setSessSaved(hasSess)
+              setCredSaved(hasCred)
+              showToast(hasSess || hasCred ? 'Login override saved on this device' : 'Override cleared', 'ok')
             }}
           >
             Save

@@ -33,33 +33,35 @@ const MIN_PDF_BYTES = 15000
 // client: the default key is always accepted alongside the env one.
 const DEFAULT_API_KEY = 'pt-ssac-9f3c7a2e4b5d'
 const API_KEY = process.env.SSAC_API_KEY || DEFAULT_API_KEY
-// School-site credentials - Vercel env vars SSAC_USER / SSAC_PASS, NEVER in
-// the repo. The proxy logs itself into the STUDENT portal (edutechsadmin -
-// plain POST, no captcha) because pasted browser sessions die fast: the CMS
-// mints a new anonymous PHPSESSID on nearly every unauthenticated hit, so any
-// copied value is stale within seconds. Verified: one student-portal session
-// renders ANY student's report (not just its own). A teacher paste via
-// x-ssac-cookie still wins when provided.
-const SSAC_USER = process.env.SSAC_USER || ''
-const SSAC_PASS = process.env.SSAC_PASS || ''
-// academic year selector on the portal login - override via env each session
-const SSAC_ACADEMIC_YR = process.env.SSAC_ACADEMIC_YR || '20262027'
-const loginConfigured = !!SSAC_USER && !!SSAC_PASS
+// School-site login - HARDCODED defaults (teacher's call), overwritable
+// per-request from the app (Results → School login sends x-ssac-user /
+// x-ssac-pass). Anyone with repo access can read these, so a dedicated
+// school account beats a personal one. The proxy logs itself into the
+// STUDENT portal (edutechsadmin - plain POST, no captcha) because pasted
+// browser sessions die fast: the CMS mints a new anonymous PHPSESSID on
+// nearly every unauthenticated hit. Verified: one student-portal session
+// renders ANY student's report (not just its own). A live teacher paste via
+// x-ssac-cookie still wins over everything when provided.
+const DEFAULT_USER = '2610600152'
+const DEFAULT_PASS = '01716611368'
+// academic year selector on the portal login
+const ACADEMIC_YR = '20262027'
 
-// module-scope authenticated session (warm invocations reuse it)
-let sessCache: { cookie: string; at: number } | null = null
+// module-scope authenticated session, keyed by username (warm invocations
+// reuse it; switching accounts never serves another account's session)
+let sessCache: { key: string; cookie: string; at: number } | null = null
 const SESS_TTL_MS = 20 * 60 * 1000
 
 /** Fresh programmatic login to the student portal - returns a Cookie header
  *  value or null. */
-async function loginSession(): Promise<string | null> {
-  if (!loginConfigured) return null
+async function loginSession(user: string, pass: string): Promise<string | null> {
+  if (!user || !pass) return null
   const body = new URLSearchParams({
     branch_id: '5001',
     account_type: 'student',
-    academic_yr: SSAC_ACADEMIC_YR,
-    username: SSAC_USER,
-    password: SSAC_PASS,
+    academic_yr: ACADEMIC_YR,
+    username: user,
+    password: pass,
     login: '',
   })
   const r = await fetch(`https://${ALLOW_HOST}/edutechsadmin`, {
@@ -88,14 +90,14 @@ async function loginSession(): Promise<string | null> {
   return sess.length ? sess.join('; ') : null
 }
 
-async function sessionCookie(): Promise<{ cookie: string | null; fresh: boolean }> {
+async function sessionCookie(user: string, pass: string): Promise<{ cookie: string | null; fresh: boolean }> {
   const now = Date.now()
-  if (sessCache && now - sessCache.at < SESS_TTL_MS) {
+  if (sessCache && sessCache.key === user && now - sessCache.at < SESS_TTL_MS) {
     return { cookie: sessCache.cookie, fresh: false }
   }
-  const c = await loginSession().catch(() => null)
+  const c = await loginSession(user, pass).catch(() => null)
   if (c) {
-    sessCache = { cookie: c, at: now }
+    sessCache = { key: user, cookie: c, at: now }
     return { cookie: c, fresh: true }
   }
   return { cookie: null, fresh: false }
@@ -263,12 +265,21 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     res.status(400).json({ status: 'error', reason: 'exam_id and sid must be numeric' })
     return
   }
-  // school session: per-request teacher paste wins, else the proxy's own
-  // login. Only ever forwarded to ssaac.edu.bd, never logged.
+  // school session, cheapest-first: a live teacher paste wins outright;
+  // otherwise the proxy logs in with the effective credentials (per-request
+  // app overwrite, else the hardcoded defaults). Only ever forwarded to
+  // ssaac.edu.bd, never logged.
   const rawCookie = headerOne(headers, 'x-ssac-cookie')
   const validCookie = (c: string | null): c is string =>
     !!c && c.length > 0 && c.length <= 1000 && !/[\r\n]/.test(c)
   const headerCookie = validCookie(rawCookie) ? rawCookie : null
+  const validCred = (c: string | null): c is string =>
+    !!c && c.length > 0 && c.length <= 100 && !/[\r\n]/.test(c)
+  const rawUser = headerOne(headers, 'x-ssac-user')
+  const rawPass = headerOne(headers, 'x-ssac-pass')
+  const effUser = validCred(rawUser) ? rawUser : DEFAULT_USER
+  const effPass = validCred(rawPass) ? rawPass : DEFAULT_PASS
+  const credSource: 'app' | 'hardcoded' = rawUser || rawPass ? 'app' : 'hardcoded'
   let browser: Awaited<ReturnType<typeof puppeteer.launch>> | null = null
   try {
     browser = await puppeteer.launch({
@@ -326,10 +337,16 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     const [resolved, sessRes] = await Promise.all([
       resolveSystemId(sid).catch(() => null),
       headerCookie
-        ? Promise.resolve({ cookie: headerCookie, fresh: true })
-        : sessionCookie(),
+        ? Promise.resolve({ cookie: headerCookie, fresh: false })
+        : sessionCookie(effUser, effPass),
     ])
-    const sessionSource = headerCookie ? 'header' : sessRes.cookie ? 'login' : 'none'
+    const sessionSource = headerCookie
+      ? 'header-cookie'
+      : sessRes.cookie
+        ? sessRes.fresh
+          ? `login-fresh-${credSource}`
+          : `login-cache-${credSource}`
+        : 'none'
     let loadSid = sid
     let resolvedSid: string | null = null
     if (resolved && resolved !== sid) {
@@ -341,11 +358,13 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     }
     let info = await loadReport(page, reportUrl(examId, loadSid))
     let relogged = false
-    if (!info.hasMarks && !sessRes.fresh && !headerCookie && loginConfigured) {
-      // cached session may have expired mid-run - one fresh login + one reload
+    if (!info.hasMarks && !sessRes.fresh && effUser && effPass) {
+      // stale cached session or stale pasted cookie - one fresh login with
+      // the effective credentials, then one reload. A just-completed login
+      // is never retried (same attempt twice proves nothing).
       sessCache = null
-      const fresh = await sessionCookie()
-      if (fresh.cookie) {
+      const fresh = await sessionCookie(effUser, effPass)
+      if (fresh.cookie && fresh.cookie !== sessRes.cookie) {
         relogged = true
         await page.setExtraHTTPHeaders({ Cookie: fresh.cookie })
         info = await loadReport(page, reportUrl(examId, loadSid))
@@ -366,7 +385,6 @@ export default async function handler(req: Req, res: Res): Promise<void> {
         htmlLen: info.htmlLen,
         cookieSent: !!sessRes.cookie,
         sessionSource,
-        loginConfigured,
         relogged,
         cookiesSeen: cookieNames,
         resolvedSid,
@@ -384,8 +402,8 @@ export default async function handler(req: Req, res: Res): Promise<void> {
         siteName: info.name,
         hint: resolvedSid
           ? 'system id resolved but still no marks - exam unpublished for this student, or school login rejected'
-          : !loginConfigured && !headerCookie
-            ? 'no school login configured - set SSAC_USER/SSAC_PASS env vars or paste a session'
+          : !effUser || !effPass
+            ? 'no school login available - set it in Results → School login'
             : 'logged in but no marks - exam unpublished for this student, or SSAC ID not in school list',
       })
       return
