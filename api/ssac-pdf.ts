@@ -34,23 +34,35 @@ const MIN_PDF_BYTES = 15000
 const DEFAULT_API_KEY = 'pt-ssac-9f3c7a2e4b5d'
 const API_KEY = process.env.SSAC_API_KEY || DEFAULT_API_KEY
 // School-site credentials - Vercel env vars SSAC_USER / SSAC_PASS, NEVER in
-// the repo. The proxy logs itself in (plain POST, no captcha) because pasted
-// browser sessions die fast: the CMS mints a new anonymous PHPSESSID on
-// nearly every unauthenticated hit, so any copied value is stale within
-// seconds. A teacher paste via x-ssac-cookie still wins when provided.
+// the repo. The proxy logs itself into the STUDENT portal (edutechsadmin -
+// plain POST, no captcha) because pasted browser sessions die fast: the CMS
+// mints a new anonymous PHPSESSID on nearly every unauthenticated hit, so any
+// copied value is stale within seconds. Verified: one student-portal session
+// renders ANY student's report (not just its own). A teacher paste via
+// x-ssac-cookie still wins when provided.
 const SSAC_USER = process.env.SSAC_USER || ''
 const SSAC_PASS = process.env.SSAC_PASS || ''
+// academic year selector on the portal login - override via env each session
+const SSAC_ACADEMIC_YR = process.env.SSAC_ACADEMIC_YR || '20262027'
 const loginConfigured = !!SSAC_USER && !!SSAC_PASS
 
 // module-scope authenticated session (warm invocations reuse it)
 let sessCache: { cookie: string; at: number } | null = null
 const SESS_TTL_MS = 20 * 60 * 1000
 
-/** Fresh programmatic login - returns a Cookie header value or null. */
+/** Fresh programmatic login to the student portal - returns a Cookie header
+ *  value or null. */
 async function loginSession(): Promise<string | null> {
   if (!loginConfigured) return null
-  const body = new URLSearchParams({ branch_id: '5001', username: SSAC_USER, password: SSAC_PASS, login: '' })
-  const r = await fetch(`https://${ALLOW_HOST}/edutechadmin`, {
+  const body = new URLSearchParams({
+    branch_id: '5001',
+    account_type: 'student',
+    academic_yr: SSAC_ACADEMIC_YR,
+    username: SSAC_USER,
+    password: SSAC_PASS,
+    login: '',
+  })
+  const r = await fetch(`https://${ALLOW_HOST}/edutechsadmin`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
