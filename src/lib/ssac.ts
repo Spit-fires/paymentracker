@@ -5,6 +5,11 @@
 
 const HOST = 'ssaac.edu.bd'
 
+// shared anti-spam key for our own render proxy - must match api/ssac-pdf.ts
+// (DEFAULT_API_KEY). Not a real secret: it ships in this bundle. It just
+// keeps random bots from burning our function time; rate limiting backs it.
+const PT_API_KEY = 'pt-ssac-9f3c7a2e4b5d'
+
 export function buildResultUrl(examId: string, sid: string): string {
   return `https://${HOST}/index_pop.php?cms=printBanPR&exam_id=${examId}&sid=${sid}`
 }
@@ -34,9 +39,11 @@ export async function fetchResultPdf(examId: string, sid: string, cookie?: strin
   const ctrl = new AbortController()
   const timer = window.setTimeout(() => ctrl.abort(), 90000)
   try {
+    const headers: Record<string, string> = { 'x-pt-key': PT_API_KEY }
+    if (cookie) headers['x-ssac-cookie'] = cookie
     const res = await fetch(
       `/api/ssac-pdf?exam_id=${encodeURIComponent(examId)}&sid=${encodeURIComponent(sid)}`,
-      { signal: ctrl.signal, headers: cookie ? { 'x-ssac-cookie': cookie } : {} },
+      { signal: ctrl.signal, headers },
     )
     const ctype = res.headers.get('content-type') || ''
     if (ctype.includes('application/pdf')) {

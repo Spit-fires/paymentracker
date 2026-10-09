@@ -24,6 +24,45 @@ export const maxDuration = 60
 
 const ALLOW_HOST = 'ssaac.edu.bd'
 const MIN_PDF_BYTES = 15000
+
+// ---- anti-spam gate ----
+// Shared key: Vercel env SSAC_API_KEY wins, else the default below. The PWA
+// bundle carries the same default, so this is NOT a real secret - it just
+// keeps random bots from burning function time. The per-IP rate limit
+// underneath is the real backstop. Env changes never lock out the current
+// client: the default key is always accepted alongside the env one.
+const DEFAULT_API_KEY = 'pt-ssac-9f3c7a2e4b5d'
+const API_KEY = process.env.SSAC_API_KEY || DEFAULT_API_KEY
+// Default school session (teacher's). Per-request x-ssac-cookie overwrites
+// it. Sessions expire - when renders go empty again, paste a fresh value in
+// the app (takes precedence) or update this + redeploy.
+const DEFAULT_SESS = 'PHPSESSID=8vkkcfnpm1g4t0eue5ptkjca2'
+
+// rolling per-IP bucket: 30 renders/min is plenty for sequential teacher
+// runs (3s gaps ≈ 20/min) and starves floods
+const RATE_MAX = 30
+const RATE_WIN_MS = 60_000
+const hits = new Map<string, { n: number; reset: number }>()
+
+function rateOk(ip: string): boolean {
+  const now = Date.now()
+  if (hits.size > 500) {
+    for (const [k, v] of hits) if (now > v.reset) hits.delete(k)
+  }
+  const e = hits.get(ip)
+  if (!e || now > e.reset) {
+    hits.set(ip, { n: 1, reset: now + RATE_WIN_MS })
+    return true
+  }
+  e.n++
+  return e.n <= RATE_MAX
+}
+
+function headerOne(h: Record<string, string | string[] | undefined>, name: string): string | null {
+  const v = h[name]
+  const s = Array.isArray(v) ? v[0] : v
+  return typeof s === 'string' ? s : null
+}
 const FONTS_URL =
   'https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;700&family=Roboto+Condensed:wght@400;700&display=swap'
 const FONT_OVERRIDE = `body, td, th, p, div, font { font-family: 'Roboto Condensed', 'Noto Sans Bengali', sans-serif !important; }`
@@ -140,6 +179,20 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     res.status(405).json({ status: 'error', reason: 'method not allowed' })
     return
   }
+  const headers = req.headers || {}
+  // gate 1: shared key - bots scanning URLs don't have it
+  const key = headerOne(headers, 'x-pt-key')
+  if (key !== API_KEY && key !== DEFAULT_API_KEY) {
+    res.status(401).json({ status: 'error', reason: 'unauthorized' })
+    return
+  }
+  // gate 2: per-IP rate limit - blunts anything that gets past gate 1
+  const fwd = headerOne(headers, 'x-forwarded-for')
+  const ip = (fwd || '').split(',')[0].trim() || 'unknown'
+  if (!rateOk(ip)) {
+    res.status(429).json({ status: 'error', reason: 'rate limited - slow down' })
+    return
+  }
   const examId = req.query?.exam_id
   const sid = req.query?.sid
   const debug = req.query?.debug === '1'
@@ -147,16 +200,13 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     res.status(400).json({ status: 'error', reason: 'exam_id and sid must be numeric' })
     return
   }
-  // optional school-site session cookie (teacher pastes it in the app) - the
-  // CMS appears to render marks only for authenticated sessions; anonymous
-  // loads get the empty shell. Only ever forwarded to ssaac.edu.bd, never
-  // logged. Header form avoids the value landing in server access logs.
-  const rawCookie = req.headers?.['x-ssac-cookie']
-  const cookie = Array.isArray(rawCookie) ? rawCookie[0] : rawCookie
-  const useCookie =
-    typeof cookie === 'string' && cookie.length > 0 && cookie.length <= 1000 && !/[\r\n]/.test(cookie)
-      ? cookie
-      : null
+  // school session: per-request teacher paste wins, else the hardcoded
+  // default. Only ever forwarded to ssaac.edu.bd, never logged.
+  const rawCookie = headerOne(headers, 'x-ssac-cookie')
+  const validCookie = (c: string | null): c is string =>
+    !!c && c.length > 0 && c.length <= 1000 && !/[\r\n]/.test(c)
+  const useCookie = validCookie(rawCookie) ? rawCookie : DEFAULT_SESS
+  const cookieSource: 'header' | 'default' = validCookie(rawCookie) ? 'header' : 'default'
   let browser: Awaited<ReturnType<typeof puppeteer.launch>> | null = null
   try {
     browser = await puppeteer.launch({
@@ -208,15 +258,8 @@ export default async function handler(req: Req, res: Res): Promise<void> {
         failed: r.failure()?.errorText || 'failed',
       })
     })
-    // visit the homepage first when no teacher session was supplied - picks
-    // up any session/init cookies the report page may depend on
-    if (!useCookie) {
-      try {
-        await page.goto(`https://${ALLOW_HOST}/`, { waitUntil: 'domcontentloaded', timeout: 20000 })
-      } catch {
-        /* homepage optional - the report URL is what matters */
-      }
-    }
+    // the default session is always on, so the warmup visit adds nothing -
+    // skip it and save the seconds
     // teachers save printed student IDs, but report URLs need system ids -
     // resolve via the school's own list BEFORE loading, so the common case
     // costs one page load, not try-plus-retry (function budget is 60s)
@@ -245,7 +288,8 @@ export default async function handler(req: Req, res: Res): Promise<void> {
         hasReport: info.hasReport,
         hasMarks: info.hasMarks,
         htmlLen: info.htmlLen,
-        cookieSent: !!useCookie,
+        cookieSent: true,
+        cookieSource,
         cookiesSeen: cookieNames,
         resolvedSid,
         requests: seen,
@@ -261,10 +305,8 @@ export default async function handler(req: Req, res: Res): Promise<void> {
         status: 'empty',
         siteName: info.name,
         hint: resolvedSid
-          ? 'system id resolved but still no marks - unpublished or session expired'
-          : useCookie
-            ? 'session cookie was sent but no marks - check the SSAC ID is in the school list'
-            : 'no school session cookie was sent - marks may require login',
+          ? 'system id resolved but still no marks - exam unpublished or school session expired'
+          : 'no marks - school session may have expired, or the SSAC ID is not in the school list',
       })
       return
     }
