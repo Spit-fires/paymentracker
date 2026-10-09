@@ -4,6 +4,7 @@ import { useApp } from '../state/AppContext'
 import { studentPeriodBalance, studentBalanceFee, studentPeriodPaidAny } from '../lib/ledger'
 import { fmtTaka, periodNow, periodLabel, payingForDisplay, fmtDate, fillMessage, todayKey, addDays, fmtWeekday, fmtDateLong, fmtInvoiceNo, invoiceDailySeq } from '../lib/format'
 import { getKV, K, db } from '../lib/db'
+import { downloadDriveFile } from '../lib/sync'
 import { getToken } from '../lib/token'
 import { Card, Button, Modal, EmptyState, SectionLabel, PageHeader, useBlobUrl } from '../components/ui'
 import { StudentForm, type FormValue } from '../components/StudentForm'
@@ -29,6 +30,7 @@ export function StudentDetail() {
     payments,
     center,
     routines,
+    examResults,
     refreshData,
     updateStudent,
     archiveStudent,
@@ -91,6 +93,31 @@ export function StudentDetail() {
         .sort((a, b) => b.date - a.date || b.receiptNo - a.receiptNo),
     [payments, id],
   )
+
+  const myResults = useMemo(
+    () =>
+      examResults
+        .filter((r) => r.studentId === id)
+        .sort((a, b) => b.fetchedAt - a.fetchedAt),
+    [examResults, id],
+  )
+  const [openingId, setOpeningId] = useState<string | null>(null)
+
+  /** Private open - Drive token download, never a public link (minors' records). */
+  const onOpenResult = async (fileId: string, rowId: string) => {
+    if (openingId) return
+    setOpeningId(rowId)
+    try {
+      const blob = await downloadDriveFile(fileId)
+      const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }))
+      window.open(url, '_blank', 'noopener')
+      window.setTimeout(() => URL.revokeObjectURL(url), 60000)
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Could not open PDF', 'err')
+    } finally {
+      setOpeningId(null)
+    }
+  }
 
   if (!student) {
     return (
@@ -371,6 +398,42 @@ export function StudentDetail() {
           </button>
         </div>
       </Card>
+
+      {/* Report cards */}
+      {myResults.length > 0 && (
+        <>
+          <SectionLabel>Report cards · {myResults.length}</SectionLabel>
+          <div className="px-4 space-y-2">
+            {myResults.map((r) => (
+              <Card key={r.id} className="!rounded-xl p-3.5">
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[14px] font-bold text-ink dark:text-white truncate">
+                      {r.examLabel}
+                    </div>
+                    <div className="text-[12px] text-muted dark:text-muted-dark tabular-nums truncate">
+                      {r.status === 'ok'
+                        ? `PDF saved ${fmtDate(r.fetchedAt)}`
+                        : r.status === 'empty'
+                          ? 'No marks published yet'
+                          : r.note || 'Failed'}
+                    </div>
+                  </div>
+                  {r.status === 'ok' && r.fileId && (
+                    <button
+                      onClick={() => void onOpenResult(r.fileId as string, r.id)}
+                      disabled={openingId !== null}
+                      className="text-[12px] font-bold text-teal dark:text-teal-bright whitespace-nowrap px-2 py-1.5 disabled:opacity-40"
+                    >
+                      {openingId === r.id ? 'Opening…' : 'Open PDF'}
+                    </button>
+                  )}
+                </div>
+              </Card>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* History */}
       <SectionLabel>Receipt history · {history.length}</SectionLabel>

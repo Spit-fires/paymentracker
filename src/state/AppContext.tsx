@@ -17,6 +17,8 @@ import type {
   Routine,
   QuickCard,
   AttReport,
+  StudentResult,
+  ExamMapping,
   SubjectEntry,
   Center,
   Session,
@@ -34,6 +36,7 @@ import {
   setDriveToken,
   defaultCenter,
   normalizeSubjects,
+  normalizeExamMappings,
 } from '../lib/sync'
 import { newId, receiptFileName, dayKey } from '../lib/format'
 import { setToken, getToken, clearToken, tokenNeedsRefresh } from '../lib/token'
@@ -139,6 +142,13 @@ interface Ctx {
   /** guardian-informed ticks for attendance report slices */
   attReports: AttReport[]
   saveAttReport: (studentId: string, batch: string, from: string, to: string, ticked: boolean) => Promise<void>
+  /** backed-up report cards (metadata rows - PDFs live on Drive) */
+  examResults: StudentResult[]
+  upsertExamResult: (row: Omit<StudentResult, 'updatedAt'>) => Promise<void>
+  /** teacher-maintained batch → school-exam mappings - synced via meta */
+  examMappings: ExamMapping[]
+  saveExamMapping: (input: { batch: string; examId: string; examLabel: string }) => Promise<void>
+  deleteExamMapping: (id: string) => Promise<void>
   /** master subject list for the routine builder - synced via meta */
   subjects: SubjectEntry[]
   addSubject: (name: string) => Promise<void>
@@ -204,6 +214,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [routines, setRoutines] = useState<Routine[]>([])
   const [quickCards, setQuickCards] = useState<QuickCard[]>([])
   const [attReports, setAttReports] = useState<AttReport[]>([])
+  const [examResults, setExamResults] = useState<StudentResult[]>([])
+  const [examMappings, setExamMappings] = useState<ExamMapping[]>([])
   const [subjects, setSubjects] = useState<SubjectEntry[]>([])
   const [teachers, setTeachers] = useState<Teacher[]>([])
   const [center, setCenter] = useState<Center>(defaultCenter())
@@ -297,6 +309,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setRoutines((await loadTable(db.routines, 'routines')).filter((r) => !r.deletedAt))
     setQuickCards((await loadTable(db.quick, 'quick')).filter((q) => !q.deletedAt))
     setAttReports((await loadTable(db.attrep, 'attrep')).filter((r) => !r.deletedAt))
+    setExamResults((await loadTable(db.results, 'results')).filter((r) => !r.deletedAt))
+    setExamMappings(normalizeExamMappings(await getKV<unknown>(K.EXAM_MAPS)).filter((m) => !m.deletedAt))
     setSubjects(normalizeSubjects((await getKV<unknown>(K.SUBJECTS))))
     const loaded = (await getKV<Center>(K.CENTER)) || defaultCenter()
     // soft-migrate the legacy phone field: receipts no longer print it - if
@@ -1021,6 +1035,65 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [refreshData, scheduleSync],
   )
 
+  /** Upsert one backed-up report card row (the PDF itself is already on
+   *  Drive). Updates local state directly - no full refresh per student, so
+   *  batch runs stay cheap; the caller syncs once at the end. */
+  const upsertExamResult = useCallback(async (row: Omit<StudentResult, 'updatedAt'>) => {
+    const full: StudentResult = { ...row, updatedAt: Date.now() }
+    await db.results.put(full)
+    setExamResults((prev) => {
+      const i = prev.findIndex((r) => r.id === full.id)
+      if (i < 0) return [...prev, full]
+      const next = [...prev]
+      next[i] = full
+      return next
+    })
+    await queueOp({ kind: 'pushJSON', file: 'results' })
+  }, [])
+
+  /** Upsert a batch → exam mapping. Deterministic id so relabelling updates
+   *  instead of duplicating; syncs via the meta file like teachers. */
+  const saveExamMapping = useCallback(
+    async (input: { batch: string; examId: string; examLabel: string }) => {
+      const batch = input.batch.trim()
+      const examId = input.examId.trim()
+      const examLabel = input.examLabel.trim()
+      if (!batch || !examId || !examLabel) return
+      const id = `${batch}__${examId}`
+      const cur = normalizeExamMappings(await getKV<unknown>(K.EXAM_MAPS))
+      const next = [
+        ...cur.filter((m) => m.id !== id),
+        {
+          id,
+          batch,
+          examId,
+          examLabel,
+          updatedAt: Date.now(),
+        },
+      ]
+      await setKV(K.EXAM_MAPS, next)
+      setExamMappings(next.filter((m) => !m.deletedAt))
+      await queueOp({ kind: 'pushJSON', file: 'meta' })
+      scheduleSync()
+    },
+    [scheduleSync],
+  )
+
+  /** Tombstone a batch → exam mapping - saved result rows keep working, the
+   *  exam just disappears from the run screen. */
+  const deleteExamMapping = useCallback(
+    async (id: string) => {
+      const cur = normalizeExamMappings(await getKV<unknown>(K.EXAM_MAPS))
+      const now = Date.now()
+      const next = cur.map((m) => (m.id === id ? { ...m, deletedAt: now, updatedAt: now } : m))
+      await setKV(K.EXAM_MAPS, next)
+      setExamMappings(next.filter((m) => !m.deletedAt))
+      await queueOp({ kind: 'pushJSON', file: 'meta' })
+      scheduleSync()
+    },
+    [scheduleSync],
+  )
+
   const updateCenter = useCallback(
     async (c: Center) => {
       await setKV(K.CENTER, c)
@@ -1095,6 +1168,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       saveAttReport,
       addSubject,
       deleteSubject,
+      examResults,
+      upsertExamResult,
+      examMappings,
+      saveExamMapping,
+      deleteExamMapping,
       updateCenter,
       setTheme,
       setPin,
@@ -1149,6 +1227,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       saveAttReport,
       addSubject,
       deleteSubject,
+      examResults,
+      upsertExamResult,
+      examMappings,
+      saveExamMapping,
+      deleteExamMapping,
       updateCenter,
       setTheme,
       setPin,

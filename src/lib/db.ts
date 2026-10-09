@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie'
-import type { Student, Payment, Posting, Attendance, Routine, QuickCard, AttReport, OutboxEntry, OutboxOp } from '../types'
+import type { Student, Payment, Posting, Attendance, Routine, QuickCard, AttReport, StudentResult, OutboxEntry, OutboxOp } from '../types'
 import { log } from './logs'
 
 export const K = {
@@ -19,6 +19,8 @@ export const K = {
   ATT_BATCH: 'attBatch',
   /** master subject list for the routine builder - synced via the meta file */
   SUBJECTS: 'subjects',
+  /** teacher-maintained batch → school-exam mappings - synced via the meta file */
+  EXAM_MAPS: 'examMaps',
 } as const
 
 /**
@@ -67,6 +69,7 @@ class PTDatabase extends Dexie {
   routines!: Table<Routine, string>
   quick!: Table<QuickCard, string>
   attrep!: Table<AttReport, string>
+  results!: Table<StudentResult, string>
   outbox!: Table<OutboxEntry, number>
 
   constructor() {
@@ -121,6 +124,19 @@ class PTDatabase extends Dexie {
       routines: 'id, day, batch',
       quick: 'id',
       attrep: 'id',
+      outbox: '++id, at',
+    })
+    // v7 adds the backed-up report cards (one metadata row per student per
+    // exam - the PDF bytes live on Drive, never in IndexedDB)
+    this.version(7).stores({
+      students: 'id, batch, archived',
+      payments: 'id, studentId, receiptNo, period',
+      postings: 'id',
+      attendance: 'id, studentId, day, batch',
+      routines: 'id, day, batch',
+      quick: 'id',
+      attrep: 'id',
+      results: 'id, studentId, examId',
       outbox: '++id, at',
     })
   }
@@ -186,6 +202,10 @@ export async function getQuickCards(): Promise<QuickCard[]> {
 
 export async function getAttReports(): Promise<AttReport[]> {
   return db.attrep.toArray()
+}
+
+export async function getStudentResults(): Promise<StudentResult[]> {
+  return db.results.toArray()
 }
 
 export async function queueOp(op: OutboxOp): Promise<void> {

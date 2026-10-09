@@ -301,11 +301,15 @@ export function StudentForm({
       </Field>
 
       {f.school === 'SSAC' && (
-        <Field label="SSAC ID">
+        <Field
+          label="SSAC ID"
+          hint="The school's numeric student ID from result URLs (e.g. 251217110740) - used to back up report cards."
+        >
           <Input
             value={f.ssacId}
             onChange={(e) => set('ssacId', e.target.value)}
-            placeholder="e.g. SSAC-2024-0012"
+            placeholder="e.g. 251217110740"
+            inputMode="numeric"
           />
         </Field>
       )}

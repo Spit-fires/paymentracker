@@ -1,5 +1,5 @@
 import { DriveClient } from './drive'
-import { db, getKV, setKV, queueOp, getStudents, getPayments, getPostings, getAttendance, getRoutines, getQuickCards, getAttReports, K } from './db'
+import { db, getKV, setKV, queueOp, getStudents, getPayments, getPostings, getAttendance, getRoutines, getQuickCards, getAttReports, getStudentResults, K } from './db'
 import { fmtDate, dayKey } from './format'
 import { log } from './logs'
 import { postingLedger } from './ledger'
@@ -14,6 +14,8 @@ import type {
   Routine,
   QuickCard,
   AttReport,
+  StudentResult,
+  ExamMapping,
   SubjectEntry,
   Center,
   Session,
@@ -65,6 +67,49 @@ export async function retryEnsurePublic(paymentId: string): Promise<string | nul
   }
 }
 
+/**
+ * Store one report-card PDF inside the student's Drive folder. Private by
+ * design - minors' records are NEVER made public, unlike receipt PNGs.
+ * Pass the existing fileId to overwrite on re-runs, otherwise a new file is
+ * created. Returns the Drive file id.
+ */
+export async function saveResultFile(
+  studentId: string,
+  fileName: string,
+  pdf: Blob,
+  existingFileId?: string,
+): Promise<string> {
+  const drive = await getKV<DriveRefs>(K.DRIVE)
+  if (!drive?.rootFolderId) throw new Error('Drive not ready - sign in first')
+  let student = await db.students.get(studentId)
+  if (!student) throw new Error('Student not found')
+  if (!student.folderId) await ensureStudentFolder(student)
+  student = await db.students.get(studentId)
+  if (!student?.folderId) throw new Error('Student folder not ready')
+  if (existingFileId) {
+    try {
+      await client().updateContent(existingFileId, 'application/pdf', pdf)
+      log('sync', `Overwrote ${fileName} on Drive`)
+      return existingFileId
+    } catch {
+      // file was deleted on Drive outside the app - fall through and recreate
+      log('warn', `Result file ${existingFileId} gone on Drive, recreating ${fileName}`)
+    }
+  }
+  const id = await client().createFile(student.folderId, fileName, 'application/pdf', pdf, {
+    pt: 'result',
+    studentId,
+  })
+  log('sync', `Uploaded ${fileName} to Drive`)
+  return id
+}
+
+/** Private download of a Drive file (auth token, no public link) - used for
+ *  opening backed-up result PDFs from StudentDetail. */
+export async function downloadDriveFile(fileId: string): Promise<Blob> {
+  return client().downloadBlob(fileId)
+}
+
 function cleanStudent(s: Student) {
   const { photoBlob: _pb, ...rest } = s
   return rest
@@ -74,7 +119,7 @@ function cleanPayment(p: Payment) {
   return rest
 }
 
-async function buildJSON(file: 'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick' | 'attrep'): Promise<string> {
+async function buildJSON(file: 'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick' | 'attrep' | 'results'): Promise<string> {
   if (file === 'students') {
     const students = (await getStudents()).map(cleanStudent)
     return JSON.stringify({ version: 1, updatedAt: Date.now(), students })
@@ -107,12 +152,18 @@ async function buildJSON(file: 'students' | 'payments' | 'meta' | 'postings' | '
     const attrep = await getAttReports()
     return JSON.stringify({ version: 1, updatedAt: Date.now(), attrep })
   }
+  if (file === 'results') {
+    // backed-up report cards - metadata rows only, the PDFs live on Drive
+    const results = await getStudentResults()
+    return JSON.stringify({ version: 1, updatedAt: Date.now(), results })
+  }
   const center = (await getKV<Center>(K.CENTER)) || defaultCenter()
   const receiptSeq = (await getKV<number>(K.RECEIPT_SEQ)) || 0
   const teachers = (await getKV<Teacher[]>(K.TEACHERS)) || []
   const seqReserved = (await getKV<{ high: number; used: number }>(K.SEQ_RESERVED)) || { high: 0, used: 0 }
   const subjects = normalizeSubjects((await getKV<unknown>(K.SUBJECTS)))
-  return JSON.stringify({ version: 1, updatedAt: Date.now(), center, receiptSeq, teachers, seqReserved, subjects })
+  const examMaps = normalizeExamMappings(await getKV<unknown>(K.EXAM_MAPS))
+  return JSON.stringify({ version: 1, updatedAt: Date.now(), center, receiptSeq, teachers, seqReserved, subjects, examMaps })
 }
 
 export function defaultCenter(): Center {
@@ -401,6 +452,43 @@ function quickSig(q: QuickCard): string {
 function attRepSig(r: AttReport): string {
   return JSON.stringify([r.studentId, r.batch, r.from, r.to, r.ticked, r.deletedAt ?? null])
 }
+function resultSig(r: StudentResult): string {
+  return JSON.stringify([r.studentId, r.examId, r.examLabel, r.sid, r.fileId || '', r.status, r.deletedAt ?? null])
+}
+
+/** Batch → school-exam mappings - normalize both raw shapes into entries so
+ *  old snapshots keep merging cleanly. */
+export function normalizeExamMappings(v: unknown): ExamMapping[] {
+  if (!Array.isArray(v)) return []
+  return v.filter(
+    (x): x is ExamMapping =>
+      !!x && typeof (x as ExamMapping).id === 'string' && typeof (x as ExamMapping).batch === 'string',
+  )
+}
+
+/** Union-merge exam mappings by id (last-writer-wins, tombstones included) -
+ *  mirrors mergeTeachers so two teachers editing different batches never
+ *  clobber each other. */
+function mergeExamMappings(local: ExamMapping[], remote: ExamMapping[]): ExamMapping[] {
+  const byId = new Map(local.map((m) => [m.id, m]))
+  for (const rm of remote) {
+    const lm = byId.get(rm.id)
+    if (!lm) {
+      byId.set(rm.id, rm)
+      continue
+    }
+    const rmAt = rm.updatedAt || 0
+    const lmAt = lm.updatedAt || 0
+    if (rmAt > lmAt) {
+      byId.set(rm.id, rm)
+    } else if (rmAt === lmAt) {
+      // equal stamps - prefer remote (deterministic, no re-push loop)
+      if (JSON.stringify(lm) !== JSON.stringify(rm)) byId.set(rm.id, rm)
+    }
+    // rmAt < lmAt → keep local (newer) - the caller re-pushes via diff
+  }
+  return [...byId.values()]
+}
 
 /** The subject master list was briefly a plain string[] - normalize both
  *  shapes into entries so old snapshots keep merging cleanly. */
@@ -456,7 +544,7 @@ function mergeTeachers(local: Teacher[], remote: Teacher[]): Teacher[] {
  */
 export async function pull(): Promise<{
   changed: boolean
-  needPush: Array<'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick' | 'attrep'>
+  needPush: Array<'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick' | 'attrep' | 'results'>
 }> {
   const drive = await getKV<DriveRefs>(K.DRIVE)
   if (!drive?.rootFolderId) return { changed: false, needPush: [] }
@@ -474,18 +562,18 @@ export async function pull(): Promise<{
   // processed them, so their baseline must be 0, never lastPulledAt. With the
   // legacy fallback a snapshot older than the fleet's latest meta write would
   // be silently skipped forever (the exact bug class that hid tombstones).
-  const baseAt = (f: 'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick' | 'attrep') =>
-    f === 'postings' || f === 'attendance' || f === 'routines' || f === 'quick' || f === 'attrep'
+  const baseAt = (f: 'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick' | 'attrep' | 'results') =>
+    f === 'postings' || f === 'attendance' || f === 'routines' || f === 'quick' || f === 'attrep' || f === 'results'
       ? (pulledAt[f] ?? 0)
       : (pulledAt[f] ?? session.lastPulledAt) || 0
   let changed = false
   let pullDirty = false
   let latest = session.lastPulledAt
-  const needPush: Array<'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick' | 'attrep'> = []
+  const needPush: Array<'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick' | 'attrep' | 'results'> = []
   const stamps = { ...(drive.stamps || {}) }
   let stampDirty = false
 
-  const files: Array<['students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick' | 'attrep', string | undefined]> = [
+  const files: Array<['students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick' | 'attrep' | 'results', string | undefined]> = [
     ['students', drive.fileIds.students],
     ['payments', drive.fileIds.payments],
     ['meta', drive.fileIds.meta],
@@ -494,6 +582,7 @@ export async function pull(): Promise<{
     ['routines', drive.fileIds.routines],
     ['quick', drive.fileIds.quick],
     ['attrep', drive.fileIds.attrep],
+    ['results', drive.fileIds.results],
   ]
   // run two passes: the second is nearly free (in-memory stamps skip
   // unchanged files) and catches files that another device rewrote while
@@ -1010,6 +1099,58 @@ export async function pull(): Promise<{
             await db.attrep.bulkPut(merged)
           })
           changed = true
+        } else if (file === 'results' && Array.isArray(j.results)) {
+          // mirrors the attrep merge - tombstones, then missing records
+          // (absence is NEVER a delete), then LWW per student-exam row
+          await db.transaction('rw', db.results, async () => {
+            const local = new Map((await db.results.toArray()).map((r) => [r.id, r]))
+            const remoteIds = new Set(j.results.map((r: StudentResult) => r.id))
+            // 1) tombstones: keep locally unless we edited after the delete
+            for (const r of j.results) {
+              if (!r.deletedAt) continue
+              const cur = local.get(r.id)
+              if (!cur) continue
+              if ((cur.updatedAt || 0) > (r.deletedAt || 0)) {
+                if (!needPush.includes('results')) needPush.push('results')
+                continue
+              }
+              // keep the tombstone locally instead of purging: a device that
+              // forgets the delete would re-broadcast the record on its next
+              // whole-file push and resurrect it everywhere
+              await db.results.put(r)
+              local.set(r.id, r)
+            }
+            // 2) records missing from the file: absence is NEVER a delete
+            for (const loc of local.values()) {
+              if (remoteIds.has(loc.id)) continue
+              if (!needPush.includes('results')) needPush.push('results')
+            }
+            // 3) plain records: keep local when fresher than our last pull
+            //    or newer than the remote record; otherwise take remote
+            const merged = j.results
+              .filter((r: StudentResult) => !r.deletedAt)
+              .map((r: StudentResult) => {
+                const cur = local.get(r.id)
+                if (!cur) return r
+                // a local tombstone always beats a stale remote copy - re-push
+                // so every device converges on the tombstone
+                if (cur.deletedAt && !r.deletedAt) {
+                  if (!needPush.includes('results')) needPush.push('results')
+                  return cur
+                }
+                const keepLocal =
+                  (cur.updatedAt || 0) > baseAt('results') || (cur.updatedAt || 0) >= (r.updatedAt || 0)
+                const div =
+                  (cur.updatedAt || 0) > (r.updatedAt || 0) ||
+                  ((cur.updatedAt || 0) === (r.updatedAt || 0) && resultSig(cur) !== resultSig(r))
+                if (keepLocal && div) {
+                  if (!needPush.includes('results')) needPush.push('results')
+                }
+                return keepLocal ? cur : r
+              })
+            await db.results.bulkPut(merged)
+          })
+          changed = true
         } else if (file === 'meta' && j.center) {
           await setKV(K.CENTER, { ...((await getKV<Center>(K.CENTER)) || {}), ...j.center })
           const seq = Math.max(j.receiptSeq || 0, (await getKV<number>(K.RECEIPT_SEQ)) || 0)
@@ -1046,6 +1187,18 @@ export async function pull(): Promise<{
             await setKV(K.SUBJECTS, mergedS)
           }
           if (canonS(mergedS) !== canonS(remoteS)) {
+            if (!needPush.includes('meta')) needPush.push('meta')
+          }
+          // batch → exam mappings: merge by id with tombstones, same as
+          // teachers - two teachers mapping different batches never clobber
+          const curM = normalizeExamMappings(await getKV<unknown>(K.EXAM_MAPS))
+          const remoteM = normalizeExamMappings(j.examMaps)
+          const mergedM = mergeExamMappings(curM, remoteM)
+          const canonM = (arr: ExamMapping[]) => JSON.stringify([...arr].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)))
+          if (canonM(mergedM) !== canonM(curM)) {
+            await setKV(K.EXAM_MAPS, mergedM)
+          }
+          if (canonM(mergedM) !== canonM(remoteM)) {
             if (!needPush.includes('meta')) needPush.push('meta')
           }
           changed = true
@@ -1191,6 +1344,25 @@ export async function ensureDriveStructure(): Promise<DriveRefs> {
         log('sync', 'Created _attrep.json (schema upgrade)')
         return drive
       }
+      // schema upgrade: installs that predate backed-up report cards have no
+      // _results.json ref - create it now so result rows sync across the fleet
+      if (!existing.fileIds.results) {
+        const files = await c.list(`'${existing.rootFolderId}' in parents and trashed=false`)
+        const hit = files.find((f) => f.name === '_results.json')
+        const results =
+          hit?.id ||
+          (await c.createFile(
+            existing.rootFolderId,
+            '_results.json',
+            'application/json',
+            JSON.stringify({ version: 1, updatedAt: 0 }),
+            { pt: '_results.json' },
+          ))
+        const drive = { ...existing, fileIds: { ...existing.fileIds, results } }
+        await setKV(K.DRIVE, drive)
+        log('sync', 'Created _results.json (schema upgrade)')
+        return drive
+      }
       return existing
     } catch (e) {
       if (!isNotFound(e)) throw e
@@ -1243,6 +1415,7 @@ export async function ensureDriveStructure(): Promise<DriveRefs> {
       routines: await mk('_routines.json'),
       quick: await mk('_quick.json'),
       attrep: await mk('_attrep.json'),
+      results: await mk('_results.json'),
     },
   }
   await setKV(K.DRIVE, drive)

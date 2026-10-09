@@ -254,12 +254,53 @@ export interface Teacher {
   deletedAt?: number
 }
 
+/** Batch → school-exam mapping, teacher-maintained on the Results page.
+ *  Exam IDs come from the school per exam and vary by batch - the teacher
+ *  types them (or pastes a result URL and the app extracts the exam_id).
+ *  Synced via the meta file with per-entry LWW merging like teachers. */
+export interface ExamMapping {
+  /** deterministic: `${batch}__${examId}` - relabelling updates, never duplicates */
+  id: string
+  /** our free-text batch name */
+  batch: string
+  /** school exam id, digits only */
+  examId: string
+  /** teacher-typed label, e.g. "2nd Tutorial 2026" - used in filenames */
+  examLabel: string
+  updatedAt: number
+  /** tombstone - syncs mapping removal to other devices */
+  deletedAt?: number
+}
+
+/** One backed-up report card: a student's PDF for one school exam.
+ *  The PDF bytes live once in the student's Drive folder (private - minors'
+ *  records are never made public); only this metadata row syncs. */
+export interface StudentResult {
+  /** deterministic: `${studentId}_${examId}` - re-runs update, never duplicate */
+  id: string
+  studentId: string
+  examId: string
+  examLabel: string
+  /** the school sid actually fetched - frozen at fetch time */
+  sid: string
+  /** Drive file id of the PDF inside the student's folder */
+  fileId?: string
+  fileName?: string
+  fetchedAt: number
+  /** ok = PDF stored; empty = page published but no marks yet; error = why not */
+  status: 'ok' | 'empty' | 'error'
+  note?: string
+  updatedAt: number
+  /** tombstone - set (instead of removing) when deleted; syncs deletes across devices */
+  deletedAt?: number
+}
+
 export interface DriveRefs {
   rootFolderId?: string
   studentsFolderId?: string
   /** Google account that owns this folder - refs are only trusted for that account. */
   ownerEmail?: string
-  fileIds: { students?: string; payments?: string; meta?: string; postings?: string; attendance?: string; routines?: string; quick?: string; attrep?: string }
+  fileIds: { students?: string; payments?: string; meta?: string; postings?: string; attendance?: string; routines?: string; quick?: string; attrep?: string; results?: string }
   /** modifiedTime of each JSON file at last sync - lets pull() skip downloads */
   stamps?: Record<string, string>
 }
@@ -277,11 +318,11 @@ export interface Session {
   theme: 'light' | 'dark'
   lastPulledAt: number
   /** per-file: timestamp of the last snapshot each JSON file was fully processed from */
-  pulledAt?: Partial<Record<'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick' | 'attrep', number>>
+  pulledAt?: Partial<Record<'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick' | 'attrep' | 'results', number>>
 }
 
 export type OutboxOp =
-  | { kind: 'pushJSON'; file: 'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick' | 'attrep' }
+  | { kind: 'pushJSON'; file: 'students' | 'payments' | 'meta' | 'postings' | 'attendance' | 'routines' | 'quick' | 'attrep' | 'results' }
   | {
       kind: 'uploadMedia'
       type: 'photo' | 'receipt'
