@@ -188,11 +188,19 @@ export function Results() {
           log('warn', `Result fetch failed for ${st.name}`, res.reason)
           errors++
         } else if (!namesMatch(st.name, res.siteName)) {
-          // wrong-sid footgun: never save a stranger's report silently
-          pendingBlobs.current.set(st.id, { blob: res.pdf, siteName: res.siteName, resolvedSid: res.resolvedSid })
-          setPhase(st.id, { kind: 'mismatch', msg: res.siteName || 'unnamed' })
-          log('warn', `Result name mismatch for ${st.name}`, `site says "${res.siteName}"`)
-          mismatched++
+          if (!res.siteName) {
+            // no name extracted at all - can't confirm identity, hold it
+            pendingBlobs.current.set(st.id, { blob: res.pdf, siteName: '', resolvedSid: res.resolvedSid })
+            setPhase(st.id, { kind: 'mismatch', msg: 'unnamed' })
+            log('warn', `Result name unreadable for ${st.name}`, 'held for review')
+            mismatched++
+          } else {
+            // intentional differences (test records, spelling variants) - save
+            // anyway but keep the site's name on the row so it stays visible
+            await storePdf(st, mapping, res.resolvedSid || sid, res.pdf, `site says "${res.siteName}"`)
+            log('warn', `Result saved for ${st.name} despite name difference`, `site says "${res.siteName}"`)
+            saved++
+          }
         } else {
           // stored values are printed student IDs - the proxy retries with
           // the resolved system id and reports it back; freeze that sid
