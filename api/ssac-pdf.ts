@@ -67,13 +67,13 @@ async function loadReport(page: Page, url: string): Promise<ReportInfo> {
   } catch {
     /* fonts are best-effort - the PDF still renders without them */
   }
-  await page.waitForNetworkIdle({ timeout: 12000 }).catch(() => null)
+  await page.waitForNetworkIdle({ timeout: 10000 }).catch(() => null)
   await page
     .waitForFunction(() => /Result Publish Date:\s*\d/.test(document.body.innerText || ''), {
-      timeout: 20000,
+      timeout: 15000,
     })
     .catch(() => null)
-  await new Promise<void>((r) => setTimeout(r, 3000))
+  await new Promise<void>((r) => setTimeout(r, 2000))
   return page.evaluate(() => {
     const text = document.body.innerText || ''
     // leaf-cell match: the page is nested tables, so an outer wrapper td
@@ -157,8 +157,6 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     typeof cookie === 'string' && cookie.length > 0 && cookie.length <= 1000 && !/[\r\n]/.test(cookie)
       ? cookie
       : null
-  const url = `https://${ALLOW_HOST}/index_pop.php?cms=printBanPR&exam_id=${examId}&sid=${sid}`
-
   let browser: Awaited<ReturnType<typeof puppeteer.launch>> | null = null
   try {
     browser = await puppeteer.launch({
@@ -202,28 +200,30 @@ export default async function handler(req: Req, res: Res): Promise<void> {
         failed: r.failure()?.errorText || 'failed',
       })
     })
-    // visit the homepage first - picks up any session/init cookies the report
-    // page's dynamic loading may depend on
-    try {
-      await page.goto(`https://${ALLOW_HOST}/`, { waitUntil: 'domcontentloaded', timeout: 20000 })
-    } catch {
-      /* homepage optional - the report URL is what matters */
-    }
-    let info = await loadReport(page, url)
-    let resolvedSid: string | null = null
-    if (!info.hasMarks) {
-      // stored values are printed student IDs, not URL sids - resolve the
-      // system id via the school's own student list, then retry once
+    // visit the homepage first when no teacher session was supplied - picks
+    // up any session/init cookies the report page may depend on
+    if (!useCookie) {
       try {
-        const resolved = await resolveSystemId(sid)
-        if (resolved && resolved !== sid) {
-          resolvedSid = resolved
-          info = await loadReport(page, reportUrl(examId, resolved))
-        }
+        await page.goto(`https://${ALLOW_HOST}/`, { waitUntil: 'domcontentloaded', timeout: 20000 })
       } catch {
-        /* lookup failed - fall through to the empty response below */
+        /* homepage optional - the report URL is what matters */
       }
     }
+    // teachers save printed student IDs, but report URLs need system ids -
+    // resolve via the school's own list BEFORE loading, so the common case
+    // costs one page load, not try-plus-retry (function budget is 60s)
+    let loadSid = sid
+    let resolvedSid: string | null = null
+    try {
+      const resolved = await resolveSystemId(sid)
+      if (resolved && resolved !== sid) {
+        loadSid = resolved
+        resolvedSid = resolved
+      }
+    } catch {
+      /* lookup failed - try the stored value directly, old behavior */
+    }
+    let info = await loadReport(page, reportUrl(examId, loadSid))
     if (debug) {
       let cookieNames: string[] = []
       try {
