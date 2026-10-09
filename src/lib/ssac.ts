@@ -27,14 +27,16 @@ export type ProxyResult =
   | { status: 'error'; reason: string }
 
 /** Call the render proxy for one student. 90s budget - cold Chromium starts
- *  are slow; the caller paces students sequentially with gaps. */
-export async function fetchResultPdf(examId: string, sid: string): Promise<ProxyResult> {
+ *  are slow; the caller paces students sequentially with gaps. Pass the
+ *  teacher's school-site session cookie when set - the CMS appears to render
+ *  marks only for authenticated sessions. */
+export async function fetchResultPdf(examId: string, sid: string, cookie?: string): Promise<ProxyResult> {
   const ctrl = new AbortController()
   const timer = window.setTimeout(() => ctrl.abort(), 90000)
   try {
     const res = await fetch(
       `/api/ssac-pdf?exam_id=${encodeURIComponent(examId)}&sid=${encodeURIComponent(sid)}`,
-      { signal: ctrl.signal },
+      { signal: ctrl.signal, headers: cookie ? { 'x-ssac-cookie': cookie } : {} },
     )
     const ctype = res.headers.get('content-type') || ''
     if (ctype.includes('application/pdf')) {
@@ -90,12 +92,32 @@ export function namesMatch(ours: string, site: string): boolean {
 
 /** Deterministic filename - re-runs overwrite the same Drive file, never
  *  duplicate. e.g. Result-2nd-Tutorial-2026-1008.pdf */
-export function resultFileName(examLabel: string, examId: string): string {
-  const clean = examLabel
+export function resultFileName(examLabel: string, examId: string): string {  const clean = examLabel
     .trim()
     .replace(/[^\w\s-]/g, '')
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
     .slice(0, 60)
   return `Result-${clean || 'Exam'}-${examId}.pdf`
+}
+
+const SESS_KEY = 'pt_ssac_sess'
+
+/** Teacher's school-site session cookie. Local-only (never synced, never
+ *  logged) - it only ever travels to ssaac.edu.bd via the render proxy. */
+export function getSsacSession(): string {
+  try {
+    return localStorage.getItem(SESS_KEY) || ''
+  } catch {
+    return ''
+  }
+}
+
+export function setSsacSession(v: string): void {
+  try {
+    if (v) localStorage.setItem(SESS_KEY, v)
+    else localStorage.removeItem(SESS_KEY)
+  } catch {
+    /* ignore */
+  }
 }

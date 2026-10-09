@@ -29,6 +29,7 @@ const MIN_PDF_BYTES = 15000
 interface Req {
   method?: string
   query?: Record<string, string | string[] | undefined>
+  headers?: Record<string, string | string[] | undefined>
 }
 interface Res {
   status: (code: number) => Res
@@ -52,6 +53,16 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     res.status(400).json({ status: 'error', reason: 'exam_id and sid must be numeric' })
     return
   }
+  // optional school-site session cookie (teacher pastes it in the app) - the
+  // CMS appears to render marks only for authenticated sessions; anonymous
+  // loads get the empty shell. Only ever forwarded to ssaac.edu.bd, never
+  // logged. Header form avoids the value landing in server access logs.
+  const rawCookie = req.headers?.['x-ssac-cookie']
+  const cookie = Array.isArray(rawCookie) ? rawCookie[0] : rawCookie
+  const useCookie =
+    typeof cookie === 'string' && cookie.length > 0 && cookie.length <= 1000 && !/[\r\n]/.test(cookie)
+      ? cookie
+      : null
   const url = `https://${ALLOW_HOST}/index_pop.php?cms=printBanPR&exam_id=${examId}&sid=${sid}`
 
   let browser: Awaited<ReturnType<typeof puppeteer.launch>> | null = null
@@ -64,6 +75,11 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     const page = await browser.newPage()
     // wide viewport so the 1200px report table lays out like a desktop print
     await page.setViewport({ width: 1400, height: 1000 })
+    if (useCookie) {
+      // teacher's own school-site session - makes this load equivalent to
+      // their logged-in browser tab
+      await page.setExtraHTTPHeaders({ Cookie: useCookie })
+    }
     // look like a real desktop browser - headless tells (webdriver flag,
     // HeadlessChrome UA) make some servers skip their dynamic content
     await page.evaluateOnNewDocument(() => {
@@ -147,12 +163,20 @@ export default async function handler(req: Req, res: Res): Promise<void> {
       }
     })
     if (debug) {
+      let cookieNames: string[] = []
+      try {
+        cookieNames = (await page.cookies()).map((c) => c.name)
+      } catch {
+        /* ignore */
+      }
       res.status(200).json({
         status: 'debug',
         siteName: info.name,
         hasReport: info.hasReport,
         hasMarks: info.hasMarks,
         htmlLen: info.htmlLen,
+        cookieSent: !!useCookie,
+        cookiesSeen: cookieNames,
         requests: seen,
       })
       return
@@ -162,7 +186,13 @@ export default async function handler(req: Req, res: Res): Promise<void> {
       return
     }
     if (!info.hasMarks) {
-      res.status(200).json({ status: 'empty', siteName: info.name })
+      res.status(200).json({
+        status: 'empty',
+        siteName: info.name,
+        hint: useCookie
+          ? 'session cookie was sent but no marks - exam may be unpublished'
+          : 'no school session cookie was sent - marks may require login',
+      })
       return
     }
     const pdf = await page.pdf({ format: 'A4', landscape: true, printBackground: true })

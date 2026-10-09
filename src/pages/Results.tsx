@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../state/AppContext'
-import { fetchResultPdf, namesMatch, resultFileName, extractExamId, extractSid } from '../lib/ssac'
+import { fetchResultPdf, namesMatch, resultFileName, extractExamId, extractSid, getSsacSession, setSsacSession } from '../lib/ssac'
 import { saveResultFile } from '../lib/sync'
 import { log } from '../lib/logs'
 import { Card, PageHeader, EmptyState, Button, Select, Input, Spinner, cx } from '../components/ui'
@@ -40,6 +40,10 @@ export function Results() {
   const [running, setRunning] = useState(false)
   const [phases, setPhases] = useState<Record<string, Phase>>({})
   const [summary, setSummary] = useState('')
+  // school-site session cookie (teacher pastes once) - the CMS only renders
+  // marks for logged-in sessions; stored on this device only, never synced
+  const [sessInput, setSessInput] = useState(() => getSsacSession())
+  const [sessSaved, setSessSaved] = useState(() => !!getSsacSession())
   const stopRef = useRef(false)
   // name-mismatch PDFs stay in memory so "save anyway" needs no re-fetch
   const pendingBlobs = useRef(new Map<string, { blob: Blob; siteName: string }>())
@@ -127,6 +131,7 @@ export function Results() {
     setRunning(true)
     stopRef.current = false
     setSummary('')
+    const sessCookie = getSsacSession().trim() || undefined
     const targets = batchStudents.filter((s) =>
       onlyIds ? onlyIds.includes(s.id) : checked.includes(s.id),
     )
@@ -146,7 +151,7 @@ export function Results() {
       }
       setPhase(st.id, { kind: 'fetching' })
       try {
-        const res = await fetchResultPdf(mapping.examId, sid)
+        const res = await fetchResultPdf(mapping.examId, sid, sessCookie)
         if (res.status === 'empty') {
           await upsertExamResult({
             id: `${st.id}_${mapping.examId}`,
@@ -261,6 +266,36 @@ export function Results() {
         onSave={saveExamMapping}
         onDelete={deleteExamMapping}
       />
+
+      <Card className="!rounded-2xl p-4">
+        <div className="text-[13px] font-bold text-ink dark:text-white mb-1">
+          School login session {sessSaved && <span className="text-teal">· saved</span>}
+        </div>
+        <div className="text-[11.5px] text-muted dark:text-muted-dark mb-2.5 leading-relaxed">
+          Report pages only show marks when logged into the school site. Log into ssaac.edu.bd
+          in another tab, copy the session cookie (DevTools → Application → Cookies →
+          ssaac.edu.bd → PHPSESSID value), and paste it here. Stays on this device only.
+        </div>
+        <div className="flex gap-2">
+          <Input
+            type="password"
+            value={sessInput}
+            onChange={(e) => setSessInput(e.target.value)}
+            placeholder="Paste PHPSESSID value"
+            autoComplete="off"
+          />
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setSsacSession(sessInput.trim())
+              setSessSaved(!!sessInput.trim())
+              showToast(sessInput.trim() ? 'Session saved on this device' : 'Session cleared', 'ok')
+            }}
+          >
+            Save
+          </Button>
+        </div>
+      </Card>
 
       <Card className="!rounded-2xl p-4">
         <div className="text-[13px] font-bold text-ink dark:text-white mb-3">
