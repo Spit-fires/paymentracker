@@ -429,17 +429,20 @@ export function Results() {
           with pauses - be nice to the school server, and keep this screen open during a run.
         </div>
 
-        <div className="grid grid-cols-2 gap-2.5 mt-3">
+        <div className="space-y-2.5 mt-3">
           <Button
+            full
             size="lg"
             onClick={() => void run()}
             disabled={running || !mapping || !checked.length}
+            className="whitespace-nowrap"
           >
             {running ? <Spinner className="w-5 h-5" /> : <IconDownload className="w-5 h-5" />}
             {running ? 'Working…' : 'Download PDFs'}
           </Button>
           {running ? (
             <Button
+              full
               variant="secondary"
               size="lg"
               onClick={() => {
@@ -450,12 +453,14 @@ export function Results() {
             </Button>
           ) : (
             <Button
+              full
               variant="secondary"
               size="lg"
               onClick={() => void run(failedIds)}
               disabled={!mapping || !failedIds.length}
+              className="whitespace-nowrap"
             >
-              Retry {failedIds.length || ''} failed
+              Retry{failedIds.length ? ` ${failedIds.length}` : ''} failed
             </Button>
           )}
         </div>
