@@ -182,11 +182,19 @@ export default async function handler(req: Req, res: Res): Promise<void> {
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
     )
     // record the page's own network traffic - with ?debug=1 this is returned
-    // instead of a PDF, showing whether marks even attempt to load
+    // instead of a PDF, showing whether marks even attempt to load.
+    // Third-party widgets (facebook page plugin on the homepage) are aborted
+    // outright - they only burn function-budget seconds.
     const seen: Array<{ url: string; method: string; type: string; failed?: string }> = []
+    await page.setRequestInterception(true)
     page.on('request', (r) => {
-      if (seen.length > 60) return
       const u = r.url()
+      if (u.includes('facebook.com') || u.includes('staticxx.facebook.com')) {
+        r.abort().catch(() => null)
+        return
+      }
+      r.continue().catch(() => null)
+      if (seen.length > 60) return
       if (!u.includes('ssaac.edu.bd')) return
       if (/\.(css|png|jpg|jpeg|gif|ico|woff2?|js)(\?|$)/i.test(u)) return
       seen.push({ url: u.slice(0, 220), method: r.method(), type: r.resourceType() })
