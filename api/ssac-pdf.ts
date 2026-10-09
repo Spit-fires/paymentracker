@@ -151,11 +151,26 @@ const isDigits = (v: string | string[] | undefined): v is string =>
 const reportUrl = (examId: string, sid: string): string =>
   `https://${ALLOW_HOST}/index_pop.php?cms=printBanPR&exam_id=${examId}&sid=${sid}`
 
+// A4 landscape at 96dpi is 1123x794px; with 10mm margins the printable box
+// is 1047x718. Report bodies vary in height by subject count while the width
+// is fixed (the site's 1200px table), so each render measures the body and
+// scales to fit exactly one page instead of trusting a fixed scale.
+const PRINT_W = 1047
+const PRINT_H = 718
+const CONTENT_W = 1200
+const MIN_SCALE = 0.55
+
+function fitScale(bodyH: number): number {
+  const s = Math.min(PRINT_W / CONTENT_W, bodyH > 0 ? PRINT_H / bodyH : 1)
+  return Math.max(MIN_SCALE, Math.min(1, Math.floor(s * 100) / 100))
+}
+
 interface ReportInfo {
   name: string
   hasReport: boolean
   hasMarks: boolean
   htmlLen: number
+  bodyH: number
 }
 
 /** Load one report URL and read its state. Marks are JS-injected after load,
@@ -215,6 +230,9 @@ async function loadReport(page: Page, url: string): Promise<ReportInfo> {
       hasReport: /Student's Progress Report/.test(text),
       hasMarks: /\d/.test(pub),
       htmlLen: document.documentElement.outerHTML.length,
+      // content widths are fixed px (no reflow between screen/print), so the
+      // screen-measured flow height predicts the print height 1:1
+      bodyH: document.body ? document.body.scrollHeight : 0,
     }
   })
 }
@@ -303,8 +321,9 @@ export default async function handler(req: Req, res: Res): Promise<void> {
       headless: chromium.headless,
     })
     const page = await browser.newPage()
-    // wide viewport so the 1200px report table lays out like a desktop print
-    await page.setViewport({ width: 1400, height: 1000 })
+    // wide viewport so the 1200px report table lays out like a desktop print;
+    // short height so scrollHeight measures content, not viewport
+    await page.setViewport({ width: 1400, height: 600 })
     if (headerCookie) {
       // teacher's own live session - makes this load equivalent to their tab
       await page.setExtraHTTPHeaders({ Cookie: headerCookie })
@@ -385,6 +404,7 @@ export default async function handler(req: Req, res: Res): Promise<void> {
         info = await loadReport(page, reportUrl(examId, loadSid))
       }
     }
+    const scale = fitScale(info.bodyH)
     if (debug) {
       let cookieNames: string[] = []
       try {
@@ -403,6 +423,8 @@ export default async function handler(req: Req, res: Res): Promise<void> {
         relogged,
         cookiesSeen: cookieNames,
         resolvedSid,
+        bodyH: info.bodyH,
+        scale,
         requests: seen,
       })
       return
@@ -423,13 +445,13 @@ export default async function handler(req: Req, res: Res): Promise<void> {
       })
       return
     }
-    // scale 0.8 mirrors the site's own print zoom: the 1200px table becomes
-    // 960px and fits landscape A4 (1047px printable) instead of clipping
+    // scale is computed per render to fit one page (see fitScale) instead of
+    // the site's ignored zoom - the fixed 1200px table can no longer clip
     const pdf = await page.pdf({
       format: 'A4',
       landscape: true,
       printBackground: true,
-      scale: 0.8,
+      scale,
       margin: { top: '10mm', bottom: '10mm', left: '10mm', right: '10mm' },
     })
     if (pdf.length < MIN_PDF_BYTES) {
