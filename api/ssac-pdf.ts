@@ -33,10 +33,61 @@ const MIN_PDF_BYTES = 15000
 // client: the default key is always accepted alongside the env one.
 const DEFAULT_API_KEY = 'pt-ssac-9f3c7a2e4b5d'
 const API_KEY = process.env.SSAC_API_KEY || DEFAULT_API_KEY
-// Default school session (teacher's). Per-request x-ssac-cookie overwrites
-// it. Sessions expire - when renders go empty again, paste a fresh value in
-// the app (takes precedence) or update this + redeploy.
-const DEFAULT_SESS = 'PHPSESSID=8vkkcfnpm1g4t0eue5ptkjca2'
+// School-site credentials - Vercel env vars SSAC_USER / SSAC_PASS, NEVER in
+// the repo. The proxy logs itself in (plain POST, no captcha) because pasted
+// browser sessions die fast: the CMS mints a new anonymous PHPSESSID on
+// nearly every unauthenticated hit, so any copied value is stale within
+// seconds. A teacher paste via x-ssac-cookie still wins when provided.
+const SSAC_USER = process.env.SSAC_USER || ''
+const SSAC_PASS = process.env.SSAC_PASS || ''
+const loginConfigured = !!SSAC_USER && !!SSAC_PASS
+
+// module-scope authenticated session (warm invocations reuse it)
+let sessCache: { cookie: string; at: number } | null = null
+const SESS_TTL_MS = 20 * 60 * 1000
+
+/** Fresh programmatic login - returns a Cookie header value or null. */
+async function loginSession(): Promise<string | null> {
+  if (!loginConfigured) return null
+  const body = new URLSearchParams({ branch_id: '5001', username: SSAC_USER, password: SSAC_PASS, login: '' })
+  const r = await fetch(`https://${ALLOW_HOST}/edutechadmin`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+    },
+    body: body.toString(),
+    redirect: 'manual',
+    signal: AbortSignal.timeout(25000),
+  })
+  try {
+    await r.arrayBuffer()
+  } catch {
+    /* free the socket */
+  }
+  const setCookies: string[] =
+    typeof (r.headers as Headers).getSetCookie === 'function'
+      ? (r.headers as Headers).getSetCookie()
+      : []
+  const sess = setCookies
+    .map((c) => c.split(';')[0].trim())
+    .filter((c) => /^phpsessid=/i.test(c))
+  return sess.length ? sess.join('; ') : null
+}
+
+async function sessionCookie(): Promise<{ cookie: string | null; fresh: boolean }> {
+  const now = Date.now()
+  if (sessCache && now - sessCache.at < SESS_TTL_MS) {
+    return { cookie: sessCache.cookie, fresh: false }
+  }
+  const c = await loginSession().catch(() => null)
+  if (c) {
+    sessCache = { cookie: c, at: now }
+    return { cookie: c, fresh: true }
+  }
+  return { cookie: null, fresh: false }
+}
 
 // rolling per-IP bucket: 30 renders/min is plenty for sequential teacher
 // runs (3s gaps ≈ 20/min) and starves floods
@@ -200,13 +251,12 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     res.status(400).json({ status: 'error', reason: 'exam_id and sid must be numeric' })
     return
   }
-  // school session: per-request teacher paste wins, else the hardcoded
-  // default. Only ever forwarded to ssaac.edu.bd, never logged.
+  // school session: per-request teacher paste wins, else the proxy's own
+  // login. Only ever forwarded to ssaac.edu.bd, never logged.
   const rawCookie = headerOne(headers, 'x-ssac-cookie')
   const validCookie = (c: string | null): c is string =>
     !!c && c.length > 0 && c.length <= 1000 && !/[\r\n]/.test(c)
-  const useCookie = validCookie(rawCookie) ? rawCookie : DEFAULT_SESS
-  const cookieSource: 'header' | 'default' = validCookie(rawCookie) ? 'header' : 'default'
+  const headerCookie = validCookie(rawCookie) ? rawCookie : null
   let browser: Awaited<ReturnType<typeof puppeteer.launch>> | null = null
   try {
     browser = await puppeteer.launch({
@@ -217,10 +267,9 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     const page = await browser.newPage()
     // wide viewport so the 1200px report table lays out like a desktop print
     await page.setViewport({ width: 1400, height: 1000 })
-    if (useCookie) {
-      // teacher's own school-site session - makes this load equivalent to
-      // their logged-in browser tab
-      await page.setExtraHTTPHeaders({ Cookie: useCookie })
+    if (headerCookie) {
+      // teacher's own live session - makes this load equivalent to their tab
+      await page.setExtraHTTPHeaders({ Cookie: headerCookie })
     }
     // look like a real desktop browser - headless tells (webdriver flag,
     // HeadlessChrome UA) make some servers skip their dynamic content
@@ -260,21 +309,36 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     })
     // the default session is always on, so the warmup visit adds nothing -
     // skip it and save the seconds
-    // teachers save printed student IDs, but report URLs need system ids -
-    // resolve via the school's own list BEFORE loading, so the common case
-    // costs one page load, not try-plus-retry (function budget is 60s)
+    // resolve the system id AND establish the session in parallel - the
+    // login POST and the list fetch are independent network calls
+    const [resolved, sessRes] = await Promise.all([
+      resolveSystemId(sid).catch(() => null),
+      headerCookie
+        ? Promise.resolve({ cookie: headerCookie, fresh: true })
+        : sessionCookie(),
+    ])
+    const sessionSource = headerCookie ? 'header' : sessRes.cookie ? 'login' : 'none'
     let loadSid = sid
     let resolvedSid: string | null = null
-    try {
-      const resolved = await resolveSystemId(sid)
-      if (resolved && resolved !== sid) {
-        loadSid = resolved
-        resolvedSid = resolved
-      }
-    } catch {
-      /* lookup failed - try the stored value directly, old behavior */
+    if (resolved && resolved !== sid) {
+      loadSid = resolved
+      resolvedSid = resolved
+    }
+    if (sessRes.cookie && !headerCookie) {
+      await page.setExtraHTTPHeaders({ Cookie: sessRes.cookie })
     }
     let info = await loadReport(page, reportUrl(examId, loadSid))
+    let relogged = false
+    if (!info.hasMarks && !sessRes.fresh && !headerCookie && loginConfigured) {
+      // cached session may have expired mid-run - one fresh login + one reload
+      sessCache = null
+      const fresh = await sessionCookie()
+      if (fresh.cookie) {
+        relogged = true
+        await page.setExtraHTTPHeaders({ Cookie: fresh.cookie })
+        info = await loadReport(page, reportUrl(examId, loadSid))
+      }
+    }
     if (debug) {
       let cookieNames: string[] = []
       try {
@@ -288,8 +352,10 @@ export default async function handler(req: Req, res: Res): Promise<void> {
         hasReport: info.hasReport,
         hasMarks: info.hasMarks,
         htmlLen: info.htmlLen,
-        cookieSent: true,
-        cookieSource,
+        cookieSent: !!sessRes.cookie,
+        sessionSource,
+        loginConfigured,
+        relogged,
         cookiesSeen: cookieNames,
         resolvedSid,
         requests: seen,
@@ -305,8 +371,10 @@ export default async function handler(req: Req, res: Res): Promise<void> {
         status: 'empty',
         siteName: info.name,
         hint: resolvedSid
-          ? 'system id resolved but still no marks - exam unpublished or school session expired'
-          : 'no marks - school session may have expired, or the SSAC ID is not in the school list',
+          ? 'system id resolved but still no marks - exam unpublished for this student, or school login rejected'
+          : !loginConfigured && !headerCookie
+            ? 'no school login configured - set SSAC_USER/SSAC_PASS env vars or paste a session'
+            : 'logged in but no marks - exam unpublished for this student, or SSAC ID not in school list',
       })
       return
     }

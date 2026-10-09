@@ -274,10 +274,10 @@ export function Results() {
           School login session {sessSaved && <span className="text-teal">· saved</span>}
         </div>
         <div className="text-[11.5px] text-muted dark:text-muted-dark mb-2.5 leading-relaxed">
-          A school session is configured on the server - only re-paste here when downloads
-          start coming back empty (sessions expire). Log into ssaac.edu.bd in another tab,
-          copy the session cookie (DevTools → Application → Cookies → ssaac.edu.bd →
-          PHPSESSID value). Your paste overwrites the default, stays on this device only.
+          The server logs itself into the school site - nothing to do here unless downloads
+          come back empty. Then log into ssaac.edu.bd in another tab and paste the session
+          cookie (DevTools → Application → Cookies → ssaac.edu.bd → PHPSESSID value) as an
+          override. Your paste stays on this device only.
         </div>
         <div className="flex gap-2">
           <Input
