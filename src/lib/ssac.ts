@@ -28,7 +28,7 @@ export function extractSid(url: string): string | null {
 
 export type ProxyResult =
   | { status: 'ok'; pdf: Blob; siteName: string; resolvedSid?: string }
-  | { status: 'empty'; siteName: string }
+  | { status: 'empty'; siteName: string; hint?: string }
   | { status: 'error'; reason: string }
 
 /** Call the render proxy for one student. 90s budget - cold Chromium starts
@@ -61,9 +61,11 @@ export async function fetchResultPdf(examId: string, sid: string, cookie?: strin
       status?: string
       siteName?: string
       reason?: string
+      hint?: string
     } | null
     if (!j) return { status: 'error', reason: `proxy unavailable (HTTP ${res.status})` }
-    if (j.status === 'empty') return { status: 'empty', siteName: j.siteName || '' }
+    if (j.status === 'empty')
+      return { status: 'empty', siteName: j.siteName || '', hint: j.hint || undefined }
     return { status: 'error', reason: j.reason || `proxy ${res.status}` }
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') {

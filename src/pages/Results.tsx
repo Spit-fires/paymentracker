@@ -161,7 +161,7 @@ export function Results() {
             sid,
             fetchedAt: Date.now(),
             status: 'empty',
-            note: 'page published but no marks yet',
+            note: res.hint || 'page published but no marks yet',
           })
           setPhase(st.id, { kind: 'empty' })
           empty++
@@ -653,7 +653,7 @@ function StudentRow({
           </label>
         </div>
       )}
-      {phase?.kind === 'saved' && saved?.note && (
+      {(phase?.kind === 'saved' || phase?.kind === 'empty') && saved?.note && (
         <div className="ml-7 mb-1.5 text-[11.5px] text-muted dark:text-muted-dark">{saved.note}</div>
       )}
     </div>
