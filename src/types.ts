@@ -267,6 +267,8 @@ export interface ExamMapping {
   examId: string
   /** teacher-typed label, e.g. "2nd Tutorial 2026" - used in filenames */
   examLabel: string
+  /** when true, render requests append &printView=1 (school print layout) */
+  printView?: boolean
   updatedAt: number
   /** tombstone - syncs mapping removal to other devices */
   deletedAt?: number

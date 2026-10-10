@@ -165,7 +165,7 @@ export function Results() {
       }
       setPhase(st.id, { kind: 'fetching' })
       try {
-        const res = await fetchResultPdf(mapping.examId, sid, sessCookie, creds)
+        const res = await fetchResultPdf(mapping.examId, sid, sessCookie, creds, mapping.printView)
         if (res.status === 'empty') {
           await upsertExamResult({
             id: `${st.id}_${mapping.examId}`,
@@ -524,12 +524,13 @@ function MappingCard({
 }: {
   batches: string[]
   examMappings: ExamMapping[]
-  onSave: (input: { batch: string; examId: string; examLabel: string }) => Promise<void>
+  onSave: (input: { batch: string; examId: string; examLabel: string; printView?: boolean }) => Promise<void>
   onDelete: (id: string) => Promise<void>
 }) {
   const [mBatch, setMBatch] = useState('')
   const [mLabel, setMLabel] = useState('')
   const [mExamId, setMExamId] = useState('')
+  const [mPrintView, setMPrintView] = useState(false)
   const [pasteUrl, setPasteUrl] = useState('')
   const [sidHint, setSidHint] = useState('')
   const [busy, setBusy] = useState(false)
@@ -553,9 +554,10 @@ function MappingCard({
     if (!mBatch.trim() || !mLabel.trim() || !/^\d{1,20}$/.test(mExamId.trim())) return
     setBusy(true)
     try {
-      await onSave({ batch: mBatch, examId: mExamId, examLabel: mLabel })
+      await onSave({ batch: mBatch, examId: mExamId, examLabel: mLabel, printView: mPrintView || undefined })
       setMLabel('')
       setMExamId('')
+      setMPrintView(false)
       setPasteUrl('')
       setSidHint('')
     } finally {
@@ -599,9 +601,21 @@ function MappingCard({
                     {m.examLabel}
                   </div>
                   <div className="text-[11.5px] text-muted dark:text-muted-dark tabular-nums">
-                    {m.batch} · exam {m.examId}
+                    {m.batch} · exam {m.examId}{m.printView ? ' · print view' : ''}
                   </div>
                 </div>
+                <button
+                  onClick={() =>
+                    void onSave({ batch: m.batch, examId: m.examId, examLabel: m.examLabel, printView: !m.printView })
+                  }
+                  title="Toggle &printView=1 on render requests for this exam"
+                  className={cx(
+                    'shrink-0 text-[11px] font-bold px-2 py-1.5 rounded-lg',
+                    m.printView ? 'text-teal bg-teal/10' : 'text-faint',
+                  )}
+                >
+                  {m.printView ? 'Print view on' : 'Print view'}
+                </button>
                 <button
                   onClick={() => void onDelete(m.id)}
                   className="text-faint hover:text-danger p-2"
@@ -663,6 +677,17 @@ function MappingCard({
             />
           </label>
         </div>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={mPrintView}
+            onChange={(e) => setMPrintView(e.target.checked)}
+            className="w-4 h-4 accent-teal shrink-0"
+          />
+          <span className="text-[12px] font-semibold text-muted dark:text-muted-dark">
+            Print view (appends &printView=1 to requests)
+          </span>
+        </label>
         <Button
           full
           onClick={() => void onAdd()}

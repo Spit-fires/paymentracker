@@ -147,8 +147,9 @@ interface Ctx {
   upsertExamResult: (row: Omit<StudentResult, 'updatedAt'>) => Promise<void>
   /** teacher-maintained batch → school-exam mappings - synced via meta */
   examMappings: ExamMapping[]
-  saveExamMapping: (input: { batch: string; examId: string; examLabel: string }) => Promise<void>
+  saveExamMapping: (input: { batch: string; examId: string; examLabel: string; printView?: boolean }) => Promise<void>
   deleteExamMapping: (id: string) => Promise<void>
+  deleteExamResult: (id: string) => Promise<void>
   /** master subject list for the routine builder - synced via meta */
   subjects: SubjectEntry[]
   addSubject: (name: string) => Promise<void>
@@ -1054,7 +1055,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   /** Upsert a batch → exam mapping. Deterministic id so relabelling updates
    *  instead of duplicating; syncs via the meta file like teachers. */
   const saveExamMapping = useCallback(
-    async (input: { batch: string; examId: string; examLabel: string }) => {
+    async (input: { batch: string; examId: string; examLabel: string; printView?: boolean }) => {
       const batch = input.batch.trim()
       const examId = input.examId.trim()
       const examLabel = input.examLabel.trim()
@@ -1068,6 +1069,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           batch,
           examId,
           examLabel,
+          // false ≡ absent so toggles don't churn the merged shape
+          printView: input.printView || undefined,
           updatedAt: Date.now(),
         },
       ]
@@ -1092,6 +1095,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       scheduleSync()
     },
     [scheduleSync],
+  )
+
+  /** Manually delete one backed-up report card - tombstones the row AND
+   *  trashes the Drive PDF, so re-runs start clean with no orphans. */
+  const deleteExamResult = useCallback(
+    async (id: string) => {
+      const cur = await db.results.get(id)
+      if (!cur) return
+      await db.results.put({ ...cur, deletedAt: Date.now(), updatedAt: Date.now() })
+      if (cur.fileId) await queueOp({ kind: 'deleteMedia', fileId: cur.fileId })
+      await queueOp({ kind: 'pushJSON', file: 'results' })
+      await refreshData()
+      scheduleSync()
+    },
+    [refreshData, scheduleSync],
   )
 
   const updateCenter = useCallback(
@@ -1173,6 +1191,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       examMappings,
       saveExamMapping,
       deleteExamMapping,
+      deleteExamResult,
       updateCenter,
       setTheme,
       setPin,
@@ -1232,6 +1251,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       examMappings,
       saveExamMapping,
       deleteExamMapping,
+      deleteExamResult,
       updateCenter,
       setTheme,
       setPin,

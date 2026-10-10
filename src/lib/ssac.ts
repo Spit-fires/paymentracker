@@ -40,6 +40,7 @@ export async function fetchResultPdf(
   sid: string,
   cookie?: string,
   creds?: { user: string; pass: string },
+  printView?: boolean,
 ): Promise<ProxyResult> {
   const ctrl = new AbortController()
   const timer = window.setTimeout(() => ctrl.abort(), 90000)
@@ -51,7 +52,7 @@ export async function fetchResultPdf(
     if (creds?.user) headers['x-ssac-user'] = creds.user
     if (creds?.pass) headers['x-ssac-pass'] = creds.pass
     const res = await fetch(
-      `/api/ssac-pdf?exam_id=${encodeURIComponent(examId)}&sid=${encodeURIComponent(sid)}`,
+      `/api/ssac-pdf?exam_id=${encodeURIComponent(examId)}&sid=${encodeURIComponent(sid)}${printView ? '&print=1' : ''}`,
       { signal: ctrl.signal, headers },
     )
     const ctype = res.headers.get('content-type') || ''

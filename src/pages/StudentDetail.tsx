@@ -31,6 +31,7 @@ export function StudentDetail() {
     center,
     routines,
     examResults,
+    deleteExamResult,
     refreshData,
     updateStudent,
     archiveStudent,
@@ -233,6 +234,11 @@ export function StudentDetail() {
     showToast('Receipt deleted', 'ok')
   }
 
+  const onDeleteResult = async (resultId: string) => {
+    await deleteExamResult(resultId)
+    showToast('Report card deleted', 'ok')
+  }
+
   const allPaid = due === 0 && (fee > 0 || paidAny)
   const partial = paidAny && due > 0
 
@@ -428,6 +434,13 @@ export function StudentDetail() {
                       {openingId === r.id ? 'Opening…' : 'Open PDF'}
                     </button>
                   )}
+                  <button
+                    onClick={() => void onDeleteResult(r.id)}
+                    className="text-faint hover:text-danger p-2 shrink-0"
+                    title="Delete report card (removes the row and the Drive PDF)"
+                  >
+                    <IconTrash className="w-4 h-4" />
+                  </button>
                 </div>
               </Card>
             ))}

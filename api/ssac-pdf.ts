@@ -7,8 +7,9 @@
  * real page load ever sees the marks. The teacher's permission to fetch these
  * pages is on file - keep the polite pacing client-side (sequential, gaps).
  *
- * GET /api/ssac-pdf?exam_id=1008&sid=251217110740
+ * GET /api/ssac-pdf?exam_id=1008&sid=251217110740[&print=1][&debug=1]
  *   200 application/pdf + X-Student-Name (URI-encoded) + X-Status: ok
+ *   (+ X-Resolved-Sid when the stored student ID was mapped to a system id)
  *   200 application/json { status: 'empty', siteName } - page loaded, no marks
  *   200 application/json { status: 'error', reason } - site unreachable/changed
  *   200 application/json { status: 'debug', ... } - with ?debug=1: request log
@@ -148,8 +149,8 @@ interface Res {
 const isDigits = (v: string | string[] | undefined): v is string =>
   typeof v === 'string' && /^\d{1,20}$/.test(v)
 
-const reportUrl = (examId: string, sid: string): string =>
-  `https://${ALLOW_HOST}/index_pop.php?cms=printBanPR&exam_id=${examId}&sid=${sid}`
+const reportUrl = (examId: string, sid: string, printView: boolean): string =>
+  `https://${ALLOW_HOST}/index_pop.php?cms=printBanPR&exam_id=${examId}&sid=${sid}${printView ? '&printView=1' : ''}`
 
 // A4 landscape at 96dpi is 1123x794px; with 10mm margins the printable box
 // is 1047x718. Report bodies vary in height by subject count while the width
@@ -227,7 +228,8 @@ async function loadReport(page: Page, url: string): Promise<ReportInfo> {
     const pub = (/Result Publish Date:\s*([^\n]+)/.exec(text)?.[1] || '').trim()
     return {
       name,
-      hasReport: /Student's Progress Report/.test(text),
+      // tolerant marker - print-view layouts may reword the title
+      hasReport: /Progress Report/.test(text),
       hasMarks: /\d/.test(pub),
       htmlLen: document.documentElement.outerHTML.length,
       // content widths are fixed px (no reflow between screen/print), so the
@@ -294,6 +296,8 @@ export default async function handler(req: Req, res: Res): Promise<void> {
   const examId = req.query?.exam_id
   const sid = req.query?.sid
   const debug = req.query?.debug === '1'
+  // per-mapping print layout flag - passed straight through to the school URL
+  const printView = req.query?.print === '1'
   if (!isDigits(examId) || !isDigits(sid)) {
     res.status(400).json({ status: 'error', reason: 'exam_id and sid must be numeric' })
     return
@@ -390,7 +394,7 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     if (sessRes.cookie && !headerCookie) {
       await page.setExtraHTTPHeaders({ Cookie: sessRes.cookie })
     }
-    let info = await loadReport(page, reportUrl(examId, loadSid))
+    let info = await loadReport(page, reportUrl(examId, loadSid, printView))
     let relogged = false
     if (!info.hasMarks && !sessRes.fresh && effUser && effPass) {
       // stale cached session or stale pasted cookie - one fresh login with
@@ -401,7 +405,7 @@ export default async function handler(req: Req, res: Res): Promise<void> {
       if (fresh.cookie && fresh.cookie !== sessRes.cookie) {
         relogged = true
         await page.setExtraHTTPHeaders({ Cookie: fresh.cookie })
-        info = await loadReport(page, reportUrl(examId, loadSid))
+        info = await loadReport(page, reportUrl(examId, loadSid, printView))
       }
     }
     const scale = fitScale(info.bodyH)
@@ -423,6 +427,7 @@ export default async function handler(req: Req, res: Res): Promise<void> {
         relogged,
         cookiesSeen: cookieNames,
         resolvedSid,
+        printView,
         bodyH: info.bodyH,
         scale,
         requests: seen,
