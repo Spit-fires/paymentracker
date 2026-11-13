@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { toPng as htmlToImageToPng } from 'html-to-image'
-import { domToPng } from 'modern-screenshot'
 import { useApp } from '../state/AppContext'
 import { receiptFileName, payingForDisplay, fillMessage, fmtDateLong, fmtInvoiceNo, invoiceDailySeq, fmtTaka, periodLabel } from '../lib/format'
 import { Button, PageHeader } from '../components/ui'
 import { ReceiptCard } from '../components/ReceiptCard'
+import { capturePng, downloadBlob } from '../lib/capture'
 import { IconPrint, IconShare, IconDownload, IconWhatsApp } from '../components/Icons'
 import { defaultCenter, receiptViewLink, retryEnsurePublic } from '../lib/sync'
 import { waLink, openExternal } from '../lib/phone'
@@ -87,16 +86,15 @@ export function ReceiptView() {
   const fillLink = (link: string) => fillMessage(messageTemplate, { ...msgVars, link }).trim()
 
   const pngBlob = async (): Promise<Blob> => {
-    if (payment.pngBlob) return payment.pngBlob
     const el = cardRef.current
     if (!el) throw new Error('not ready')
-    let dataUrl: string
     try {
-      dataUrl = await domToPng(el, { scale: 2 })
-    } catch {
-      dataUrl = await htmlToImageToPng(el, { pixelRatio: 2, cacheBust: true })
+      return await capturePng(el)
+    } catch (e) {
+      // Fall back to the stored copy only if a live capture is impossible.
+      if (payment.pngBlob) return payment.pngBlob
+      throw e
     }
-    return fetch(dataUrl).then((r) => r.blob())
   }
 
   /**
@@ -220,12 +218,7 @@ export function ReceiptView() {
 
   const onDownload = async () => {
     const blob = await pngBlob()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = fileName
-    a.click()
-    URL.revokeObjectURL(url)
+    downloadBlob(blob, fileName)
   }
 
   return (

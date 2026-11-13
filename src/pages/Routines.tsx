@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useApp } from '../state/AppContext'
 import { dayKey } from '../lib/format'
 import { routineBlock, hasBuilderFields } from '../lib/routine'
@@ -391,7 +392,13 @@ export function Routines() {
                     <IconClock className="w-4.5 h-4.5 text-teal dark:text-teal-bright" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[14px] font-bold text-ink dark:text-white truncate">{r.batch}</div>
+                    <Link
+                      to={`/students?batch=${encodeURIComponent(r.batch)}`}
+                      className="inline-block max-w-full text-[14px] font-bold text-ink dark:text-white truncate hover:text-teal dark:hover:text-teal-bright transition-colors"
+                      aria-label={`Open students in ${r.batch}`}
+                    >
+                      {r.batch}
+                    </Link>
                     {routineBlock(r) && (
                       <div className="text-[12px] text-muted dark:text-muted-dark whitespace-pre-line leading-snug line-clamp-2">
                         {routineBlock(r)}

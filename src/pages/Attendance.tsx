@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { toPng as htmlToImageToPng } from 'html-to-image'
-import { domToPng } from 'modern-screenshot'
 import {
   Chart as ChartJS,
   BarController,
@@ -19,6 +17,7 @@ import { getKV, setKV, K, db } from '../lib/db'
 import { getToken } from '../lib/token'
 import { waLink, openExternal } from '../lib/phone'
 import { Card, PageHeader, EmptyState, Button, Select, Input, Modal, Spinner, cx, useBlobUrl } from '../components/ui'
+import { capturePng, downloadBlob } from '../lib/capture'
 import { IconClipboardCheck, IconWhatsApp, IconCheck, IconPrint, IconDownload } from '../components/Icons'
 import type { AttendanceStatus, Routine, Attendance, Student } from '../types'
 
@@ -279,11 +278,10 @@ function TakeView() {
     const entries = roster
       .map((s) => ({ studentId: s.id, status: marks[s.id] }))
       .filter((e): e is { studentId: string; status: AttendanceStatus } => Boolean(e.status))
-    if (!entries.length) return showToast('Mark at least one student first', 'err')
     setSaving(true)
     try {
       await saveAttendance({ batch, day, marks: entries })
-      showToast('Attendance saved', 'ok')
+      showToast(entries.length ? 'Attendance saved' : 'Attendance cleared', 'ok')
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Could not save attendance', 'err')
     } finally {
@@ -384,7 +382,7 @@ function TakeView() {
           </div>
 
           <Button full size="lg" onClick={() => void save()} disabled={saving || !batch}>
-            {saving ? 'Saving…' : taken ? 'Update attendance' : 'Save attendance'}
+            {saving ? 'Saving…' : taken ? (markedTotal ? 'Update attendance' : 'Clear attendance') : 'Save attendance'}
           </Button>
         </>
       )}
@@ -676,19 +674,8 @@ function StatsView() {
     if (!el) return
     setPngBusy(true)
     try {
-      let dataUrl: string
-      try {
-        dataUrl = await domToPng(el, { scale: 2 })
-      } catch {
-        dataUrl = await htmlToImageToPng(el, { pixelRatio: 2, cacheBust: true })
-      }
-      const blob = await fetch(dataUrl).then((r) => r.blob())
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = repFileName
-      a.click()
-      URL.revokeObjectURL(url)
+      const blob = await capturePng(el)
+      downloadBlob(blob, repFileName)
       showToast('PNG saved', 'ok')
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Could not export PNG', 'err')

@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom'
-import { domToPng } from 'modern-screenshot'
-import { toPng as htmlToImageToPng } from 'html-to-image'
 import { useApp } from '../state/AppContext'
 import {
   studentPeriodPaid,
@@ -14,6 +12,7 @@ import { fmtTaka, takaToWords, periodNow, periodLabel, receiptFileName, dayKey, 
 import type { PaymentMode, Teacher } from '../types'
 import { Card, Button, PageHeader, Spinner, useBlobUrl } from '../components/ui'
 import { ReceiptCard } from '../components/ReceiptCard'
+import { capturePng } from '../lib/capture'
 import { IconCheck, IconReceipt, IconPlus, IconInfo } from '../components/Icons'
 
 const MODES: PaymentMode[] = ['Cash', 'Bkash', 'Nagad', 'Other']
@@ -22,17 +21,6 @@ function shiftPeriod(p: string, delta: number): string {
   const [y, m] = p.split('-').map(Number)
   const d = new Date(y, m - 1 + delta, 1)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
-
-/** Rasterize the receipt node to a PNG data URL. modern-screenshot draws
- * images directly to canvas (works on iOS Safari where html-to-image's
- * SVG foreignObject renders images blank); fall back to html-to-image. */
-async function capturePng(node: HTMLElement): Promise<string> {
-  try {
-    return await domToPng(node, { scale: 2 })
-  } catch {
-    return htmlToImageToPng(node, { pixelRatio: 2 })
-  }
 }
 
 export function Payment() {
@@ -280,8 +268,7 @@ export function Payment() {
           img.onerror = () => r()
         })
       }))
-      const dataUrl = await capturePng(previewRef.current)
-      const blob = await fetch(dataUrl).then((r) => r.blob())
+      const blob = await capturePng(previewRef.current)
       const isFee = kind === 'fee'
       const isRange = !isFee && periodType === 'range'
       const fromMs = isRange ? new Date(rangeFrom + 'T00:00:00').getTime() : 0
